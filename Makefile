@@ -9,12 +9,15 @@ help: ## Display this help
 
 ##@ Manifest Generation
 
+## Generate api code for the tenant and nodestore CRDs
+.PHONY: generate-code
+generate-code:
+	hack/update-codegen.sh
 
 ##Generate CRDS
 .PHONY: crds
 crds: controller-gen ##Generate Webhook configuration, ClusterRole and CustomResourceDefinition objects
 	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=config/crd/bases 
-
 
 ##Generate rbacs
 
@@ -30,6 +33,15 @@ rbac-agent: controller-gen
 .PHONY: rbac-orchestrator
 rbac-orchestrator: controller-gen 
 	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths=./internal/orchestrator output:rbac:dir=./config/rbac/orchestrator
+
+##@ Manifest installation
+.PHONY: install
+install: ## Install CRDs, RBAC and webhook configuration
+	kubectl apply -f config/crd/bases
+	kubectl apply -f $(RBAC_ORCHESTRATOR_DIR)
+	kubectl apply -f $(RBAC_AGENT_DIR)
+
+
 
 ##@ Development
 .PHONY: fmt
@@ -57,13 +69,35 @@ webhook-ssl:
 
 ##@ Build
 
-.PHONY: build
-build: manifests generate fmt vet ## Build manager binary
-	go build -o bin/manager main.go
+.PHONY: build-orchestrator
+build-orchestrator: ## Build orchestrator binary
+	docker build \ 
+	--build-arg CMD_PATH=cmd/orchestrator/ \
+	-f $(DOCKERFILE) \
+	-t $(REGISTRY)/orchestrator:$(IMAGE_TAG) .
 
-.PHONY: run
-run: manifests generate fmt vet ## Run against the configured Kubernetes cluster in ~/.kube/config
-	go run ./main.go
+
+docker-build-orchestrator: ## Build orchestrator docker image
+	docker build -t setera.com/orchestrator:latest --build-arg CMD_PATH=./cmd/orchestrator/main.go -f Dockerfile .
+
+##@ Run
+.PHONY: run-orchestrator
+run-orchestrator:  ## run orchestrator binary
+	go run ./cmd/orchestrator/main.go
+
+##@ Environment
+
+.PHONY: kind-cluster
+kind-cluster:
+	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml ## create a kind cluster for testing
+
+
+##@ Env Variables
+
+# variables for docker build
+REGISTRY ?= setera.com
+IMAGE_TAG ?= v0.1.0
+DOCKERFILE ?= Dockerfile
 
 ##Output directories
 

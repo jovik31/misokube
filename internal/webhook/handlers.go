@@ -54,7 +54,7 @@ func (ws *WebhookServer) admissionValidationHandler(w http.ResponseWriter, r *ht
 		//call tenant validation
 		if admissionResponse, err = ws.validateTenant(requestAdmissionReview.Request); err != nil {
 			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
-			return 
+			return
 		}
 	}
 

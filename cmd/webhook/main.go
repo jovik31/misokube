@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
+	//"flag"
 	"github/setera/internal/webhook"
 	"github/setera/pkg/k8s"
 	"log"
@@ -23,10 +23,10 @@ import (
 func main() {
 
 	var tlsKey, tlsCert string
-	flag.StringVar(&tlsKey, "tlsKey", "./k8s-webhook-server/serving-certs/tls.key", "path to the tls key")
-	flag.StringVar(&tlsCert, "tlsCert", "./k8s-webhook-server/serving-certs/tls.key", "path to the tls cert")
+	//flag.StringVar(&tlsKey, "tlsKey", "./k8s-webhook-server/serving-certs/tls.key", "path to the tls key")
+	//flag.StringVar(&tlsCert, "tlsCert", "./k8s-webhook-server/serving-certs/tls.key", "path to the tls cert")
 
-	flag.Parse()
+	//flag.Parse()
 
 	config, err := k8s.InitKubeConfig()
 	if err != nil {

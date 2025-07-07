@@ -9,36 +9,37 @@ import (
 
 	// k8s
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
 )
 
-func (o *Orchestrator) enqueue(obj any, event Event) {
+func (o *OrchOperator) enqueue(obj any, event Event) {
 
 	// check if every node has an existing nodestore
 
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
-		o.logger.Error(err, "Error in getting key for object", obj)
+		o.Base.Logger.Error(err, "Error in getting key for object", obj)
 		return
 	}
 
 	//wrap the key with the event type
 	wrappedKey := fmt.Sprintf("%s:%s", event, key)
 
-	ok, reason := o.checkNodeNodeStore()
-	if !ok {
-		o.logger.Info(reason, key)
-		o.workqueue.AddRateLimited(wrappedKey)
+	//ok, reason := o.checkNodeNodeStore()
+	/*if !ok {
+		o.Base.Logger.Info(reason, key)
+		o.Base.Workqueue.AddRateLimited(wrappedKey)
 		return
 	} else {
-		o.logger.Info("Adding key to workqueue", wrappedKey)
-		o.workqueue.Add(wrappedKey)
+		o.Base.Logger.Info("Adding key to workqueue", wrappedKey)
+		o.Base.Workqueue.Add(wrappedKey)
 
-	}
+	}*/
 
+	o.Base.Logger.Info("Adding key to workqueue", wrappedKey)
+	o.Base.Workqueue.Add(wrappedKey)
 }
 
 func parseQueuedKey(wrappedKey string) (Event, string) {
@@ -52,7 +53,7 @@ func parseQueuedKey(wrappedKey string) (Event, string) {
 	return event, key
 }
 
-func (o *Orchestrator) checkNodeNodeStore() (bool, string) {
+/*func (o *OrchOperator) checkNodeNodeStore() (bool, string) {
 
 	// retrieve the nodes and nodestores from the cache
 	nodes, err := o.nodeLister.List(labels.Everything())
@@ -82,10 +83,10 @@ func (o *Orchestrator) checkNodeNodeStore() (bool, string) {
 
 	return true, ""
 
-}
+}*/
 
 // checks if tenant has the finalizer
-func (o *Orchestrator) checkTenantFinalizer(tenant *seterav1.Tenant) bool {
+func (o *OrchOperator) checkTenantFinalizer(tenant *seterav1.Tenant) bool {
 
 	for _, f := range tenant.Finalizers {
 		if f == TenantFinalizer {
@@ -96,12 +97,12 @@ func (o *Orchestrator) checkTenantFinalizer(tenant *seterav1.Tenant) bool {
 
 }
 
-func (o *Orchestrator) updateTenantObject(tenant *seterav1.Tenant) error {
+func (o *OrchOperator) updateTenantObject(tenant *seterav1.Tenant) error {
 
 	// update the tenant object in the k8s cluster
-	_, err := o.seterav1Clientset.SeteraV1().Tenants(tenant.Namespace).Update(context.TODO(), tenant, metav1.UpdateOptions{})
+	_, err := o.Base.Seterav1Clientset.SeteraV1().Tenants(tenant.Namespace).Update(context.TODO(), tenant, metav1.UpdateOptions{})
 	if err != nil {
-		o.logger.Error(err, "Error in updating tenant object in the k8s cluster", tenant.Name)
+		o.Base.Logger.Error(err, "Error in updating tenant object in the k8s cluster", tenant.Name)
 		return err
 	}
 	return nil

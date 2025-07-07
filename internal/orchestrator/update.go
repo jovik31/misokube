@@ -1,7 +1,6 @@
 package orchestrator
 
-
-func (o *Orchestrator) updateTenant(key string) error {
+func (o *OrchOperator) updateTenant(key string) error {
 	// add tenant to the orchestrator
 	return nil
 }

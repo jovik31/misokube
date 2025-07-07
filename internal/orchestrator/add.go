@@ -6,9 +6,6 @@ import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// k8s
-	"errors"
-
-	"k8s.io/apimachinery/pkg/labels"
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
@@ -16,7 +13,7 @@ import (
 
 const TenantFinalizer = "finalizer.setera.com"
 
-func (o *Orchestrator) addTenant(key string) error {
+func (o *OrchOperator) addTenant(key string) error {
 	// add tenant to the k8s cluster
 	/*[x get the tenant object from the cache
 	[x retrieve the nodestores existing in the cluster //this part may not be needed if it is only applied
@@ -30,25 +27,25 @@ func (o *Orchestrator) addTenant(key string) error {
 	*/
 
 	// check if all nodestores are present
-	ok, reason := o.checkNodeNodeStore()
+	/*ok, reason := o.checkNodeNodeStore()
 	if !ok {
 		err := errors.New(reason)
 		o.logger.Error(err, "Failed to add tenant", key)
 
 		return err
-	}
+	}*/
 
 	// split the name and namespace from the key
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		o.logger.Error(err, "Error in getting key for object", key)
+		o.Base.Logger.Error(err, "Error in getting key for object", key)
 		return err
 	}
 
 	//get tenant object from the tenant lister (cache)
-	tenant, err := o.tenantLister.Tenants(namespace).Get(name)
+	tenant, err := o.TenantLister.Tenants(namespace).Get(name)
 	if err != nil {
-		o.logger.Error(err, "Error in getting tenant object from cache", key)
+		o.Base.Logger.Error(err, "Error in getting tenant object from cache", key)
 		return err
 	}
 
@@ -57,7 +54,7 @@ func (o *Orchestrator) addTenant(key string) error {
 	updatedTenant = tenant.DeepCopy()
 
 	// Check for tenant finalizer
-	ok = o.checkTenantFinalizer(tenant)
+	ok := o.checkTenantFinalizer(tenant)
 	if !ok { // finalizer not found
 		// add the finalizer to the tenant object
 
@@ -72,16 +69,12 @@ func (o *Orchestrator) addTenant(key string) error {
 	_ = tenant.Spec.Zones // zones are equivalent to the number of nodes the tenant is going to be deployed to
 	//selectors := tenant.Spec.Zones[].Requirements // the required selectors that the nodes must have for this tenant to be deployed to them
 
-	// get the nodestores from the cache
-	_, err = o.nodeStoreLister.List(labels.Everything())
-	if err != nil {
-		o.logger.Error(err, "Error in getting nodestores from cache")
-	}
+	// TODO: check the cache from the nodestore scores sent to the orchestrator from the local agents (daemons)
 
 	// update the tenant object in the k8s cluster
 	err = o.updateTenantObject(updatedTenant)
 	if err != nil {
-		o.logger.Error(err, "Failed to update tenant object in the k8s cluster", key)
+		o.Base.Logger.Error(err, "Failed to update tenant object in the k8s cluster", key)
 		return err
 	}
 

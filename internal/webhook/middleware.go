@@ -31,7 +31,7 @@ func (w *wrappedWritter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 }
 
-//validate http request fields
+// validate http request fields
 func validatingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
