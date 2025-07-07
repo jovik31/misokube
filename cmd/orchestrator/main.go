@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github/setera/internal/orchestrator"
+	orchestrator "github/setera/internal/orchestrator/operator"
 	"os"
 
 	"k8s.io/klog/v2"
