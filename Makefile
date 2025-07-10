@@ -1,45 +1,81 @@
+#TODO
+#
+#[ ]: Kind - Cluster creation
+#[ ]: Kind - Cluster Deletion
+#[ ]: Kind -Add images to cluster registry
+#[ ]: Kind - Generate custom node images
+#[ ] Versioning - Bump My Version
+#[ ] Versioning - Major
+#[ ] Versioning - Minor
+#[ ] Versioning - Patch
+#[ ] Generation - CRD generation
+#[ ] Generation - RBAC generation
+#[ ] Generation - Code generation
+#[ ] Generation - webhook TLS generation
+#[ ] Manifest - Installation
+#[ ] Manifest - Removal
+#[ ] Development - Linting
+#[ ] Development - Formatting
+#[ ] Development - Testing
+#[ ] Development - Vetting
+#[ ] Development - Run orchestrator
+#[ ] Docker - Build orchestrator, daemon, cni and webhook
+#[ ] Docker- Push orchestrator, daemon, cni and webhook
+
+
 
 ##@ Help
-#[x]Add help target to Makefile
 
 .PHONY: help
-help: ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+help:
+	@awk ' \
+		/^##@/ { \
+			section = substr($$0, 5); \
+			printf "\n%s\n", section; \
+		} \
+		/^[a-zA-Z0-9_-]+:.*? ##/ { \
+			split($$0,a,":"); \
+			target = a[1]; \
+			match($$0, /## (.*)/, m); \
+			desc = m[1]; \
+			printf "  %-15s %s\n", target, desc; \
+		} \
+	' $(MAKEFILE_LIST)
 
 
-##@ Manifest Generation
 
-## Generate api code for the tenant and nodestore CRDs
-.PHONY: generate-code
-generate-code:
+##@ Code generation
+
+.PHONY: generate-code 
+generate-code: ## Generate api code for the Tenant and Nodestore CRDs
 	hack/update-codegen.sh
 
-##Generate CRDS
+##@ Manifest generation
+
 .PHONY: crds
-crds: controller-gen ##Generate Webhook configuration, ClusterRole and CustomResourceDefinition objects
-	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=config/crd/bases 
+crds: controller-gen ## Generate CRDS for the defined types: Tenant and NodeStore
+	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=$(CRD_DIR)
 
-##Generate rbacs
+.PHONY: rbac-daemon
+rbac-daemon: controller-gen ## Generate RBAC configuration for the daemon component
+	$(CONTROLLER_GEN) rbac:roleName=agent-role paths=./internal/$(DAEMON_COMPONENT) output:rbac:dir=./$(RBAC_ORCHESTRATOR_DIR)
 
-.PHONY: rbac
-rbac: rbac-agent rbac-orchestrator
 
-##Generate RBAC configuration for the agent
-.PHONY: rbac-agent
-rbac-agent: controller-gen
-	$(CONTROLLER_GEN) rbac:roleName=agent-role paths=./internal/agent output:rbac:dir=./config/rbac/agent
-
-##Generate RBAC configuration for the orchestrator
 .PHONY: rbac-orchestrator
-rbac-orchestrator: controller-gen 
-	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths=./internal/orchestrator output:rbac:dir=./config/rbac/orchestrator
+rbac-orchestrator: controller-gen ## Generate RBAC configuration for the orchestrator component
+	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths=./internal/$(ORCHESTRATOR_COMPONENT) output:rbac:dir=./$(RBAC_DAEMON_DIR)
+
+.PHONY: rbac-all
+rbac-all: rbac-daemon rbac-orchestrator ## Generate RBAC for all the components
+
+
 
 ##@ Manifest installation
 .PHONY: install
-install: ## Install CRDs, RBAC and webhook configuration
+install: ## Install CRDs, RBAC and webhook configuration onto the cluster - make sure the kubeconfig file is pointing to the correct cluster
 	kubectl apply -f config/crd/bases
 	kubectl apply -f $(RBAC_ORCHESTRATOR_DIR)
-	kubectl apply -f $(RBAC_AGENT_DIR)
+	kubectl apply -f $(RBAC_DAEMON_DIR)
 
 
 
@@ -57,7 +93,7 @@ lint: golangci-lint ## Run golangci-lint against code
 	$(GOLANGCI_LINT) run
 
 .PHONY: webhook-ssl
-webhook-ssl: 
+webhook-ssl: ## Generate new weobhook certificates
 	mkdir -p ${TMPDIR}/k8s-webhook-server/serving-certs
 	openssl req -x509 \
 			-newkey rsa:2048 \
@@ -66,43 +102,67 @@ webhook-ssl:
 			-out ${TMPDIR}/k8s-webhook-server/serving-certs/tls.crt \
 			-days 60
 
-
 ##@ Build
 
 .PHONY: build-orchestrator
-build-orchestrator: ## Build orchestrator binary
+build-orchestrator: ## Build orchestrator docker image
 	docker build \ 
-	--build-arg CMD_PATH=cmd/orchestrator/ \
+	--build-arg CMD_PATH=$(CMD_ORCHESTRATOR) \
 	-f $(DOCKERFILE) \
-	-t $(REGISTRY)/orchestrator:$(IMAGE_TAG) .
-
+	-t $(REGISTRY)/$(ORCHESTRATOR_COMPONENT)r:$(IMAGE_TAG) .
 
 docker-build-orchestrator: ## Build orchestrator docker image
 	docker build -t setera.com/orchestrator:latest --build-arg CMD_PATH=./cmd/orchestrator/main.go -f Dockerfile .
 
+.PHONY: build-daemon
+build-daemon: # Build daemon docker image
+	docker build \
+	--build-arg CMD_PATH=$(CMD_DAEMON)
+	-f $(DOCKERFILE)
+	-t $(REGISTRY)/$(DAEMON_COMPONENT):$(IMAGE_TAG)
+
+
 ##@ Run
 .PHONY: run-orchestrator
-run-orchestrator:  ## run orchestrator binary
-	go run ./cmd/orchestrator/main.go
+run-orchestrator:  ## run orchestrator binary from ouside of the cluster
+	go run ./$(CMD_ORCHESTRATOR)/main.go
 
-##@ Environment
+##@ Cluster operations
 
 .PHONY: kind-cluster
-kind-cluster:
+kind-cluster: ## Create kind cluster
 	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml ## create a kind cluster for testing
 
+.PHONY: create-node-image
+create-node-image: ## Create custom kind node image
 
-##@ Env Variables
+## Docker variables
 
-# variables for docker build
-REGISTRY ?= setera.com
-IMAGE_TAG ?= v0.1.0
+REGISTRY_REMOTE ?= remote.example.com ## Local Docker registry
+REGISTRY_LOCAL ?= local.example.com ## Remote Docker registry
 DOCKERFILE ?= Dockerfile
+
+## Versioning variables
+DAEMON_IMG ?= $(DAEMON_COMPONENT):$(DAEMON_VERSION)
+DAEMON_VERSION ?= v0.1.0
+
+ORCHESTRATOR_IMG ?= $(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
+ORCHESTRATOR_VERSION ?= v0.1.0
+DOCKERFILE ?= Dockerfile
+
+#CMD variables
+CMD_ORCHESTRATOR ?= cmd/orchestrator/
+CMD_DAEMON ?=cmd/daemon/
+
+#Component variables
+ORCHESTRATOR_COMPONENT ?= orchestrator
+DAEMON_COMPONENT ?=daemon
 
 ##Output directories
 
 RBAC_ORCHESTRATOR_DIR = config/rbac/orchestrator
-RBAC_AGENT_DIR = config/rbac/agent
+RBAC_DAEMON_DIR = config/rbac/daemon
+CRD_DIR ?= config/crds/bases
 
 
 ##@ Dependencies
