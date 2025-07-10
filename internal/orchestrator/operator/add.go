@@ -13,7 +13,7 @@ import (
 
 const TenantFinalizer = "finalizer.setera.com"
 
-func (o *OrchOperator) addTenant(key string) error {
+func (o *TenantOperator) addTenant(key string) error {
 	// add tenant to the k8s cluster
 	/*[x get the tenant object from the cache
 	[x retrieve the nodestores existing in the cluster //this part may not be needed if it is only applied

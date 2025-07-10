@@ -42,7 +42,6 @@ install: ## Install CRDs, RBAC and webhook configuration
 	kubectl apply -f $(RBAC_AGENT_DIR)
 
 
-
 ##@ Development
 .PHONY: fmt
 fmt: ## Run go fmt against code

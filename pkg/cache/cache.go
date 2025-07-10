@@ -44,7 +44,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 
 // Get n elements with implemented criteria: max, min, best, etc..
 // if n > len(c.data) return all elements but sorted
-
+// check heaps for larger datasets
 func (c *Cache[K, V]) GetWithCriteria(n int) []struct {
 	Key   K
 	Value V

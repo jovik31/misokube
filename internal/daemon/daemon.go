@@ -233,7 +233,7 @@ func (d *Daemon) processNextWorkItem() bool {
 
 // processItem processes a single item from the workqueue
 func (d *Daemon) processItem(key string) error {
-	// TODO: Implement item processing logic
+	// [ ]TODO: Implement item processing logic
 	d.k8sController.logger.Info("Processing item", "key", key)
 	return nil
 }

@@ -3,7 +3,7 @@ package orchestrator
 import (
 
 	//internals
-	oO "github/setera/internal/orchestrator/operator"
+	tenant_operator "github/setera/internal/orchestrator/operator"
 
 	//std
 	"net/http"
@@ -17,7 +17,7 @@ import (
 */
 
 type orchestrator struct {
-	Operator    *oO.OrchOperator
+	Operator    *tenant_operator.TenantOperator
 	ScoreCache  *NodeScoreCache
 	ScoreServer *http.Server
 }
