@@ -29,7 +29,7 @@ func (ws *WebhookServer) validateTenant(admissionRequest *admissionv1.AdmissionR
 		return nil, err
 	}
 
-	allowed, reason := checkNodeZones(nodes.Items, tenant.Spec.Zones)
+	allowed, reason := checkNodeZones(nodes.Items, tenant.Status)
 
 	return createAdmissionResponse(allowed, reason), nil
 

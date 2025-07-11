@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"fmt"
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -68,42 +67,7 @@ func checkNodeZones(nodeList []corev1.Node, status seterav1.TenantStatus) (bool,
 		return !allowed, zonesAboveNodes
 	}
 
-	pairNodeZone := make(map[string]string)
-	for _, z := range zoneList {
-
-		//check if zone has requirements
-		if len(z.Requirements) == 0 {
-
-			pairNodeZone[z.Name] = "all"
-			continue
-		}
-
-		for _, n := range nodeList {
-			//check if node is already in the map
-			if isMapped(n.Name, pairNodeZone) {
-				continue
-			}
-
-			if isMapSubset(n.Labels, z.Requirements) {
-				// pair the zone to the node
-
-				pairNodeZone[z.Name] = n.Name
-
-			}
-		}
-
-	}
-	// if the length of the pairNodeZone is smaller than the length of the zoneList it means some
-	if len(pairNodeZone) != len(zoneList) {
-
-		if len(zoneList) == 0 {
-			return !allowed, "No zones are node compliant"
-		} else {
-			return !allowed, fmt.Sprintf("tenant is not valid, the following zones are node compliant %v", pairNodeZone)
-		}
-	} else {
-		return allowed, tenantIsValid
-	}
+	return allowed, tenantIsValid
 
 }
 

@@ -33,7 +33,7 @@ func (b *BaseOperator) EnqueueWithKey(event EventType, key string) {
 	// wrap the key with the event type
 	wrappedKey := fmt.Sprintf("%s:%s", event, key)
 
-	b.Logger.Info("Adding key to workqueue", wrappedKey)
+	b.Logger.WithValues("event", event, "key", key).Info("Enqueuing key")
 	b.Workqueue.Add(wrappedKey)
 
 }
