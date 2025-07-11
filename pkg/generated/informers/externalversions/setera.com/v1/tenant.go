@@ -61,13 +61,25 @@ func NewFilteredTenantInformer(client versioned.Interface, namespace string, res
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SeteraV1().Tenants(namespace).List(context.TODO(), options)
+				return client.SeteraV1().Tenants(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SeteraV1().Tenants(namespace).Watch(context.TODO(), options)
+				return client.SeteraV1().Tenants(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.SeteraV1().Tenants(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.SeteraV1().Tenants(namespace).Watch(ctx, options)
 			},
 		},
 		&apiseteracomv1.Tenant{},

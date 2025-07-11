@@ -1,25 +1,16 @@
 package orchestrator
 
 import (
-	// api types
-
+	// internal pkg
 	seterav1 "github/setera/pkg/api/setera.com/v1"
-)
-
-type Event string
-
-const (
-	AddEvent     Event = "Add"
-	UpdateEvent  Event = "Update"
-	DeleteEvent  Event = "Delete"
-	UnknownEvent Event = "Unknown"
+	"github/setera/pkg/operator"
 )
 
 // add tenant key to the workqueue - add event
 func (t *TenantOperator) addTenantHandler(obj any) {
 
 	tenant, ok := obj.(*seterav1.Tenant)
-	logger := t.Base.Logger.WithValues("event", AddEvent, "tenant", tenant.Name)
+	logger := t.Base.Logger.WithValues("event", operator.AddEvent, "tenant", tenant.Name)
 
 	if !ok {
 		logger.Info("Failed to cast object to tenant in add handler")
@@ -27,7 +18,7 @@ func (t *TenantOperator) addTenantHandler(obj any) {
 	}
 	logger.Info("Adding tenant to queue")
 
-	//o.enqueue(tenant, AddEvent)
+	t.Base.Enqueue(tenant, operator.AddEvent)
 
 }
 
@@ -35,7 +26,7 @@ func (t *TenantOperator) addTenantHandler(obj any) {
 func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 
 	oldTenant, ok := oldObj.(*seterav1.Tenant)
-	logger := t.Base.Logger.WithValues("event", UpdateEvent, "tenant", oldTenant.Name)
+	logger := t.Base.Logger.WithValues("event", operator.UpdateEvent, "tenant", oldTenant.Name)
 	if !ok {
 		logger.Info("Failed to cast old object to tenant in update handler")
 		return
@@ -53,7 +44,7 @@ func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 	}
 
 	// Only add update event for tenants where the number of nodes has changed
-	if len(oldTenant.Spec.Nodes) != len(newTenant.Spec.Nodes) {
+	if oldTenant.Spec.Zones != newTenant.Spec.Zones {
 
 		logger.Info("Number of nodes changed in tenant")
 		logger.Info("Add tenant to queue - Update event")
@@ -68,7 +59,7 @@ func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 func (t *TenantOperator) deleteTenantHandler(obj any) {
 
 	tenant, ok := obj.(*seterav1.Tenant)
-	logger := t.Base.Logger.WithValues("event", UpdateEvent, "tenant", tenant.Name)
+	logger := t.Base.Logger.WithValues("event", operator.UpdateEvent, "tenant", tenant.Name)
 	if !ok {
 		logger.Info("Failed to cast object to tenant in delete handler")
 		return
@@ -83,7 +74,7 @@ func (t *TenantOperator) deleteTenantHandler(obj any) {
 func (t *TenantOperator) updateTenantFromNodestoreHandler(oldObj, newObj any) {
 
 	oldNodestore, ok := oldObj.(*seterav1.NodeStore)
-	logger := t.Base.Logger.WithValues("event", UpdateEvent, "nodestore", oldNodestore.Name)
+	logger := t.Base.Logger.WithValues("event", operator.UpdateEvent, "nodestore", oldNodestore.Name)
 	if !ok {
 		logger.Info("Failed to cast old object to nodestore in update handler")
 		return
@@ -109,7 +100,7 @@ func (t *TenantOperator) updateTenantFromNodestoreHandler(oldObj, newObj any) {
 func (t *TenantOperator) deleteTenantFromNodestoreHandler(obj any) {
 
 	nodestore, ok := obj.(*seterav1.NodeStore)
-	logger := t.Base.Logger.WithValues("event", DeleteEvent, "nodestore", nodestore.Name)
+	logger := t.Base.Logger.WithValues("event", operator.DeleteEvent, "nodestore", nodestore.Name)
 	if !ok {
 		logger.Info("Failed to cast object to nodestore in delete handler")
 		return

@@ -99,7 +99,8 @@ func (t *TenantOperator) Process() bool {
 	defer t.Base.Workqueue.Done(wrappedKey)
 
 	// parse the wrapped key to get the event and key
-	event, key := parseQueuedKey(wrappedKey)
+	event, key := operator.ParseQueuedKey(wrappedKey)
+
 	t.Base.Logger.WithValues("event", event, "key", key).Info("Processing event")
 
 	// check if the key is valid
@@ -109,7 +110,7 @@ func (t *TenantOperator) Process() bool {
 	}
 
 	// check if the event is unknown - short circuit the processing
-	if event == UnknownEvent {
+	if event == operator.UnknownEvent {
 		t.Base.Logger.Info("Unknown event type, skipping processing", "key", key)
 		t.Base.Workqueue.Forget(wrappedKey)
 		return true
@@ -118,13 +119,14 @@ func (t *TenantOperator) Process() bool {
 	var err error
 
 	switch event {
-	case AddEvent:
+
+	case operator.AddEvent:
 		err = t.addTenant(key)
 
-	case UpdateEvent:
+	case operator.UpdateEvent:
 		err = t.updateTenant(key)
 
-	case DeleteEvent:
+	case operator.DeleteEvent:
 		err = t.deleteTenant(key)
 
 	}

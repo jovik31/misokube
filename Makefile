@@ -48,6 +48,7 @@ help:
 
 .PHONY: generate-code 
 generate-code: ## Generate api code for the Tenant and Nodestore CRDs
+	export GOFLAGS="-mod=mod"
 	hack/update-codegen.sh
 
 ##@ Manifest generation

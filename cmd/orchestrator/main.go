@@ -44,10 +44,10 @@ func main() {
 	}
 
 	// Build the orchestrator operator (with base operator inside)
-	orchOperator := orchestrator.NewOrchestratorOperator(ctx, "setera-orchestrator-operator", seteraClient, kubeClient)
+	tenantOperator := orchestrator.NewTenantOperator(ctx, "setera-orchestrator-operator", seteraClient, kubeClient)
 
 	// Run it
-	if err := orchOperator.Base.Run(ctx); err != nil {
+	if err := tenantOperator.Base.Run(ctx); err != nil {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}

@@ -39,6 +39,8 @@ type TenantsGetter interface {
 type TenantInterface interface {
 	Create(ctx context.Context, tenant *seteracomv1.Tenant, opts metav1.CreateOptions) (*seteracomv1.Tenant, error)
 	Update(ctx context.Context, tenant *seteracomv1.Tenant, opts metav1.UpdateOptions) (*seteracomv1.Tenant, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, tenant *seteracomv1.Tenant, opts metav1.UpdateOptions) (*seteracomv1.Tenant, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
 	Get(ctx context.Context, name string, opts metav1.GetOptions) (*seteracomv1.Tenant, error)
@@ -46,6 +48,8 @@ type TenantInterface interface {
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *seteracomv1.Tenant, err error)
 	Apply(ctx context.Context, tenant *applyconfigurationseteracomv1.TenantApplyConfiguration, opts metav1.ApplyOptions) (result *seteracomv1.Tenant, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, tenant *applyconfigurationseteracomv1.TenantApplyConfiguration, opts metav1.ApplyOptions) (result *seteracomv1.Tenant, err error)
 	TenantExpansion
 }
 

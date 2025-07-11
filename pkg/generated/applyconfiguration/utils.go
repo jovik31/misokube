@@ -32,8 +32,6 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=setera.com, Version=v1
-	case v1.SchemeGroupVersion.WithKind("Node"):
-		return &seteracomv1.NodeApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NodeStore"):
 		return &seteracomv1.NodeStoreApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NodeStoreSpec"):
@@ -46,8 +44,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &seteracomv1.TenantInfraApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TenantSpec"):
 		return &seteracomv1.TenantSpecApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("Zone"):
-		return &seteracomv1.ZoneApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("TenantStatus"):
+		return &seteracomv1.TenantStatusApplyConfiguration{}
 
 	}
 	return nil

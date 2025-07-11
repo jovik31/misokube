@@ -56,7 +56,9 @@ func checkTenantLabel(labels map[string]string, tenantList *seterav1.TenantList)
 	return !allowed, tenantNotFound
 }
 
-func checkNodeZones(nodeList []corev1.Node, zoneList []seterav1.Zone) (bool, string) {
+func checkNodeZones(nodeList []corev1.Node, status seterav1.TenantStatus) (bool, string) {
+
+	zoneList := status.AssignedNodes
 
 	var allowed bool = true
 

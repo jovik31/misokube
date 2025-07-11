@@ -20,10 +20,8 @@ package v1
 // TenantSpecApplyConfiguration represents a declarative configuration of the TenantSpec type for use
 // with apply.
 type TenantSpecApplyConfiguration struct {
-	Name  *string                  `json:"name,omitempty"`
-	VNI   *int                     `json:"vni,omitempty"`
-	Zones []ZoneApplyConfiguration `json:"zones,omitempty"`
-	Nodes []NodeApplyConfiguration `json:"nodes,omitempty"`
+	Name  *string `json:"name,omitempty"`
+	Zones *int    `json:"zones,omitempty"`
 }
 
 // TenantSpecApplyConfiguration constructs a declarative configuration of the TenantSpec type for use with
@@ -40,36 +38,10 @@ func (b *TenantSpecApplyConfiguration) WithName(value string) *TenantSpecApplyCo
 	return b
 }
 
-// WithVNI sets the VNI field in the declarative configuration to the given value
+// WithZones sets the Zones field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the VNI field is set to the value of the last call.
-func (b *TenantSpecApplyConfiguration) WithVNI(value int) *TenantSpecApplyConfiguration {
-	b.VNI = &value
-	return b
-}
-
-// WithZones adds the given value to the Zones field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the Zones field.
-func (b *TenantSpecApplyConfiguration) WithZones(values ...*ZoneApplyConfiguration) *TenantSpecApplyConfiguration {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithZones")
-		}
-		b.Zones = append(b.Zones, *values[i])
-	}
-	return b
-}
-
-// WithNodes adds the given value to the Nodes field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the Nodes field.
-func (b *TenantSpecApplyConfiguration) WithNodes(values ...*NodeApplyConfiguration) *TenantSpecApplyConfiguration {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithNodes")
-		}
-		b.Nodes = append(b.Nodes, *values[i])
-	}
+// If called multiple times, the Zones field is set to the value of the last call.
+func (b *TenantSpecApplyConfiguration) WithZones(value int) *TenantSpecApplyConfiguration {
+	b.Zones = &value
 	return b
 }

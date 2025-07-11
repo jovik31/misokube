@@ -48,7 +48,7 @@ type BaseOperator struct {
 	Workqueue         workqueue.TypedRateLimitingInterface[string] // workqueue to store the tenant objects with their namespace/name as the key
 	Handler           WorkHandler
 	//informers          []cache.SharedIndexInformer // informers for tenant and nodestore
-	recorder record.EventRecorder
+	Recorder record.EventRecorder
 	Logger   klog.Logger
 }
 
@@ -58,7 +58,7 @@ func NewBaseOperator(
 	name string,
 	seterav1Clientset seterav1clientset.Interface,
 	kubeClientset kubernetes.Interface,
-	factory seterav1Factory.SharedInformerFactory,
+	factory seterav1Factory.SharedInformerFactory, // factory for Setera resources
 	handler WorkHandler) *BaseOperator {
 
 	// create logger
@@ -77,7 +77,7 @@ func NewBaseOperator(
 		factory:           factory,
 		Workqueue:         workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 		Handler:           handler, // Handler will be set later
-		recorder:          recorder,
+		Recorder:          recorder,
 		Logger:            baseLogger,
 	}
 }
