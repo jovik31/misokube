@@ -129,9 +129,21 @@ run-orchestrator:  ## run orchestrator binary from ouside of the cluster
 
 ##@ Cluster operations
 
-.PHONY: kind-cluster
+.PHONY: kind-cluster-dev
 kind-cluster: ## Create kind cluster
-	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml ## create a kind cluster for testing
+	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml 
+
+.PHONY: kind-cluster-orch-dev
+kind-cluster-orch-dev: ## Create kind cluster for orchestrator development
+	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_orch_dev.yaml 
+
+.PHONY: kind-cluster-delete
+kind-cluster-delete: ## Delete kind cluster
+	kind delete cluster --name=setera-cluster
+
+.PHONY: kind-cluster-load-images
+kind-cluster-load-images: ## Load images into the kind cluster
+	kind load docker-image $(REGISTRY_REMOTE)/$(ORCHESTRATOR_COMPONENT):
 
 .PHONY: create-node-image
 create-node-image: ## Create custom kind node image
