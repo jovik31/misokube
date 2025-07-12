@@ -25,12 +25,14 @@ SCRIPT_ROOT=$(realpath "$(dirname ${BASH_SOURCE[0]})/..")
 echo $SCRIPT_ROOT
 
 # get the codegen package from the vendor directory
-CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 /home/jovik/go/pkg/mod/k8s.io/code-generator@v0.33.2 2>/dev/null || echo ../code-generator)}
+CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 ${HOME}/go/pkg/mod/k8s.io/code-generator@v0.33.2 2>/dev/null || echo ../code-generator)}
 echo $CODEGEN_PKG
 
 source "${CODEGEN_PKG}/kube_codegen.sh"
 
 THIS_PKG="github/setera"
+
+
 
 ln -s github
 trap "rm github" EXIT

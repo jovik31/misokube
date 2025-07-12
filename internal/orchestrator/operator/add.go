@@ -3,11 +3,14 @@ package orchestrator
 import (
 
 	//std
+	"context"
 	"fmt"
+
+	//internals
 	"github/setera/pkg/operator"
 
 	// setera api tyes
-	"context"
+	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// k8s
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -18,7 +21,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-const TenantFinalizer = "finalizer.setera.com"
+const (
+	TenantFinalizer = "finalizer.setera.com"
+	PausedTenant    = true
+	UnpausedTenant  = false
+)
 
 func (t *TenantOperator) addTenant(key string) error {
 
@@ -62,11 +69,49 @@ func (t *TenantOperator) addTenant(key string) error {
 	if err != nil {
 		return fmt.Errorf("listing NodeStores: %w", err)
 	}
-	if len(nodeStores) == 0 {
-		return t.patchPauseStatus(ctx, tenant, true, nil)
+
+	// check if there are enough nodestores for the tenant
+	if len(nodeStores) < tenant.Spec.Zones {
+
+		t.Base.Logger.Error(nil, "not enough nodestores for tenant", "tenant", tenant.Name, "zones", tenant.Spec.Zones, "available", len(nodeStores))
+		if err := t.patchPauseStatus(ctx, tenant, PausedTenant); err != nil {
+			return err
+		}
+	} else {
+		t.Base.Logger.Info("enough nodestores available for tenant", "tenant", tenant.Name, "zones", tenant.Spec.Zones, "available", len(nodeStores))
+		t.patchPauseStatus(ctx, tenant, UnpausedTenant)
 	}
 
-	t.patchPauseStatus(ctx, tenant, false, nil)
+	// if we reach here, we have enough nodestores and the tenant is not paused
+	t.Base.Logger.Info("tenant is ready to be processed", "tenant", tenant.Name)
 
 	return nil
+}
+
+func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.Tenant, pausedStatus bool) error {
+
+	// best practices - always work on a copy
+	tcopy := tenant.DeepCopy()
+	tcopy.Status.Paused = PausedTenant
+
+	// Update the tenant status
+	if _, err := t.Base.Seterav1Clientset.SeteraV1().
+		Tenants(tenant.Namespace).
+		UpdateStatus(ctx, tcopy, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("updating tenant status: %w", err)
+	}
+
+	t.Base.Logger.Info("updated tenant pause status", "tenant", tenant.Name, "paused", pausedStatus)
+
+	return nil
+}
+
+func containsString(slice []string, item string) bool {
+
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

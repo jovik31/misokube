@@ -53,8 +53,8 @@ generate-code: ## Generate api code for the Tenant and Nodestore CRDs
 
 ##@ Manifest generation
 
-.PHONY: crds
-crds: controller-gen ## Generate CRDS for the defined types: Tenant and NodeStore
+.PHONY: crd
+crd: controller-gen ## Generate CRDS for the defined types: Tenant and NodeStore
 	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=$(CRD_DIR)
 
 .PHONY: rbac-daemon
@@ -174,7 +174,7 @@ DAEMON_COMPONENT ?=daemon
 
 RBAC_ORCHESTRATOR_DIR = config/rbac/orchestrator
 RBAC_DAEMON_DIR = config/rbac/daemon
-CRD_DIR ?= config/crds/bases
+CRD_DIR ?= config/crd/bases
 
 
 ##@ Dependencies
