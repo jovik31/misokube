@@ -24,10 +24,10 @@ import (
 // TenantStatusApplyConfiguration represents a declarative configuration of the TenantStatus type for use
 // with apply.
 type TenantStatusApplyConfiguration struct {
-	AssignedNodes               []string                             `json:"assignedNodes,omitempty"`
-	Paused                      *bool                                `json:"paused,omitempty"`
-	WaitingForNodeConfiguration []string                             `json:"waitingForNodeConfiguration,omitempty"`
-	Conditions                  []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	AssignedNodes             []NodeInfoApplyConfiguration         `json:"assignedNodes,omitempty"`
+	Paused                    *bool                                `json:"paused,omitempty"`
+	AwaitingNodeConfiguration []string                             `json:"waitingForNodeConfiguration,omitempty"`
+	Conditions                []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
 }
 
 // TenantStatusApplyConfiguration constructs a declarative configuration of the TenantStatus type for use with
@@ -39,9 +39,12 @@ func TenantStatus() *TenantStatusApplyConfiguration {
 // WithAssignedNodes adds the given value to the AssignedNodes field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the AssignedNodes field.
-func (b *TenantStatusApplyConfiguration) WithAssignedNodes(values ...string) *TenantStatusApplyConfiguration {
+func (b *TenantStatusApplyConfiguration) WithAssignedNodes(values ...*NodeInfoApplyConfiguration) *TenantStatusApplyConfiguration {
 	for i := range values {
-		b.AssignedNodes = append(b.AssignedNodes, values[i])
+		if values[i] == nil {
+			panic("nil value passed to WithAssignedNodes")
+		}
+		b.AssignedNodes = append(b.AssignedNodes, *values[i])
 	}
 	return b
 }
@@ -54,12 +57,12 @@ func (b *TenantStatusApplyConfiguration) WithPaused(value bool) *TenantStatusApp
 	return b
 }
 
-// WithWaitingForNodeConfiguration adds the given value to the WaitingForNodeConfiguration field in the declarative configuration
+// WithAwaitingNodeConfiguration adds the given value to the AwaitingNodeConfiguration field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the WaitingForNodeConfiguration field.
-func (b *TenantStatusApplyConfiguration) WithWaitingForNodeConfiguration(values ...string) *TenantStatusApplyConfiguration {
+// If called multiple times, values provided by each call will be appended to the AwaitingNodeConfiguration field.
+func (b *TenantStatusApplyConfiguration) WithAwaitingNodeConfiguration(values ...string) *TenantStatusApplyConfiguration {
 	for i := range values {
-		b.WaitingForNodeConfiguration = append(b.WaitingForNodeConfiguration, values[i])
+		b.AwaitingNodeConfiguration = append(b.AwaitingNodeConfiguration, values[i])
 	}
 	return b
 }

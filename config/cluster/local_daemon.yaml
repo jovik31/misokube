@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: daemon-service-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: daemon-cluster-role
+rules:
+- apiGroups:
+  - setera.com
+  resources:
+  - tenants
+  - nodestores
+  verbs:
+  - list
+  - watch
+  - create
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - list
+  - watch
+  - create
+  - get
+  - patch
+  - update
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - namespaces
+  - pods
+  - configmaps
+  - events
+  verbs:
+  - create
+  - list
+  - watch
+  - get
+  - patch
+  - update
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: daemon-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: daemon-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: daemon-service-account
+  namespace: default
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: tenantcni-config
+  namespace: default
+  labels:
+    tier: node
+    app: tenantcni
+data:
+  cni-conf.json: |
+   {
+      "cniVersion": "0.4.0",
+      "name": "tenantcni",
+      "type": "tenantcni"
+    }
+  net-conf.json: |
+    {
+      "PodCIDR": "10.244.0.0/16",
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  creationTimestamp: null
+  labels:
+    tier: node
+    app: daemon
+  name: daemon
+spec:
+  selector:
+    matchLabels:
+      app: daemon
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: daemon
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      serviceAccountName: daemon-service-account
+      containers:
+      - image: setera-daemon:v0.1.0
+        name: daemon
+        command:
+        - /daemon
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace 
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        securityContext:
+          privileged: false
+          capabilities:
+            add: ["NET_ADMIN", "NET_RAW"]

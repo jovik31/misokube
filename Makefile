@@ -76,7 +76,7 @@ rbac-all: rbac-daemon rbac-orchestrator ## Generate RBAC for all the components
 install: ## Install CRDs, RBAC and webhook configuration onto the cluster - make sure the kubeconfig file is pointing to the correct cluster
 	kubectl apply -f config/crd/bases
 	kubectl apply -f $(RBAC_ORCHESTRATOR_DIR)
-	kubectl apply -f $(RBAC_DAEMON_DIR)
+##	kubectl apply -f $(RBAC_DAEMON_DIR)
 
 
 ##@ Development
@@ -106,10 +106,10 @@ webhook-ssl: ## Generate new weobhook certificates
 
 .PHONY: build-orchestrator
 build-orchestrator: ## Build orchestrator docker image
-	docker build \ 
-	--build-arg CMD_PATH=$(CMD_ORCHESTRATOR) \
+	docker build \
+	--build-arg BINARY=$(ORCHESTRATOR_COMPONENT) \
 	-f $(DOCKERFILE) \
-	-t $(REGISTRY)/$(ORCHESTRATOR_COMPONENT)r:$(IMAGE_TAG) .
+	-t $(ORCHESTRATOR_IMG) .
 
 docker-build-orchestrator: ## Build orchestrator docker image
 	docker build -t setera.com/orchestrator:latest --build-arg CMD_PATH=./cmd/orchestrator/main.go -f Dockerfile .
@@ -117,9 +117,9 @@ docker-build-orchestrator: ## Build orchestrator docker image
 .PHONY: build-daemon
 build-daemon: # Build daemon docker image
 	docker build \
-	--build-arg CMD_PATH=$(CMD_DAEMON)
-	-f $(DOCKERFILE)
-	-t $(REGISTRY)/$(DAEMON_COMPONENT):$(IMAGE_TAG)
+	--build-arg BINARY=$(DAEMON_COMPONENT) \
+	-f $(DOCKERFILE) \
+	-t $(DAEMON_IMG) .
 
 
 ##@ Run
@@ -139,14 +139,28 @@ kind-cluster-orch-dev: ## Create kind cluster for orchestrator development
 
 .PHONY: kind-cluster-delete
 kind-cluster-delete: ## Delete kind cluster
-	kind delete cluster --name=setera-cluster
+	kind delete cluster --name=setera-cluster-orch-dev
 
 .PHONY: kind-cluster-load-images
 kind-cluster-load-images: ## Load images into the kind cluster
 	kind load docker-image $(REGISTRY_REMOTE)/$(ORCHESTRATOR_COMPONENT):
 
+.PHONY: kind-cluster-load-daemon-image
+kind-cluster-load-daemon-image: ## Load daemon image into the kind cluster
+	kind load docker-image $(DAEMON_IMG) --name=setera-cluster-orch-dev
+
+
 .PHONY: create-node-image
 create-node-image: ## Create custom kind node image
+
+
+##@ Installation
+
+.PHONY: daemon
+daemon: generate-code crd install build-daemon kind-cluster-load-daemon-image ## Install the daemon component
+	kubectl apply -f config/cluster/local_daemon.yaml
+
+
 
 ## Docker variables
 
@@ -155,10 +169,10 @@ REGISTRY_LOCAL ?= local.example.com ## Remote Docker registry
 DOCKERFILE ?= Dockerfile
 
 ## Versioning variables
-DAEMON_IMG ?= $(DAEMON_COMPONENT):$(DAEMON_VERSION)
+DAEMON_IMG ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
 DAEMON_VERSION ?= v0.1.0
 
-ORCHESTRATOR_IMG ?= $(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
+ORCHESTRATOR_IMG ?= setera-$(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
 ORCHESTRATOR_VERSION ?= v0.1.0
 DOCKERFILE ?= Dockerfile
 

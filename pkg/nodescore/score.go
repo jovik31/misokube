@@ -1,4 +1,4 @@
-package orchestrator
+package nodescore
 
 import (
 	"github/setera/pkg/cache"

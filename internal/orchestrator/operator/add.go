@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	//internals
-	"github/setera/pkg/operator"
 
 	// setera api tyes
 	seterav1 "github/setera/pkg/api/setera.com/v1"
@@ -29,7 +28,7 @@ const (
 
 func (t *TenantOperator) addTenant(key string) error {
 
-	ctx := context.Background()
+	//ctx := context.Background()
 
 	// split the name and namespace from the key
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -42,6 +41,7 @@ func (t *TenantOperator) addTenant(key string) error {
 	tenant, err := t.TenantLister.Tenants(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		t.Base.Logger.Error(err, "Tenant object not found in cache", key)
+		return fmt.Errorf("tenant %s not found in namespace %s", name, namespace)
 	} else {
 		if err != nil {
 			t.Base.Logger.Error(err, "Error in getting tenant object from cache", key)
@@ -49,19 +49,16 @@ func (t *TenantOperator) addTenant(key string) error {
 		}
 	}
 
+	// ------------------------------------------------------------------------------------------//
+
+	// create two copies
+	//og := tenant.DeepCopy()
+	mod := tenant.DeepCopy()
+
 	// ensure finalizer is present
-	if !containsString(tenant.Finalizers, TenantFinalizer) {
-		copy := tenant.DeepCopy()
-		copy.Finalizers = append(copy.Finalizers, TenantFinalizer)
-		if _, err := t.Base.Seterav1Clientset.SeteraV1().
-			Tenants(namespace).
-			Update(ctx, copy, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("failed to add finalizer: %w", err)
-		}
-		// re-enqueue as AddEvent to continue bootstrap
-		t.Base.EnqueueWithKey(operator.AddEvent, key)
-		t.Base.Logger.Info("added finalizer, requeued as AddEvent", "key", key)
-		return nil
+	if !ContainsString(tenant.Finalizers, TenantFinalizer) {
+		mod.Finalizers = append(mod.Finalizers, TenantFinalizer)
+		t.Base.Logger.Info("adding finalizer to tenant", "tenant", tenant.Name, "namespace", tenant.Namespace)
 	}
 
 	// list all nodestores
@@ -70,25 +67,27 @@ func (t *TenantOperator) addTenant(key string) error {
 		return fmt.Errorf("listing NodeStores: %w", err)
 	}
 
-	// check if there are enough nodestores for the tenant
-	if len(nodeStores) < tenant.Spec.Zones {
+	// correct score assignement
+	/*scores := t.ScoreCache.GetWithCriteria(og.Spec.Zones)
 
-		t.Base.Logger.Error(nil, "not enough nodestores for tenant", "tenant", tenant.Name, "zones", tenant.Spec.Zones, "available", len(nodeStores))
-		if err := t.patchPauseStatus(ctx, tenant, PausedTenant); err != nil {
-			return err
-		}
+	if len(scores) < og.Spec.Zones {
+		t.Base.Logger.Error(nil, "not enough scores for tenant", "tenant", og.Name, "zones", og.Spec.Zones, "available", len(scores))
+		mod.Status.Paused = PausedTenant
 	} else {
-		t.Base.Logger.Info("enough nodestores available for tenant", "tenant", tenant.Name, "zones", tenant.Spec.Zones, "available", len(nodeStores))
-		t.patchPauseStatus(ctx, tenant, UnpausedTenant)
-	}
+		waitingNodes := make([]string, len(scores))
+		for i, score := range scores {
+	}*/
 
-	// if we reach here, we have enough nodestores and the tenant is not paused
-	t.Base.Logger.Info("tenant is ready to be processed", "tenant", tenant.Name)
+	// assign nodestores to the tenant
+	for _, store := range nodeStores {
+		nodeID := store.Spec.Name
+		mod.Status.AwaitingNodeConfiguration = append(mod.Status.AwaitingNodeConfiguration, nodeID)
+	}
 
 	return nil
 }
 
-func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.Tenant, pausedStatus bool) error {
+func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.Tenant, pausedStatus bool) (*seterav1.Tenant, error) {
 
 	// best practices - always work on a copy
 	tcopy := tenant.DeepCopy()
@@ -98,20 +97,10 @@ func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.
 	if _, err := t.Base.Seterav1Clientset.SeteraV1().
 		Tenants(tenant.Namespace).
 		UpdateStatus(ctx, tcopy, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("updating tenant status: %w", err)
+		return nil, fmt.Errorf("updating tenant status: %w", err)
 	}
 
 	t.Base.Logger.Info("updated tenant pause status", "tenant", tenant.Name, "paused", pausedStatus)
 
-	return nil
-}
-
-func containsString(slice []string, item string) bool {
-
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return tcopy, nil
 }

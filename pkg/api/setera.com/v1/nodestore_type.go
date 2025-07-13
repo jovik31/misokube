@@ -15,13 +15,22 @@ type NodeStore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec NodeStoreSpec `json:"spec"`
+	Spec   NodeStoreSpec   `json:"spec"`
+	Status NodeStoreStatus `json:"status,omitempty"`
 }
 
 type NodeStoreSpec struct {
-	Name      string                 `json:"name"`      // Node name
-	Selectors map[string]string      `json:"selectors"` // Node selectors obtained from node labels to compare against the tenant selectors provided
-	Tenants   map[string]TenantInfra `json:"tenants"`   // Tenants that are deployed on this node
+	Name   string `json:"name"`   // Node name
+	NodeIP string `json:"nodeIP"` // Node IP address
+
+	// +kubebuilder:validation:Optional
+	Selectors map[string]string `json:"selectors"` // Node selectors obtained from node labels to compare against the tenant selectors provided
+}
+
+type NodeStoreStatus struct {
+
+	// +kubebuilder:validation:Optional
+	Tenants map[string]TenantInfra `json:"tenants"` // Tenants that are deployed on this node
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -34,24 +43,18 @@ type NodeStoreList struct {
 }
 
 type TenantInfra struct {
-	Name        string     `json:"name"`        //Tenant Name
-	VNI         int        `json:"vni"`         //Tenant VNI identification
-	VTEP_IP     string     `json:"vtep_ip"`     //VTEP IP address
-	VTEP_MAC    string     `json:"vtep_mac"`    //VTEP MAC address
-	BRIDGE_IP   string     `json:"bridge_ip"`   //Bridge IP address
-	BRIDGE_MAC  string     `json:"bridge_mac"`  //Bridge MAC address
-	Pods        []Pod_Info `json:"pods"`        //Pods that are deployed on this tenant
-	Tenant_CIDR string     `json:"tenant_cidr"` //Tenant CIDR
+	Name       string     `json:"name"`        //Tenant Name
+	TenantCIDR string     `json:"tenant_cidr"` //Tenant CIDR
+	VNI        int        `json:"vni"`         //Tenant VNI identification
+	VTEP_IP    string     `json:"vtep_ip"`     //VTEP IP address
+	VTEP_MAC   string     `json:"vtep_mac"`    //VTEP MAC address
+	BRIDGE_IP  string     `json:"bridge_ip"`   //Bridge IP address
+	BRIDGE_MAC string     `json:"bridge_mac"`  //Bridge MAC address
+	Pods       []Pod_Info `json:"pods"`        //Pods that are deployed on this tenant
 
 }
 
 type Pod_Info struct {
-	Name   string `json:"name"` //Pod Name
-	IP     string `json:"ip"`   //Pod IP address
-	NET_NS string `json:"mac"`  //Pod MAC address
-}
-
-type IP_Usage struct {
-	U_IP []string `json:"used_ips"`  //List of used IPs
-	T_IP int      `json:"total_ips"` //Total number of IPs
+	Name string `json:"name"` //Pod Name
+	IP   string `json:"ip"`   //Pod IP address
 }

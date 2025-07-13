@@ -28,7 +28,7 @@ func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 	oldTenant, ok := oldObj.(*seterav1.Tenant)
 	logger := t.Base.Logger.WithValues("event", operator.UpdateEvent, "tenant", oldTenant.Name)
 	if !ok {
-		logger.Info("Failed to cast old object to tenant in update handler")
+		logger.Info("failed to cast old object to tenant in update handler")
 		return
 	}
 
@@ -38,21 +38,19 @@ func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 		return
 	}
 
-	if oldTenant.ResourceVersion == newTenant.ResourceVersion {
-		logger.Info("Resource version has not changed, skipping update event for tenant")
+	if oldTenant.Generation == newTenant.Generation {
+		logger.Info("resource version has not changed, skipping update event for tenant")
 		return
 	}
 
 	// Only add update event for tenants where the number of nodes has changed
 	if oldTenant.Spec.Zones != newTenant.Spec.Zones {
 
-		logger.Info("Number of nodes changed in tenant")
-		logger.Info("Add tenant to queue - Update event")
+		//logger.Info("Number of nodes changed in tenant,Add tenant to queue - Update event ")
+		//logger.Info("Add tenant to queue - Update event")
 		//o.enqueue(newTenant, UpdateEvent)
-		return
 
 	}
-
 }
 
 // add tenant key to the workqueue - deletion event

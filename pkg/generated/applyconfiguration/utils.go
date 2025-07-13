@@ -32,10 +32,14 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=setera.com, Version=v1
+	case v1.SchemeGroupVersion.WithKind("NodeInfo"):
+		return &seteracomv1.NodeInfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NodeStore"):
 		return &seteracomv1.NodeStoreApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NodeStoreSpec"):
 		return &seteracomv1.NodeStoreSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NodeStoreStatus"):
+		return &seteracomv1.NodeStoreStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Pod_Info"):
 		return &seteracomv1.Pod_InfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Tenant"):

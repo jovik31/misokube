@@ -58,3 +58,13 @@ func (t *TenantOperator) updateTenantObject(tenant *seterav1.Tenant) error {
 	}
 	return nil
 }
+
+func ContainsString(slice []string, item string) bool {
+
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}

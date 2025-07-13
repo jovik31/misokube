@@ -31,15 +31,22 @@ type TenantStatus struct {
 	// Conditions is a list of conditions for the tenant~
 
 	// assigned nodes
-	AssignedNodes []string `json:"assignedNodes,omitempty"` // list of nodes where the tenant is assigned
+	AssignedNodes []NodeInfo `json:"assignedNodes,omitempty"` // list of nodes where the tenant is assigned
 
 	// paused is true if the tenant is paused
 	Paused bool `json:"paused,omitempty"` // tenant is paused
 
-	WaitingForNodeConfiguration []string `json:"waitingForNodeConfiguration,omitempty"` // list of nodes where the tenant is waiting for configuration
+	AwaitingNodeConfiguration []string `json:"waitingForNodeConfiguration,omitempty"` // list of nodes where the tenant is waiting for configuration
 
 	// Conditions is a list of conditions for the tenant
 	Conditions []metav1.Condition `json:"conditions,omitempty"` // list of conditions for the tenant
+}
+
+type NodeInfo struct {
+	Name    string `json:"name"`              // Name of the node
+	IP      string `json:"ip"`                // IP address of the node
+	VtepIP  string `json:"vtepIP,omitempty"`  // VTEP IP address of the node, if applicable
+	VtepMAC string `json:"vtepMAC,omitempty"` // VTEP MAC address of the node, if applicable
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

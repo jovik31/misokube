@@ -9,6 +9,7 @@ import (
 	//internals
 	tenant_operator "github/setera/internal/orchestrator/operator"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
+	scoreCache "github/setera/pkg/nodescore"
 
 	//kubernetes
 	"k8s.io/client-go/kubernetes"
@@ -23,7 +24,7 @@ import (
 
 type Orchestrator struct {
 	Operator    *tenant_operator.TenantOperator
-	ScoreCache  *NodeScoreCache
+	ScoreCache  *scoreCache.NodeScoreCache
 	ScoreServer *http.Server
 }
 
@@ -35,9 +36,9 @@ func New(
 	scoreAddr string,
 ) *Orchestrator {
 
-	cache := NewNodeScoreCache()
+	cache := scoreCache.NewNodeScoreCache()
 
-	tenantOp := tenant_operator.NewTenantOperator(ctx, name, seteraClient, kubeClientset)
+	tenantOp := tenant_operator.NewTenantOperator(ctx, name, seteraClient, kubeClientset, cache)
 
 	return &Orchestrator{
 		Operator:   tenantOp,

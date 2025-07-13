@@ -39,6 +39,8 @@ type NodeStoresGetter interface {
 type NodeStoreInterface interface {
 	Create(ctx context.Context, nodeStore *seteracomv1.NodeStore, opts metav1.CreateOptions) (*seteracomv1.NodeStore, error)
 	Update(ctx context.Context, nodeStore *seteracomv1.NodeStore, opts metav1.UpdateOptions) (*seteracomv1.NodeStore, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, nodeStore *seteracomv1.NodeStore, opts metav1.UpdateOptions) (*seteracomv1.NodeStore, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
 	Get(ctx context.Context, name string, opts metav1.GetOptions) (*seteracomv1.NodeStore, error)
@@ -46,6 +48,8 @@ type NodeStoreInterface interface {
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *seteracomv1.NodeStore, err error)
 	Apply(ctx context.Context, nodeStore *applyconfigurationseteracomv1.NodeStoreApplyConfiguration, opts metav1.ApplyOptions) (result *seteracomv1.NodeStore, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, nodeStore *applyconfigurationseteracomv1.NodeStoreApplyConfiguration, opts metav1.ApplyOptions) (result *seteracomv1.NodeStore, err error)
 	NodeStoreExpansion
 }
 

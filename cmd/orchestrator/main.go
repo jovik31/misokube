@@ -31,20 +31,14 @@ func main() {
 		logger.Info("kubeconfig initialized successfully")
 	}
 
-	kubeClient, err := k8s.NewKubeClient(config)
+	kubeClient, seteraClient, err := k8s.InitClients(config)
 	if err != nil {
-		logger.Error(err, "failed to create kubeClient")
-		os.Exit(1)
-	}
-
-	seteraClient, err := k8s.NewSeteraClient(config)
-	if err != nil {
-		logger.Error(err, "failed to create seteraClient")
+		logger.Error(err, "failed to initialize clients")
 		os.Exit(1)
 	}
 
 	// Build the orchestrator operator (with base operator inside)
-	tenantOperator := orchestrator.NewTenantOperator(ctx, "setera-orchestrator-operator", seteraClient, kubeClient)
+	tenantOperator := orchestrator.NewTenantOperator(ctx, "setera-orchestrator-operator", seteraClient, kubeClient, nil)
 
 	// Run it
 	if err := tenantOperator.Base.Run(ctx); err != nil {

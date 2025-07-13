@@ -40,10 +40,18 @@ spec:
             properties:
               name:
                 type: string
+              nodeIP:
+                type: string
               selectors:
                 additionalProperties:
                   type: string
                 type: object
+            required:
+            - name
+            - nodeIP
+            type: object
+          status:
+            properties:
               tenants:
                 additionalProperties:
                   properties:
@@ -58,13 +66,10 @@ spec:
                         properties:
                           ip:
                             type: string
-                          mac:
-                            type: string
                           name:
                             type: string
                         required:
                         - ip
-                        - mac
                         - name
                         type: object
                       type: array
@@ -87,10 +92,6 @@ spec:
                   - vtep_mac
                   type: object
                 type: object
-            required:
-            - name
-            - selectors
-            - tenants
             type: object
         required:
         - spec

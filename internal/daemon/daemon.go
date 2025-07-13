@@ -27,6 +27,7 @@ import (
 
 	// setera packages
 	seterav1 "github/setera/pkg/api/setera.com/v1"
+	"github/setera/pkg/data/network"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
 	listers "github/setera/pkg/generated/listers/setera.com/v1"
@@ -64,18 +65,40 @@ type K8sController struct {
 }
 
 type Daemon struct {
-	// Network Manager handles IP allocation and subnet management
-	//networkManager *network.NetworkManager
+	NodeID string // Unique identifier for the node
+	NodeIP net.IP // IP address of the node
 
-	// Socket Server for CNI plugin communication
-	socketServer *server.SocketServer
+	NetworkManager *network.NetworkManager // Network Manager handles IP allocation and subnet management
 
-	// K8s Controller manages Kubernetes resources and operations
-	k8sController *K8sController
+	CNIServer *CNIServer
 
-	// Node information
-	nodeName string
-	nodeIP   net.IP
+	NodeStoreController *NodeStoreController
+
+	ScoreReporter *ScoreReporter
+}
+
+func NewDaemon(
+	nodeID string,
+	nodeIP net.IP,
+	networkManager *network.NetworkManager,
+	cniServer *server.CNIServer,
+	nodeStoreController *NodeStoreController,
+	scoreReporter *ScoreReporter,
+) (*Daemon, error) {
+
+	netMgr, err := network.NewNetworkManager(networkManager)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network manager: %w", err)
+	}
+	cniSrv := server.NewCNIServer(cniServer.SocketPath, cniServer.Logger)
+	if err := cniSrv.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start CNI server: %w", err)
+	}
+
+	scoreReporter := NewScoreReporter(scoreReporter.KubeClientset, scoreReporter.Logger)
+
+	nodeStoreController := NewNodeStoreController(nodeStoreController.KubeClientset, nodeStoreController.SeteraClientset, nodeStoreController.Logger)
+
 }
 
 // NewK8sController creates a new K8s controller instance

@@ -1,5 +1,17 @@
 package main
 
+import (
+	"os"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	seterav1 "github/setera/pkg/api/setera.com/v1"
+	"github/setera/pkg/k8s"
+)
+
 /*
 Setera Daemon - Multi-tenant network orchestration agent
 
@@ -20,72 +32,63 @@ Flags:
   --kubeconfig string      Path to kubeconfig file
 */
 
-/*func main() {
-	var (
-		nodeName = flag.String("node-name", getHostname(), "Name of the Kubernetes node")
-		nodeIP   = flag.String("node-ip", "", "IP address of the node (required)")
-		rootCIDR = flag.String("root-cidr", "10.244.0.0/16", "Root CIDR for IP allocation")
-		// socketPath = flag.String("socket-path", "/var/run/setera/setera.sock", "Path for the CNI socket")
-		// kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig file")
-	)
+func main() {
 
-	klog.InitFlags(nil)
-	flag.Parse()
+	// init
+	ctx := signals.SetupSignalHandler()
+	logger := klog.FromContext(ctx).WithName("daemon")
 
-	// Validate required flags
-	if *nodeIP == "" {
-		klog.Fatal("--node-ip is required")
-	}
-
-	// Parse node IP
-	nodeIPAddr := net.ParseIP(*nodeIP)
-	if nodeIPAddr == nil {
-		klog.Fatalf("Invalid node IP: %s", *nodeIP)
-	}
-
-	// Parse root CIDR
-	_, rootNet, err := net.ParseCIDR(*rootCIDR)
+	config, err := k8s.InitKubeConfig()
 	if err != nil {
-		klog.Fatalf("Invalid root CIDR %s: %v", *rootCIDR, err)
+		logger.Error(err, "failed to fetch kubeconfig")
+		os.Exit(1)
 	}
 
-	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle signals for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		klog.Info("Received shutdown signal")
-		cancel()
-	}()
-
-	// Initialize network manager with trie
-	ipTrie := trie.NewTrie(rootNet)
-	ipTrie.Build(30) // Build trie down to /30 subnets
-
-	_ = &network.NetworkManager{
-		Trie:        ipTrie,
-		SubnetTable: make(map[string]*network.SubnetRecord),
+	if config == nil {
+		logger.Error(nil, "kubeconfig is nil, cannot proceed")
+		os.Exit(1)
+	} else {
+		logger.Info("kubeconfig initialized successfully")
 	}
 
-	klog.Infof("Starting Setera daemon on node %s (%s)", *nodeName, nodeIPAddr.String())
-	klog.Info("Network manager initialized with trie-based IP allocation")
-	klog.Info("TODO: Complete k8s client setup and daemon initialization")
+	_, seteraClient, err := k8s.InitClients(config)
+	if err != nil {
+		os.Exit(1)
+	}
 
-	// Wait for shutdown signal
-	<-ctx.Done()
+	// Create nodestore
+	nodename := os.Getenv("NODE_NAME")
+	nodeIP := os.Getenv("NODE_IP")
+	if nodename == "" || nodeIP == "" {
+		klog.Fatal("NODE_NAME and NODE_IP environment variables must be set")
+	}
 
-	klog.Info("Setera daemon stopped")
+	// create NodeStore object for the node
+	_, err = seteraClient.SeteraV1().NodeStores("default").Create(ctx, &seterav1.NodeStore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nodename,
+			Namespace: "default",
+		},
+		Spec: seterav1.NodeStoreSpec{
+			Name:      nodename,
+			NodeIP:    nodeIP,
+			Selectors: nil,
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+
+		if apierrors.IsAlreadyExists(err) {
+			logger.Info("NodeStore already exists, skipping creation", "node", nodename)
+			os.Exit(0)
+		} else {
+			logger.Error(err, "failed to create NodeStore for node", "node", nodename)
+			os.Exit(1)
+		}
+	}
+
+	// create a new daemon instance
+	klog.Infof("Starting Setera Daemon on node %s with IP %s", nodename, nodeIP)
+
+	// get kubeclientset
+
 }
-
-// getHostname returns the system hostname or "unknown" if it cannot be determined
-func getHostname() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "unknown"
-	}
-	return hostname
-}*/

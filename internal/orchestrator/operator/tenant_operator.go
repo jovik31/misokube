@@ -17,6 +17,7 @@ import (
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
 	seterav1 "github/setera/pkg/generated/listers/setera.com/v1"
+	"github/setera/pkg/nodescore"
 	"github/setera/pkg/operator"
 
 	//k8s client-go
@@ -35,13 +36,16 @@ type TenantOperator struct {
 	// To watch and trigger tenant updates
 	NodestoreLister   seterav1.NodeStoreLister
 	NodestoreInformer cache.SharedIndexInformer
+
+	// NodeScoreCache to store the scores of nodes
+	ScoreCache *nodescore.NodeScoreCache
 }
 
 func NewTenantOperator(
 	ctx context.Context,
 	name string,
 	seterav1Clientset seterav1clientset.Interface,
-	kubeClientset kubernetes.Interface) *TenantOperator {
+	kubeClientset kubernetes.Interface, nodeScoreCache *nodescore.NodeScoreCache) *TenantOperator {
 
 	// create setera informer factory, informers and listers
 	factory := seterav1Factory.NewSharedInformerFactory(seterav1Clientset, 30*time.Second)
@@ -57,6 +61,7 @@ func NewTenantOperator(
 		TenantInformer:    tenantInformer,
 		NodestoreLister:   nodestoreLister,
 		NodestoreInformer: nodestoreInformer,
+		ScoreCache:        nodeScoreCache,
 	}
 
 	//inject informers and listers to base operator
@@ -130,6 +135,7 @@ func (t *TenantOperator) Process() bool {
 		err = t.deleteTenant(key)
 
 	}
+
 	if err != nil {
 		// requeue the key with exponential backoff since the tenant could not be processed
 		t.Base.Logger.Error(err, "failed to process tenant", "event", event, "key", key)

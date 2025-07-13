@@ -20,9 +20,9 @@ package v1
 // NodeStoreSpecApplyConfiguration represents a declarative configuration of the NodeStoreSpec type for use
 // with apply.
 type NodeStoreSpecApplyConfiguration struct {
-	Name      *string                                  `json:"name,omitempty"`
-	Selectors map[string]string                        `json:"selectors,omitempty"`
-	Tenants   map[string]TenantInfraApplyConfiguration `json:"tenants,omitempty"`
+	Name      *string           `json:"name,omitempty"`
+	NodeIP    *string           `json:"nodeIP,omitempty"`
+	Selectors map[string]string `json:"selectors,omitempty"`
 }
 
 // NodeStoreSpecApplyConfiguration constructs a declarative configuration of the NodeStoreSpec type for use with
@@ -39,6 +39,14 @@ func (b *NodeStoreSpecApplyConfiguration) WithName(value string) *NodeStoreSpecA
 	return b
 }
 
+// WithNodeIP sets the NodeIP field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NodeIP field is set to the value of the last call.
+func (b *NodeStoreSpecApplyConfiguration) WithNodeIP(value string) *NodeStoreSpecApplyConfiguration {
+	b.NodeIP = &value
+	return b
+}
+
 // WithSelectors puts the entries into the Selectors field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Selectors field,
@@ -49,20 +57,6 @@ func (b *NodeStoreSpecApplyConfiguration) WithSelectors(entries map[string]strin
 	}
 	for k, v := range entries {
 		b.Selectors[k] = v
-	}
-	return b
-}
-
-// WithTenants puts the entries into the Tenants field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, the entries provided by each call will be put on the Tenants field,
-// overwriting an existing map entries in Tenants field with the same key.
-func (b *NodeStoreSpecApplyConfiguration) WithTenants(entries map[string]TenantInfraApplyConfiguration) *NodeStoreSpecApplyConfiguration {
-	if b.Tenants == nil && len(entries) > 0 {
-		b.Tenants = make(map[string]TenantInfraApplyConfiguration, len(entries))
-	}
-	for k, v := range entries {
-		b.Tenants[k] = v
 	}
 	return b
 }

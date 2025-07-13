@@ -20,14 +20,14 @@ package v1
 // TenantInfraApplyConfiguration represents a declarative configuration of the TenantInfra type for use
 // with apply.
 type TenantInfraApplyConfiguration struct {
-	Name        *string                      `json:"name,omitempty"`
-	VNI         *int                         `json:"vni,omitempty"`
-	VTEP_IP     *string                      `json:"vtep_ip,omitempty"`
-	VTEP_MAC    *string                      `json:"vtep_mac,omitempty"`
-	BRIDGE_IP   *string                      `json:"bridge_ip,omitempty"`
-	BRIDGE_MAC  *string                      `json:"bridge_mac,omitempty"`
-	Pods        []Pod_InfoApplyConfiguration `json:"pods,omitempty"`
-	Tenant_CIDR *string                      `json:"tenant_cidr,omitempty"`
+	Name       *string                      `json:"name,omitempty"`
+	TenantCIDR *string                      `json:"tenant_cidr,omitempty"`
+	VNI        *int                         `json:"vni,omitempty"`
+	VTEP_IP    *string                      `json:"vtep_ip,omitempty"`
+	VTEP_MAC   *string                      `json:"vtep_mac,omitempty"`
+	BRIDGE_IP  *string                      `json:"bridge_ip,omitempty"`
+	BRIDGE_MAC *string                      `json:"bridge_mac,omitempty"`
+	Pods       []Pod_InfoApplyConfiguration `json:"pods,omitempty"`
 }
 
 // TenantInfraApplyConfiguration constructs a declarative configuration of the TenantInfra type for use with
@@ -41,6 +41,14 @@ func TenantInfra() *TenantInfraApplyConfiguration {
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *TenantInfraApplyConfiguration) WithName(value string) *TenantInfraApplyConfiguration {
 	b.Name = &value
+	return b
+}
+
+// WithTenantCIDR sets the TenantCIDR field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TenantCIDR field is set to the value of the last call.
+func (b *TenantInfraApplyConfiguration) WithTenantCIDR(value string) *TenantInfraApplyConfiguration {
+	b.TenantCIDR = &value
 	return b
 }
 
@@ -94,13 +102,5 @@ func (b *TenantInfraApplyConfiguration) WithPods(values ...*Pod_InfoApplyConfigu
 		}
 		b.Pods = append(b.Pods, *values[i])
 	}
-	return b
-}
-
-// WithTenant_CIDR sets the Tenant_CIDR field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Tenant_CIDR field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithTenant_CIDR(value string) *TenantInfraApplyConfiguration {
-	b.Tenant_CIDR = &value
 	return b
 }

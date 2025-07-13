@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"flag"
+	"github/setera/pkg/generated/clientset/versioned"
 	"log"
 	"path/filepath"
 
@@ -48,4 +49,21 @@ func NewKubeClient(c *rest.Config) (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 	return kubeClientset, nil
+}
+
+func InitClients(config *rest.Config) (*kubernetes.Clientset, versioned.Interface, error) {
+
+	kubeClientset, err := NewKubeClient(config)
+	if err != nil {
+		log.Printf("Error in creating kubernetes client: %v", err)
+		return nil, nil, err
+	}
+
+	seteraClientset, err := NewSeteraClient(config)
+	if err != nil {
+		log.Printf("Error in creating setera client: %v", err)
+		return nil, nil, err
+	}
+
+	return kubeClientset, seteraClientset, nil
 }
