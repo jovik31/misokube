@@ -10,6 +10,7 @@
 //      iptables -t nat -N NAT‑<TENANT>
 //      iptables ‑A POSTROUTING -s <TENANT_CIDR> -j NAT‑<TENANT>
 //      [inside NAT‑<TENANT>] 1‑to‑many SNAT lines to every remote default /24
+
 // 3. Optional FORWARD helpers in per‑tenant chains if policy==DROP.
 //
 // The Go helpers below create / remove those per‑tenant chains and rules.
