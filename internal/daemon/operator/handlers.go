@@ -42,8 +42,14 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 		if node == n.Base.Name {
 			logger.Info("tenant has node awaiting configuration", "node", node)
 
+			nodeStore, err := n.NodeStoreLister.NodeStores("").Get(n.Base.Name)
+			if err != nil {
+				logger.Error(err, "failed to get NodeStore for node", "node", n.Base.Name)
+				return
+			}
+
 			// trigger addNodeStore for this node
-			n.Base.Enqueue(node, WaitingNodeTenantEvent)
+			n.Base.Enqueue(nodeStore, WaitingNodeTenantEvent)
 		} else {
 			logger.Info("tenant does not have node awaiting configuration", "node", node)
 		}

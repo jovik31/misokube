@@ -12,8 +12,6 @@ import (
 
 func (b *BaseOperator) Enqueue(obj any, event EventType) {
 
-	// check if every node has an existing nodestore
-
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		b.Logger.Error(err, "Error in getting key for object", obj)

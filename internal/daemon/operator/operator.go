@@ -14,6 +14,7 @@ import (
 	"time"
 
 	// internal packages
+
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
 	seterav1 "github/setera/pkg/generated/listers/setera.com/v1"
@@ -140,12 +141,22 @@ func (n *NodeStoreOperator) Process() bool {
 
 	var err error
 	switch event {
+
+	// nodestore added
 	case operator.AddEvent:
 		err = n.addNodeStore(key)
+
+	// nodestore updated
 	case operator.UpdateEvent:
 		err = n.updateNodeStore(key)
+
+	// nodestore deleted
 	case operator.DeleteEvent:
 		err = n.deleteNodeStore(key)
+
+	// tenant created with awaiting node configuration for this node
+	case WaitingNodeTenantEvent:
+		err = n.configNodestore(key)
 	}
 
 	if err != nil {
