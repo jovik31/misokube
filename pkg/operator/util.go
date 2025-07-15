@@ -2,7 +2,7 @@ package operator
 
 import (
 
-	//std
+	//std 	
 	"fmt"
 	"strings"
 
@@ -45,4 +45,23 @@ func ParseQueuedKey(wrappedKey string) (EventType, string) {
 	event := EventType(parts[0])
 	key := parts[1]
 	return event, key
+}
+
+func Contains(obj_slice []any, obj any) (bool){
+
+
+	//if reflect.TypeOf(obj_slice).Elem() != reflect.TypeOf(obj) {
+		//return false
+	//}
+
+	// check if elements are of the same type 
+	for _, element := range obj_slice {
+
+		if element == obj_slice {
+
+			return true
+		}
+	}
+
+	return false
 }

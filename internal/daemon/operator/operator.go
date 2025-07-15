@@ -164,7 +164,7 @@ func (n *NodeStoreOperator) Process() bool {
 		// requeue the nodestore if there was an error
 		n.Base.Logger.Error(err, "Error processing event", "event", event, "key", key)
 		utilruntime.HandleError(fmt.Errorf("error processing key %s: %w", key, err))
-		n.Base.Workqueue.AddRateLimited(wrappedKey)
+		n.Base.Workqueue.AddRateLimited(wrappedKey) q
 	} else {
 
 		n.Base.Logger.Info("Successfully processed event", "event", event, "key", key)

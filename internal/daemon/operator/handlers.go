@@ -48,7 +48,7 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 				return
 			}
 
-			// trigger addNodeStore for this node
+			// trigger tenant configuration for this node
 			n.Base.Enqueue(nodeStore, WaitingNodeTenantEvent)
 		} else {
 			logger.Info("tenant does not have node awaiting configuration", "node", node)
