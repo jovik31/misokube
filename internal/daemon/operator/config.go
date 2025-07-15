@@ -14,16 +14,17 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 
 		//network config
 
-		// allocate tenant network
+		// allocate tenant network[IP CIDR]
 		// vni 1 identifies the default tenant
 		// calculate VNI - hash with limits from 2-16777214 - same tenant name same int
 		// allocate tenant vtep[IP, MAC]
 		// allocate tenant bridge[IP, MAC]
+		// add local routes
 
 
 		// add network info to nodestore
 
-		// route config
+		// route config - inter node communication
 		// check if tenant has configedNodes
 
 			// for each config node in the same tenant
