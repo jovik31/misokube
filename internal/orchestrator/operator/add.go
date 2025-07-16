@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	//internals
+	configs "github/setera/internal"
 
 	// setera api tyes
 	seterav1 "github/setera/pkg/api/setera.com/v1"
@@ -18,12 +19,6 @@ import (
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
-)
-
-const (
-	TenantFinalizer = "finalizer.setera.com"
-	PausedTenant    = true
-	UnpausedTenant  = false
 )
 
 func (t *TenantOperator) addTenant(key string) error {
@@ -56,8 +51,8 @@ func (t *TenantOperator) addTenant(key string) error {
 	mod := tenant.DeepCopy()
 
 	// ensure finalizer is present
-	if !ContainsString(tenant.Finalizers, TenantFinalizer) {
-		mod.Finalizers = append(mod.Finalizers, TenantFinalizer)
+	if !ContainsString(tenant.Finalizers, configs.TenantFinalizer) {
+		mod.Finalizers = append(mod.Finalizers, configs.TenantFinalizer)
 		t.Base.Logger.Info("adding finalizer to tenant", "tenant", tenant.Name, "namespace", tenant.Namespace)
 	}
 

@@ -1,13 +1,75 @@
 package daemon
 
-import "k8s.io/client-go/tools/cache"
+import (
 
-// Config holds the configuration for the NodeStoreOperator - called when a new tenant is created 
+	// internals
+	"fmt"
+
+	// api types
+	seterav1 "github/setera/pkg/api/setera.com/v1"
+
+	// configs
+	configs "github/setera/internal"
+
+	// internals
+	"github/setera/pkg/operator"
+	// k8s
+	"k8s.io/apimachinery/pkg/api/errors"
+
+	// client-go
+	"k8s.io/client-go/tools/cache"
+)
+
+// Config holds the configuration for the NodeStoreOperator - called when a new tenant is created
 func (n *NodeStoreOperator) configNodestore(key string) error {
 
 	n.Base.Logger.Info("Configuring NodeStore", "key", key)
 
+	// get the nodestore key
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		n.Base.Logger.Error(err, "Failed to split key", "key", key)
+		return err
+	}
+
+	// fetch nodestore from cache
+	nodestore, err := n.NodeStoreLister.NodeStores(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			n.Base.Logger.Error(err, "NodeStore not found in cache", "key", key)
+			return fmt.Errorf("nodestore %s not found in namespace %s", name, namespace)
+		} else {
+			n.Base.Logger.Error(err, "Error fetching NodeStore from cache", "key", key)
+			return err
+		}
+	}
+
+	// create a copy of the nodestore
+	mod := nodestore.DeepCopy()
+
+	// ensure finalizer is present
+	if !operator.ContainsString(nodestore.Finalizers, configs.NodeStoreFinalizer) {
+		mod.Finalizers = append(mod.Finalizers, configs.NodeStoreFinalizer)
+		n.Base.Logger.Info("Adding finalizer to NodeStore", "nodestore", nodestore.Name)
+	}
+
 	// check the tenant where this node is in the awaiting node array
+	waitingTenants, err := n.TenantInformer.GetIndexer().ByIndex("awaitingNodes", nodestore.Name)
+	if err != nil {
+		n.Base.Logger.Error(err, "Failed to get tenants awaiting node configuration", "node", n.Base.Name)
+	}
+
+	for _, tenantObj := range waitingTenants {
+		tenant, ok := tenantObj.(*seterav1.Tenant)
+		if !ok {
+			n.Base.Logger.Error(nil, "Failed to cast tenant object", "tenantObj", tenantObj)
+		}
+		n.Base.Logger.Info("Configuring NodeStore for tenant", "tenant", tenant.Name)
+
+		// check if the tenant is already configured in this node or is configured in the tenant
+		// Call network manager to perform tenant configuration and return a TenantInfo object
+
+	}
 
 	// for all the tenants check if it is already configured in this node (nodestore.Status.Tenants)
 	// if so get the tenant infra and check the vailidity of the configuration and return.
@@ -46,21 +108,3 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 	// Configure the tenant in the nodestore
 	return nil
 }
-
-// add utils for the indexers to get - this probably doesnt work since it requires inspection of tenant
-func (n *NodeStoreOperator) getTenantsByAwaitingNode(name string) []string {
-
-	err := n.TenantInformer.GetIndexer().AddIndexers(cache.Indexers{
-		"awaitingNodes": func (obj interface{})([]string, err)  {
-
-
-			return nil, nil
-		}
-	}) 
-
-
-}  // returns the tenants where this node is awaiting configuration
-func GetTenantsByAssignedNodes(name string) []string {
-
-
-} // returns the tenants where this node is an assigned node

@@ -15,6 +15,7 @@ import (
 
 	// internal packages
 
+	v1 "github/setera/pkg/api/setera.com/v1"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
 	seterav1 "github/setera/pkg/generated/listers/setera.com/v1"
@@ -102,6 +103,17 @@ func NewNodeStoreOperator(
 
 	podInformer := factoryCore.Core().V1().Pods().Informer()
 	podLister := factoryCore.Core().V1().Pods().Lister()
+
+	// build indexers
+	tenantInformer.AddIndexers(cache.Indexers{
+		"awaitingNodes": func(obj interface{}) ([]string, error) {
+			tenant, ok := obj.(*v1.Tenant)
+			if !ok {
+				return nil, fmt.Errorf("object is not a Tenant: %T", obj)
+			}
+			return tenant.Status.AwaitingNodeConfiguration, nil
+		},
+	})
 
 	// build orchestrator operator handler
 	nodeStoreOperator := &NodeStoreOperator{

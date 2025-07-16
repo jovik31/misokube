@@ -14,6 +14,9 @@ import (
 	"time"
 
 	// internal packages
+	"github/setera/internal"
+	v1 "github/setera/pkg/api/setera.com/v1"
+
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
 	seterav1 "github/setera/pkg/generated/listers/setera.com/v1"
@@ -25,6 +28,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	//k8s-api
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
@@ -151,4 +155,27 @@ func (t *TenantOperator) Process() bool {
 
 	return true
 
+}
+
+// checks if tenant has the finalizer
+func (t *TenantOperator) checkTenantFinalizer(tenant *v1.Tenant) bool {
+
+	for _, f := range tenant.Finalizers {
+		if f == internal.TenantFinalizer {
+			return true // finalizer found
+		}
+	}
+	return false // finalizer not found
+
+}
+
+func (t *TenantOperator) updateTenantObject(tenant *v1.Tenant) error {
+
+	// update the tenant object in the k8s cluster
+	_, err := t.Base.Seterav1Clientset.SeteraV1().Tenants(tenant.Namespace).Update(context.TODO(), tenant, metav1.UpdateOptions{})
+	if err != nil {
+		t.Base.Logger.Error(err, "Error in updating tenant object in the k8s cluster", tenant.Name)
+		return err
+	}
+	return nil
 }
