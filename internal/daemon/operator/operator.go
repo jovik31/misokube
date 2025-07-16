@@ -31,6 +31,44 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
+// problem: the tenant default requires a larger network than a client tenant. in this case a /29
+// actually it doesnt since we can always update and increase the default tenant information.
+
+// default tenant SNAT rules application
+
+// for a client tenant A that needs to reach the client tenant B it requires the following:
+// No iptables rules between tenant A and tenant default subnet in the same node
+// SNAT rule for each remote node subnet of the tenant-default, with the NAT being an IP in the local node tenant default subnet
+// To comunicate with the nodes themselves add a forward rule to get the node cidrs.
+
+// nodestore logic on the nodestore operator side
+// when a nodestore has its status updated we need to see:
+// if a new tenant was added we need to:
+// configure tenant isolation between:
+// tenant and the existing tenants in the node except the default tenant.
+// check the tenants and configure iptables rules to block the traffic between them
+//  if there is a change in the tenant Info from the previous
+
+/* Need to think a bit more on the logic and flow onf the nodestore interaction between each other. This is because we can extract
+Tenant Info from both the nodestores and the tenant custom resources.
+
+	1) Use tenant to get other node configuration:
+
+
+	2) Use the nodestores of other nodes to add and update tenant info across nodes:
+
+		When a remote nodestore is updated get the tenants that are common to the local one
+		For each common tenant:
+			Same tenant: Add routing, ARP and FDB entries
+			Different tenants:
+				// if default tenant:
+					Add SNAT rules
+				// else
+					// Do nothing
+		--> update all required rules, entries and routes when a tenant subnet changes
+
+*/
+
 type NodeStoreOperator struct {
 	Base *operator.BaseOperator
 
@@ -87,21 +125,21 @@ func (n *NodeStoreOperator) RegisterEventHandler() {
 
 	n.NodeStoreInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 
-		AddFunc:    n.addNodeStoreHandler,
-		UpdateFunc: n.updateNodeStoreHandler,
-		DeleteFunc: n.deleteNodeStoreHandler,
+		AddFunc:    n.addNodeStoreHandler,    // when a nodestore is added we need to add its finalizer and block its deletion
+		UpdateFunc: n.updateNodeStoreHandler, // when there is an update to a nodestore status we need to trigger the config of the iptables to block communications between tenants on the same node and add the snat rules to access the default tenant
+		DeleteFunc: n.deleteNodeStoreHandler, // a node store cannot be deleted
 	})
 
 	n.TenantInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    nil,
-		UpdateFunc: n.updateNodestoreFromTenantHandler,
-		DeleteFunc: n.deleteNodestoreFromTenantHandler,
+		AddFunc:    nil,                                // handled by the orchestrator tenant operator - we need the tenant to have nodes in waiting or assigned
+		UpdateFunc: n.updateNodestoreFromTenantHandler, // when a tenant is updated we need to trigger the node wait config or the node assign config
+		DeleteFunc: n.deleteNodestoreFromTenantHandler, // when a tenant is deleted we need to trigger the node remove tenant config
 	})
 
 	n.PodInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    n.addPod,
-		UpdateFunc: nil,
-		DeleteFunc: nil,
+		AddFunc:    n.addPod, // handle pod addition and save it so we can pass the tenantID back to the CNI
+		UpdateFunc: nil,      // not required/handled - feature: change pod to a differnet tenant while running
+		DeleteFunc: nil,      // not required/handled - feature: change pod to a different tenant while running
 	})
 }
 
@@ -164,7 +202,7 @@ func (n *NodeStoreOperator) Process() bool {
 		// requeue the nodestore if there was an error
 		n.Base.Logger.Error(err, "Error processing event", "event", event, "key", key)
 		utilruntime.HandleError(fmt.Errorf("error processing key %s: %w", key, err))
-		n.Base.Workqueue.AddRateLimited(wrappedKey) q
+		n.Base.Workqueue.AddRateLimited(wrappedKey)
 	} else {
 
 		n.Base.Logger.Info("Successfully processed event", "event", event, "key", key)
