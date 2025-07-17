@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/netip"
 	"sync"
 
 	// internal packages
@@ -48,20 +47,9 @@ func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*Subnet
 
 	// 2) create bridge
 
-	brName := "br-" + id
-	bridge, err := backend.CreateBridge(brName, 1500, netip.MustParseAddr(cidr.IP.String()))
+	bridge, bridgeIP, err := backend.CreateBridge(id, 1500, cidr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bridge %s: %w", brName, err)
-	}
-	// 3) assign the gateway IP (first IP of the CIDR) to the bridge
-	ip := cidr.IP.Mask(cidr.Mask)
-	gateway := ip.String()
-	addr := &netlink.Addr{IPNet: cidr}
-	if err := netlink.AddrAdd(bridge, addr); err != nil {
-		return nil, fmt.Errorf("addr add %s: %w", cidr, err)
-	}
-	if err := netlink.LinkSetUp(bridge); err != nil {
-		return nil, fmt.Errorf("link up %s: %w", brName, err)
+		return nil, fmt.Errorf("failed to create bridge %s: %w", id, err)
 	}
 
 	// 4) TODO: create Vxlan/VTEP device, attach to bridge, set up overlay
@@ -70,8 +58,8 @@ func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*Subnet
 	rec := &SubnetRecord{
 		Network: cidr,
 		Bridge: &BridgeRecord{
-			Name:      brName,
-			GatewayIP: gateway,
+			Name:      bridge.Attrs().Name,
+			GatewayIP: bridgeIP.String(),
 		},
 		VTEP: nil, // fill in once you create it
 		IPs:  make(map[string]ContainerNetInfo),

@@ -10,27 +10,22 @@ import (
 	"syscall"
 
 	"github.com/vishvananda/netlink"
+
+	// internal packages
+	config "github/setera/pkg"
 )
 
-const (
-	brPrefix    = "br-"
-	vxlanPrefix = "vxlan-"
-
-	maxDeviceNameLength = 15 // max length for a network device name in Linux
-
-)
-
-func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, error) {
+func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, *net.IPNet, error) {
 
 	// ensure the bridge name is within the character limit
-	bridgeName, err := GenerateDeviceName(brPrefix, name)
+	bridgeName, err := GenerateDeviceName(config.BrPrefix, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// check if the bridge already exists
 	if l, _ := netlink.LinkByName(bridgeName); l != nil {
-		return l, nil
+		return l, nil, nil
 	}
 
 	br := &netlink.Bridge{
@@ -42,47 +37,47 @@ func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, error
 	}
 
 	if err := netlink.LinkAdd(br); err != nil && err != syscall.EEXIST {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dev, err := netlink.LinkByName(bridgeName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// --------------------add an IP address to the bridge---------------------------------\\
 
 	// ensure the network is not nil
 	if network == nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// get first ip of network
 	bridgeIP, err := FirstIP(network)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// add the IP address to the bridge
 	if err := netlink.AddrAdd(dev, &netlink.Addr{IPNet: bridgeIP}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := netlink.LinkSetUp(dev); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return dev, nil
+	return dev, bridgeIP, nil
 }
 
 // using netlink to generate a device name within a certain character limit
 func GenerateDeviceName(prefix string, name string) (string, error) {
 
-	if len(prefix) > maxDeviceNameLength {
-		return "", fmt.Errorf("prefix %s exceeds max length %d", prefix, maxDeviceNameLength)
+	if len(prefix) > config.MaxDeviceNameLength {
+		return "", fmt.Errorf("prefix %s exceeds max length %d", prefix, config.MaxDeviceNameLength)
 	}
 
-	hashLen := maxDeviceNameLength - len(prefix)
+	hashLen := config.MaxDeviceNameLength - len(prefix)
 
 	hash := sha1.New()
 	hash.Write([]byte(name))

@@ -5,7 +5,7 @@ import (
 	//std
 
 	// internal pkg
-	configs "github/setera/internal"
+	config "github/setera/pkg"
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/operator"
 
@@ -77,7 +77,7 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 		if node == n.nodeName {
 			logger.Info("tenant has node awaiting configuration", "node", node)
 
-			nodeStore, err := n.NodeStoreLister.NodeStores(configs.SeteraNamespace).Get(n.nodeName)
+			nodeStore, err := n.NodeStoreLister.NodeStores(config.SeteraNamespace).Get(n.nodeName)
 			if err != nil {
 				logger.Error(err, "failed to get NodeStore for node", "node", n.nodeName)
 				return

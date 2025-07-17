@@ -9,7 +9,7 @@ import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// configs
-	configs "github/setera/internal"
+	config "github/setera/pkg"
 
 	// internals
 	"github/setera/pkg/operator"
@@ -50,8 +50,8 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 	mod := nodestore.DeepCopy()
 
 	// ensure finalizer is present
-	if !operator.ContainsString(nodestore.Finalizers, configs.NodeStoreFinalizer) {
-		mod.Finalizers = append(mod.Finalizers, configs.NodeStoreFinalizer)
+	if !operator.ContainsString(nodestore.Finalizers, config.NodeStoreFinalizer) {
+		mod.Finalizers = append(mod.Finalizers, config.NodeStoreFinalizer)
 		n.Base.Logger.Info("Adding finalizer to NodeStore", "nodestore", nodestore.Name)
 	}
 

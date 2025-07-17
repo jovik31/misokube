@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	//internal packages
-	configs "github/setera/internal"
+	config "github/setera/pkg"
 	"github/setera/pkg/operator"
 
 	//k8s client-go
@@ -46,8 +46,8 @@ func (n *NodeStoreOperator) addNodeStore(key string) error {
 	mod := nodestore.DeepCopy()
 
 	// ensure finalizer is present
-	if !operator.ContainsString(nodestore.Finalizers, configs.NodeStoreFinalizer) {
-		mod.Finalizers = append(mod.Finalizers, configs.NodeStoreFinalizer)
+	if !operator.ContainsString(nodestore.Finalizers, config.NodeStoreFinalizer) {
+		mod.Finalizers = append(mod.Finalizers, config.NodeStoreFinalizer)
 		n.Base.Logger.WithValues("nodestore", nodestore.Name).Info("Adding finalizer to NodeStore")
 	}
 

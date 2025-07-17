@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	//internals
-	configs "github/setera/internal"
+	config "github/setera/pkg"
 	"github/setera/pkg/operator"
 
 	// setera api tyes
@@ -54,14 +54,14 @@ func (t *TenantOperator) addTenant(key string) error {
 	mod := tenant.DeepCopy()
 
 	// ensure finalizer is present
-	if !operator.ContainsString(tenant.Finalizers, configs.TenantFinalizer) {
+	if !operator.ContainsString(tenant.Finalizers, config.TenantFinalizer) {
 
 		t.Base.Logger.WithValues("tenant", tenant.Name, "namespace", namespace).Info("Adding finalizer to Tenant")
 
 		// add finalizer load
 		patchPayload := map[string]interface{}{
 			"metadata": map[string]interface{}{
-				"finalizers": []string{configs.TenantFinalizer},
+				"finalizers": []string{config.TenantFinalizer},
 			},
 		}
 
@@ -112,7 +112,7 @@ func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.
 
 	// best practices - always work on a copy
 	tcopy := tenant.DeepCopy()
-	tcopy.Status.Paused = configs.PausedTenant
+	tcopy.Status.Paused = config.PausedTenant
 
 	// Update the tenant status
 	if _, err := t.Base.Seterav1Clientset.SeteraV1().

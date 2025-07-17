@@ -14,7 +14,7 @@ import (
 	"time"
 
 	// internal packages
-	"github/setera/internal"
+	config "github/setera/pkg"
 	v1 "github/setera/pkg/api/setera.com/v1"
 
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
@@ -161,7 +161,7 @@ func (t *TenantOperator) Process() bool {
 func (t *TenantOperator) checkTenantFinalizer(tenant *v1.Tenant) bool {
 
 	for _, f := range tenant.Finalizers {
-		if f == internal.TenantFinalizer {
+		if f == config.TenantFinalizer {
 			return true // finalizer found
 		}
 	}
