@@ -88,7 +88,7 @@ func GenerateDeviceName(prefix string, name string) (string, error) {
 
 func FirstIP(ip *net.IPNet) (*net.IPNet, error) {
 
-	// extract the network address
+	// extract the network address - ip.IP does not guarantee to be the network address
 	netIP := ip.IP.Mask(ip.Mask)
 	ipLen := len(netIP)
 
