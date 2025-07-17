@@ -11,3 +11,8 @@ const (
 	PausedTenant    = true
 	UnpausedTenant  = false
 )
+
+const (
+	// setera_namespace is the namespace where Setera resources are deployed
+	SeteraNamespace = "default"
+)

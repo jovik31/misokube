@@ -32,10 +32,10 @@ func (trie *IPTrie) Build(maxMaskSize int) {
 }
 
 // Deallocate a tenant from a trie node
-func (trie *IPTrie) DeallocateTenant(tenantID string) error {
-	node := trie.GetNodeByTenantID(tenantID)
+func (trie *IPTrie) DeallocateSubnet(id string) error {
+	node := trie.GetNodeByID(id)
 	if node == nil {
-		return fmt.Errorf("tenant %q not found", tenantID)
+		return fmt.Errorf("tenant %q not found", id)
 	}
 
 	// Prevent root node deallocation
@@ -45,8 +45,8 @@ func (trie *IPTrie) DeallocateTenant(tenantID string) error {
 
 	// Clear allocation info
 	node.Allocated = false
-	node.TenantID = ""
-	delete(trie.AllocMap, tenantID)
+	node.ID = ""
+	delete(trie.AllocMap, id)
 
 	// Rebuild children if this is not a /30 leaf
 	maskSize, _ := node.Prefix.Mask.Size()
@@ -59,7 +59,7 @@ func (trie *IPTrie) DeallocateTenant(tenantID string) error {
 }
 
 // Allocate a tenant to a trie node, returns false and with error if allocation fails
-func (trie *IPTrie) AllocateTenantSubnet(tenantID string) (*TrieNode, error) {
+func (trie *IPTrie) AllocateSubnet(id string) (*TrieNode, error) {
 
 	// check if the root exists
 	if trie.Root == nil {
@@ -67,8 +67,8 @@ func (trie *IPTrie) AllocateTenantSubnet(tenantID string) (*TrieNode, error) {
 	}
 
 	// check if the tenantID already exists and has an allocated subnet
-	if _, exists := trie.AllocMap[tenantID]; exists {
-		return nil, fmt.Errorf("tenant %q, aleardy exists and has an allocated subnet", tenantID)
+	if _, exists := trie.AllocMap[id]; exists {
+		return nil, fmt.Errorf("tenant %q, aleardy exists and has an allocated subnet", id)
 	}
 
 	freeSubnets := trie.FindAllFreeSubnets()
@@ -99,8 +99,8 @@ func (trie *IPTrie) AllocateTenantSubnet(tenantID string) (*TrieNode, error) {
 	}
 
 	bestNode.Allocated = true
-	bestNode.TenantID = tenantID
-	trie.AllocMap[tenantID] = bestNode
+	bestNode.ID = id
+	trie.AllocMap[id] = bestNode
 
 	return bestNode, nil
 }
@@ -114,9 +114,9 @@ func (trie *IPTrie) FindAllFreeSubnets() []*TrieNode {
 	return freeSubnets
 }
 
-func (trie *IPTrie) MergeSubnet(tenantID string) error {
+func (trie *IPTrie) MergeSubnet(id string) error {
 
-	node := trie.GetNodeByTenantID(tenantID)
+	node := trie.GetNodeByID(id)
 
 	// Node is empty, as its parent
 	if node == nil || node.Parent == nil {
@@ -140,7 +140,7 @@ func (trie *IPTrie) MergeSubnet(tenantID string) error {
 
 	if sibling.Allocated || sibling.hasAllocatedDescendants() {
 
-		return fmt.Errorf("cannot merge tenant %s with subnet %v: tenant %s has subnet %v allocated", node.TenantID, node.Prefix, sibling.TenantID, sibling.Prefix)
+		return fmt.Errorf("cannot merge tenant %s with subnet %v: tenant %s has subnet %v allocated", node.ID, node.Prefix, sibling.ID, sibling.Prefix)
 	}
 
 	//should never reach this case because allocation a leaf requires its parent to be empty
@@ -151,17 +151,17 @@ func (trie *IPTrie) MergeSubnet(tenantID string) error {
 
 	//Merge the subnetworks
 	parent.Allocated = true
-	parent.TenantID = tenantID
+	parent.ID = id
 	parent.Children = [2]*TrieNode{nil, nil}
 
 	//Clear child state
 	node.Allocated = false
-	node.TenantID = ""
+	node.ID = ""
 	sibling.Allocated = false
-	sibling.TenantID = ""
+	sibling.ID = ""
 
 	//Update the alloc map
-	trie.AllocMap[tenantID] = parent
+	trie.AllocMap[id] = parent
 
 	return nil
 
@@ -173,7 +173,7 @@ func (trie *IPTrie) PrintTree() {
 	}
 }
 
-func (trie *IPTrie) GetNodeByTenantID(tenantID string) *TrieNode {
+func (trie *IPTrie) GetNodeByID(id string) *TrieNode {
 	var result *TrieNode
 
 	var dfs func(node *TrieNode)
@@ -183,7 +183,7 @@ func (trie *IPTrie) GetNodeByTenantID(tenantID string) *TrieNode {
 
 			return
 		}
-		if node.Allocated && node.TenantID == tenantID {
+		if node.Allocated && node.ID == id {
 			result = node
 			return
 		}

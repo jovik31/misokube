@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+// config nodestore that is called from a tenant that added them to the awaiting nodes
+
 // Config holds the configuration for the NodeStoreOperator - called when a new tenant is created
 func (n *NodeStoreOperator) configNodestore(key string) error {
 
@@ -66,10 +68,17 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 		}
 		n.Base.Logger.Info("Configuring NodeStore for tenant", "tenant", tenant.Name)
 
+		configed_tenant_infra, err := n.NetService.AllocateTenant(tenant.Name)
+		if err != nil {
+			n.Base.Logger.Error(err, "Failed to allocate tenant infrastructure", "tenant", tenant.Name)
+		}
+		n.Base.Logger.Info("Allocated tenant infrastructure", "tenant", tenant.Name, "infra", configed_tenant_infra)
 		// check if the tenant is already configured in this node or is configured in the tenant
 		// Call network manager to perform tenant configuration and return a TenantInfo object
 
 	}
+
+	// update the nodestore with the network configuration
 
 	// for all the tenants check if it is already configured in this node (nodestore.Status.Tenants)
 	// if so get the tenant infra and check the vailidity of the configuration and return.

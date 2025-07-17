@@ -28,7 +28,7 @@ func main() {
 		logger.Error(nil, "kubeconfig is nil, cannot proceed")
 		os.Exit(1)
 	} else {
-		logger.Info("kubeconfig initialized successfully")
+		logger.Info("INIT KUBECONFIG SUCCESSFUL")
 	}
 
 	kubeClient, seteraClient, err := k8s.InitClients(config)

@@ -10,7 +10,7 @@ type TrieNode struct {
 	Parent    *TrieNode
 	Children  [2]*TrieNode
 	Allocated bool
-	TenantID  string
+	ID        string
 }
 
 func NewTrieNode(prefix *net.IPNet, parent *TrieNode) *TrieNode {
@@ -19,7 +19,7 @@ func NewTrieNode(prefix *net.IPNet, parent *TrieNode) *TrieNode {
 		Prefix:    prefix,
 		Parent:    parent,
 		Allocated: false,
-		TenantID:  "",
+		ID:        "",
 	}
 }
 
@@ -48,11 +48,11 @@ func (node *TrieNode) printTree(prefix string, isTail bool) {
 	if isTail {
 		connector = "└── "
 	}
-	if node.TenantID == "" {
+	if node.ID == "" {
 		fmt.Printf("%s%s%s %v \n", prefix, connector, node.Prefix.String(), node.Allocated)
 
 	} else {
-		fmt.Printf("%s%s%s %v %s\n", prefix, connector, node.Prefix.String(), node.Allocated, node.TenantID)
+		fmt.Printf("%s%s%s %v %s\n", prefix, connector, node.Prefix.String(), node.Allocated, node.ID)
 	}
 
 	children := []*TrieNode{node.Children[0], node.Children[1]}
@@ -104,7 +104,7 @@ func (node *TrieNode) Build(maxMaskSize int) {
 			Prefix:    subnet,
 			Parent:    node,
 			Allocated: false,
-			TenantID:  "",
+			ID:        "",
 		}
 		node.Children[i] = child
 		child.Build(maxMaskSize)

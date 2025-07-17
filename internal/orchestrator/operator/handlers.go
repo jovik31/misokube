@@ -14,9 +14,9 @@ func (t *TenantOperator) addTenantHandler(obj any) {
 
 	if !ok {
 		logger.Info("Failed to cast object to tenant in add handler")
+		return
 
 	}
-	logger.Info("Adding tenant to queue")
 
 	t.Base.Enqueue(tenant, operator.AddEvent)
 
@@ -39,7 +39,6 @@ func (t *TenantOperator) updateTenantHandler(oldObj, newObj any) {
 	}
 
 	if oldTenant.Generation == newTenant.Generation {
-		logger.Info("resource version has not changed, skipping update event for tenant")
 		return
 	}
 
@@ -85,7 +84,6 @@ func (t *TenantOperator) updateTenantFromNodestoreHandler(oldObj, newObj any) {
 	}
 
 	if oldNodestore.ResourceVersion == newNodestore.ResourceVersion {
-		logger.Info("Resource version has not changed, skipping update event for nodestore")
 		return
 	}
 

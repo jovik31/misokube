@@ -36,6 +36,7 @@ type ContainerNetInfo struct {
 	IFname string //interface name
 	NetNS  string // netns path and name
 	Name   string // container name
+	IP     string // allocated IP address
 }
 
 // newSubnetRecord initializes the bitmap, reserving reservedCount bits up front.

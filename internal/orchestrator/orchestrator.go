@@ -28,7 +28,7 @@ type Orchestrator struct {
 	ScoreServer *http.Server
 }
 
-func New(
+func NewOrchestrator(
 	ctx context.Context,
 	name string,
 	seteraClient seterav1clientset.Interface,

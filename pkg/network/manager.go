@@ -6,17 +6,21 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 
 	// internal packages
 	"github/setera/pkg/data/trie"
+	"github/setera/pkg/network/backend"
+
+	"github.com/vishvananda/netlink"
 )
 
 type NetworkManager struct {
 	mu            sync.RWMutex
-	Trie          *trie.IPTrie                    // The trie that records the allocated and non-allocated subnets
-	SubnetRecords map[string]*SubnetRecord        // tenantID <--> subnetRecord
-	watchers      []chan map[string]*SubnetRecord // channels to notify watchers of subnet changes
+	Trie          *trie.IPTrie             // The trie that records the allocated and non-allocated subnets
+	SubnetRecords map[string]*SubnetRecord // tenantID <--> subnetRecord
+
 }
 
 func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
@@ -27,29 +31,28 @@ func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
 	return &NetworkManager{
 		Trie:          ipTrie,
 		SubnetRecords: make(map[string]*SubnetRecord),
-		watchers:      []chan map[string]*SubnetRecord{},
 	}, nil
 }
 
 // AllocateTenant carves out the best /30 for tenantID, sets up bridge & VTEP.
-func (m *NetworkManager) AllocateTenant(ctx context.Context, tenantID string) (*SubnetRecord, error) {
+func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*SubnetRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 1) carve out subnet
-	node, err := m.Trie.AllocateTenantSubnet(tenantID)
+	node, err := m.Trie.AllocateSubnet(id)
 	if err != nil {
 		return nil, fmt.Errorf("trie allocation: %w", err)
 	}
 	cidr := node.Prefix
 
 	// 2) create bridge
-	brName := "br-" + tenantID
-	bridge := &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: brName}}
-	if err := netlink.LinkAdd(bridge); err != nil && err != netlink.ErrLinkExists {
-		return nil, fmt.Errorf("add bridge %s: %w", brName, err)
-	}
 
+	brName := "br-" + id
+	bridge, err := backend.CreateBridge(brName, 1500, netip.MustParseAddr(cidr.IP.String()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bridge %s: %w", brName, err)
+	}
 	// 3) assign the gateway IP (first IP of the CIDR) to the bridge
 	ip := cidr.IP.Mask(cidr.Mask)
 	gateway := ip.String()
@@ -73,27 +76,26 @@ func (m *NetworkManager) AllocateTenant(ctx context.Context, tenantID string) (*
 		VTEP: nil, // fill in once you create it
 		IPs:  make(map[string]ContainerNetInfo),
 	}
-	m.SubnetRecords[tenantID] = rec
-	m.notifyWatchers()
+	m.SubnetRecords[id] = rec
 	return rec, nil
 }
 
 // ExpandTenant merges sibling subnets (via trie), then updates bridge IP.
-func (m *NetworkManager) ExpandTenant(ctx context.Context, tenantID string) (*SubnetRecord, error) {
+func (m *NetworkManager) ExpandTenant(ctx context.Context, id string) (*SubnetRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 1) merge via trie
-	if err := m.Trie.MergeSubnet(tenantID); err != nil {
+	if err := m.Trie.MergeSubnet(id); err != nil {
 		return nil, fmt.Errorf("trie merge: %w", err)
 	}
-	node := m.Trie.GetNodeByTenantID(tenantID)
+	node := m.Trie.GetNodeByID(id)
 	cidr := node.Prefix
 
 	// 2) update bridge address
-	rec, ok := m.SubnetRecords[tenantID]
+	rec, ok := m.SubnetRecords[id]
 	if !ok {
-		return nil, fmt.Errorf("no subnet record for %s", tenantID)
+		return nil, fmt.Errorf("no subnet record for %s", id)
 	}
 	link, err := netlink.LinkByName(rec.Bridge.Name)
 	if err != nil {
@@ -108,31 +110,30 @@ func (m *NetworkManager) ExpandTenant(ctx context.Context, tenantID string) (*Su
 	// 4) update record
 	rec.Network = cidr
 	rec.Bridge.GatewayIP = cidr.IP.Mask(cidr.Mask).String()
-	m.SubnetRecords[tenantID] = rec
-	m.notifyWatchers()
+	m.SubnetRecords[id] = rec
+
 	return rec, nil
 }
 
 // DeleteTenant tears down bridge/VTEP and frees the subnet in the trie.
-func (m *NetworkManager) DeleteTenant(ctx context.Context, tenantID string) error {
+func (m *NetworkManager) DeletetSubnet(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 1) free trie allocation
-	if err := m.Trie.DeallocateTenant(tenantID); err != nil {
+	if err := m.Trie.DeallocateSubnet(id); err != nil {
 		return fmt.Errorf("trie deallocate: %w", err)
 	}
 
 	// 2) teardown bridge
-	if rec, ok := m.SubnetRecords[tenantID]; ok {
+	if rec, ok := m.SubnetRecords[id]; ok {
 		if link, err := netlink.LinkByName(rec.Bridge.Name); err == nil && link != nil {
 			netlink.LinkDel(link)
 		}
 		// TODO: teardown VTEP
-		delete(m.SubnetRecords, tenantID)
+		delete(m.SubnetRecords, id) // remove from records
 	}
 
-	m.notifyWatchers()
 	return nil
 }
 
@@ -146,30 +147,4 @@ func (m *NetworkManager) ListTenants(ctx context.Context) map[string]*SubnetReco
 		snap[k] = v
 	}
 	return snap
-}
-
-// WatchState returns a channel that will receive the full map on every change.
-func (m *NetworkManager) WatchState(ctx context.Context) (<-chan map[string]*SubnetRecord, error) {
-	ch := make(chan map[string]*SubnetRecord, 1)
-	m.mu.Lock()
-	m.watchers = append(m.watchers, ch)
-	m.mu.Unlock()
-
-	// send initial snapshot
-	ch <- m.ListTenants(ctx)
-	return ch, nil
-}
-
-func (m *NetworkManager) notifyWatchers() {
-	snap := make(map[string]*SubnetRecord, len(m.SubnetRecords))
-	for k, v := range m.SubnetRecords {
-		snap[k] = v
-	}
-
-	for _, ch := range m.watchers {
-		select {
-		case ch <- snap:
-		default:
-		}
-	}
 }

@@ -158,6 +158,7 @@ create-node-image: ## Create custom kind node image
 
 .PHONY: daemon
 daemon: generate-code crd install build-daemon kind-cluster-load-daemon-image ## Install the daemon component
+	kubectl delete -f config/cluster/local_daemon.yaml
 	kubectl apply -f config/cluster/local_daemon.yaml
 
 

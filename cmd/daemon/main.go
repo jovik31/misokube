@@ -8,6 +8,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github/setera/internal/daemon"
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/k8s"
 )
@@ -51,7 +52,7 @@ func main() {
 		logger.Info("kubeconfig initialized successfully")
 	}
 
-	_, seteraClient, err := k8s.InitClients(config)
+	kubeclient, seteraclient, err := k8s.InitClients(config)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -64,7 +65,7 @@ func main() {
 	}
 
 	// create NodeStore object for the node
-	_, err = seteraClient.SeteraV1().NodeStores("default").Create(ctx, &seterav1.NodeStore{
+	_, err = seteraclient.SeteraV1().NodeStores("default").Create(ctx, &seterav1.NodeStore{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: "default",
@@ -79,15 +80,38 @@ func main() {
 
 		if apierrors.IsAlreadyExists(err) {
 			logger.Info("NodeStore already exists, skipping creation", "node", nodename)
-			os.Exit(0)
 		} else {
 			logger.Error(err, "failed to create NodeStore for node", "node", nodename)
 			os.Exit(1)
 		}
 	}
 
+	// get node_cidr
+	node, err := kubeclient.CoreV1().Nodes().Get(ctx, nodename, metav1.GetOptions{})
+	if err != nil {
+		logger.Error(err, "failed to get node", "node", nodename)
+		os.Exit(1)
+	}
+	cidr := node.Spec.PodCIDR
+	if cidr == "" {
+		logger.Error(nil, "node does not have a PodCIDR set", "node", nodename)
+		os.Exit(1)
+	}
+
 	// create a new daemon instance
+	daemonInstance, err := daemon.NewDaemon(ctx, "setera-daemon", nodename, nodeIP, cidr, seteraclient, kubeclient)
+	if err != nil {
+		logger.Error(err, "failed to create daemon instance")
+		os.Exit(1)
+	}
+
 	klog.Infof("Starting Setera Daemon on node %s with IP %s", nodename, nodeIP)
+
+	// Run the NodeStore operator
+	if err := daemonInstance.NodeStoreOperator.Base.Run(ctx); err != nil {
+		logger.Error(err, "NodeStore operator failed to run")
+		os.Exit(1)
+	}
 
 	// get kubeclientset
 

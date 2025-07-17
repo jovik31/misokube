@@ -4,10 +4,12 @@ import (
 
 	//std
 	"context"
+	"encoding/json"
 	"fmt"
 
 	//internals
 	configs "github/setera/internal"
+	"github/setera/pkg/operator"
 
 	// setera api tyes
 	seterav1 "github/setera/pkg/api/setera.com/v1"
@@ -16,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
@@ -23,7 +26,7 @@ import (
 
 func (t *TenantOperator) addTenant(key string) error {
 
-	//ctx := context.Background()
+	ctx := context.Background()
 
 	// split the name and namespace from the key
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -51,9 +54,26 @@ func (t *TenantOperator) addTenant(key string) error {
 	mod := tenant.DeepCopy()
 
 	// ensure finalizer is present
-	if !ContainsString(tenant.Finalizers, configs.TenantFinalizer) {
-		mod.Finalizers = append(mod.Finalizers, configs.TenantFinalizer)
-		t.Base.Logger.Info("adding finalizer to tenant", "tenant", tenant.Name, "namespace", tenant.Namespace)
+	if !operator.ContainsString(tenant.Finalizers, configs.TenantFinalizer) {
+
+		t.Base.Logger.WithValues("tenant", tenant.Name, "namespace", namespace).Info("Adding finalizer to Tenant")
+
+		// add finalizer load
+		patchPayload := map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"finalizers": []string{configs.TenantFinalizer},
+			},
+		}
+
+		jsonPatch, err := json.Marshal(patchPayload)
+		// patch the tenant with the finalizer
+		_, err = t.Base.Seterav1Clientset.SeteraV1().Tenants(namespace).Patch(ctx, tenant.Name, types.MergePatchType, jsonPatch, metav1.PatchOptions{})
+		if err != nil {
+			t.Base.Logger.WithValues("tenant", tenant.Name, "namespace", namespace).Error(err, "Failed to patch Tenant with finalizer")
+			t.Base.Recorder.Eventf(mod, "Warning", "PatchFailed", "Failed to patch Tenant %s with finalizer: %v", mod.Name, err)
+			return fmt.Errorf("failed to patch tenant %s with finalizer: %w", mod.Name, err)
+		}
+		t.Base.Logger.WithValues("tenant", tenant.Name, "namespace", namespace).Info("Tenant patched with finalizer")
 	}
 
 	// list all nodestores
@@ -62,22 +82,28 @@ func (t *TenantOperator) addTenant(key string) error {
 		return fmt.Errorf("listing NodeStores: %w", err)
 	}
 
-	// correct score assignement
-	/*scores := t.ScoreCache.GetWithCriteria(og.Spec.Zones)
+	// new tenant status
+	seterav1TenantStatus := seterav1.TenantStatus{
+		AwaitingNodeConfiguration: []string{},
+		AssignedNodes:             []seterav1.NodeInfo{},
+	}
 
-	if len(scores) < og.Spec.Zones {
-		t.Base.Logger.Error(nil, "not enough scores for tenant", "tenant", og.Name, "zones", og.Spec.Zones, "available", len(scores))
-		mod.Status.Paused = PausedTenant
-	} else {
-		waitingNodes := make([]string, len(scores))
-		for i, score := range scores {
-	}*/
+	//add status to the modified tenant
+	mod.Status = seterav1TenantStatus
 
-	// assign nodestores to the tenant
 	for _, store := range nodeStores {
 		nodeID := store.Spec.Name
 		mod.Status.AwaitingNodeConfiguration = append(mod.Status.AwaitingNodeConfiguration, nodeID)
 	}
+
+	// update the tenant with the finalizer and awaiting nodes
+	_, err = t.Base.Seterav1Clientset.SeteraV1().Tenants(namespace).UpdateStatus(ctx, mod, metav1.UpdateOptions{})
+	if err != nil {
+		t.Base.Logger.WithValues("tenant", mod.Name, "namespace", namespace).Error(err, "Failed to update Tenant with finalizer and awaiting nodes")
+		t.Base.Recorder.Eventf(mod, "Warning", "UpdateFailed", "Failed to update Tenant %s with finalizer and awaiting nodes: %v", mod.Name, err)
+		return fmt.Errorf("failed to update tenant %s with finalizer and awaiting nodes: %w", mod.Name, err)
+	}
+	t.Base.Logger.WithValues("tenant", mod.Name, "namespace", namespace).Info("Tenant updated with finalizer and awaiting nodes")
 
 	return nil
 }
@@ -86,7 +112,7 @@ func (t *TenantOperator) patchPauseStatus(ctx context.Context, tenant *seterav1.
 
 	// best practices - always work on a copy
 	tcopy := tenant.DeepCopy()
-	tcopy.Status.Paused = PausedTenant
+	tcopy.Status.Paused = configs.PausedTenant
 
 	// Update the tenant status
 	if _, err := t.Base.Seterav1Clientset.SeteraV1().

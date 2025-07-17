@@ -104,7 +104,7 @@ func (b *BaseOperator) Run(ctx context.Context) error {
 	for resource, synced := range informerStatus {
 		if !synced {
 			b.Logger.Error(nil, "Failed to sync informer cache", "resource", resource)
-			return fmt.Errorf("informer cache failed to sync for resource: %v", resource) // or return an error if you want to stop the operator
+			return fmt.Errorf("[CACHE SYNC][ERROR] - informer cache failed to sync for resource: %v", resource) // or return an error if you want to stop the operator
 		}
 		b.Logger.Info("Informer cache synced", "resource", resource)
 	}

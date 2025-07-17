@@ -15,6 +15,7 @@ import (
 
 	// internal packages
 
+	"github/setera/internal/daemon/service"
 	v1 "github/setera/pkg/api/setera.com/v1"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
@@ -73,6 +74,9 @@ Tenant Info from both the nodestores and the tenant custom resources.
 type NodeStoreOperator struct {
 	Base *operator.BaseOperator
 
+	// node name and IP
+	nodeName string
+	nodeIP   string
 	// watch and trigger nodestore events
 	NodeStoreLister   seterav1.NodeStoreLister
 	NodeStoreInformer cache.SharedIndexInformer
@@ -84,17 +88,24 @@ type NodeStoreOperator struct {
 	// watch and trigger pods
 	PodLister   corev1.PodLister
 	PodInformer cache.SharedIndexInformer
+
+	// injected network service
+	NetService *service.NetworkService
 }
 
 func NewNodeStoreOperator(
 	ctx context.Context,
-	name string,
+	componentName string,
+	nodestoreName string,
+	nodestoreIP string,
 	seterav1Clientset seterav1clientset.Interface,
-	kubeClientset kubernetes.Interface) *NodeStoreOperator {
+	kubeClientset kubernetes.Interface,
+	networkService *service.NetworkService) *NodeStoreOperator {
 
 	// create setera informer factory, informers and listers
 	factorySetera := seterav1Factory.NewSharedInformerFactory(seterav1Clientset, 30*time.Second)
 	factoryCore := informers.NewSharedInformerFactory(kubeClientset, 30*time.Second)
+
 	nodeStoreInformer := factorySetera.Setera().V1().NodeStores().Informer()
 	nodeStoreLister := factorySetera.Setera().V1().NodeStores().Lister()
 
@@ -117,16 +128,19 @@ func NewNodeStoreOperator(
 
 	// build orchestrator operator handler
 	nodeStoreOperator := &NodeStoreOperator{
+		nodeName:          nodestoreName,
+		nodeIP:            nodestoreIP,
 		TenantLister:      tenantLister,
 		TenantInformer:    tenantInformer,
 		NodeStoreLister:   nodeStoreLister,
 		NodeStoreInformer: nodeStoreInformer,
 		PodLister:         podLister,
 		PodInformer:       podInformer,
+		NetService:        networkService,
 	}
 
 	//inject informers and lister to base operator
-	base := operator.NewBaseOperator(ctx, name, seterav1Clientset, kubeClientset, factorySetera, nodeStoreOperator)
+	base := operator.NewBaseOperator(ctx, componentName, seterav1Clientset, kubeClientset, factorySetera, nodeStoreOperator)
 	nodeStoreOperator.Base = base
 
 	return nodeStoreOperator
@@ -207,6 +221,10 @@ func (n *NodeStoreOperator) Process() bool {
 	// tenant created with awaiting node configuration for this node
 	case WaitingNodeTenantEvent:
 		err = n.configNodestore(key)
+
+	// tenant updated with assigned node configuration for this node
+	case AssignedNodeTenantEvent:
+		err = n.assignedNodestore(key)
 	}
 
 	if err != nil {

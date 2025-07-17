@@ -21,7 +21,7 @@ func (b *BaseOperator) Enqueue(obj any, event EventType) {
 	//wrap the key with the event type
 	wrappedKey := fmt.Sprintf("%s:%s", event, key)
 
-	b.Logger.WithValues("event", event, "key", key).Info("Enqueuing key")
+	b.Logger.WithValues("event", event, "key", key).Info("ENQUEUED")
 	b.Workqueue.Add(wrappedKey)
 
 }
@@ -31,7 +31,7 @@ func (b *BaseOperator) EnqueueWithKey(event EventType, key string) {
 	// wrap the key with the event type
 	wrappedKey := fmt.Sprintf("%s:%s", event, key)
 
-	b.Logger.WithValues("event", event, "key", key).Info("Enqueuing key")
+	b.Logger.WithValues("event", event, "key", key).Info("ENQUEUED WITH KEY")
 	b.Workqueue.Add(wrappedKey)
 
 }
@@ -56,3 +56,5 @@ func ContainsString(slice []string, item string) bool {
 	}
 	return false
 }
+
+//func jsonpaytload

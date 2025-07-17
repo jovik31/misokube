@@ -25,7 +25,7 @@ func buildRecursive(node *TrieNode, maxMaskSize int) {
 			Prefix:    subnet,
 			Parent:    node,
 			Allocated: false,
-			TenantID:  "",
+			ID:        "",
 		}
 		node.Children[i] = child
 		buildRecursive(child, maxMaskSize)
