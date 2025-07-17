@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"net/netip"
 	"syscall"
 
 	"github.com/vishvananda/netlink"
@@ -21,12 +20,12 @@ const (
 
 )
 
-func CreateBridge(name string, mtu int, gateway netip.Addr) (netlink.Link, error) {
+func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, error) {
 
 	// ensure the bridge name is within the character limit
 	bridgeName, err := GenerateDeviceName(brPrefix, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate bridge name: %w", err)
+		return nil, err
 	}
 
 	// check if the bridge already exists
@@ -50,14 +49,22 @@ func CreateBridge(name string, mtu int, gateway netip.Addr) (netlink.Link, error
 	if err != nil {
 		return nil, err
 	}
-	gatewayString := gateway.String()
-	gatewayString = gatewayString + "/30"
 
-	ip, ipnet, err := net.ParseCIDR(gatewayString)
+	// --------------------add an IP address to the bridge---------------------------------\\
+
+	// ensure the network is not nil
+	if network == nil {
+		return nil, err
+	}
+
+	// get first ip of network
+	bridgeIP, err := FirstIP(network)
 	if err != nil {
 		return nil, err
 	}
-	if err := netlink.AddrAdd(dev, &netlink.Addr{IPNet: &net.IPNet{IP: ip, Mask: ipnet.Mask}}); err != nil {
+
+	// add the IP address to the bridge
+	if err := netlink.AddrAdd(dev, &netlink.Addr{IPNet: bridgeIP}); err != nil {
 		return nil, err
 	}
 
