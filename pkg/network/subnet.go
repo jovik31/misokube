@@ -40,7 +40,7 @@ type ContainerNetInfo struct {
 }
 
 // newSubnetRecord initializes the bitmap, reserving reservedCount bits up front.
-func newSubnetRecord(cidr *net.IPNet, reservedCount int) *SubnetRecord {
+func NewSubnetRecord(cidr *net.IPNet, reservedCount int) *SubnetRecord {
 	ones, bits := cidr.Mask.Size()
 	hostCount := 1<<(bits-ones) - 2 // total usable hosts
 	// round up to a multiple of 64

@@ -15,7 +15,7 @@ import (
 	config "github/setera/pkg"
 )
 
-func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, *net.IPNet, error) {
+func CreateBridge(name string, network *net.IPNet) (netlink.Link, *net.IPNet, error) {
 
 	// ensure the bridge name is within the character limit
 	bridgeName, err := GenerateDeviceName(config.BrPrefix, name)
@@ -31,7 +31,7 @@ func CreateBridge(name string, mtu int, network *net.IPNet) (netlink.Link, *net.
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name:   bridgeName,
-			MTU:    mtu,
+			MTU:    config.DefaultMTU,
 			TxQLen: -1,
 		},
 	}

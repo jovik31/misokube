@@ -35,28 +35,28 @@ func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
 
 // AllocateTenant carves out the best /30 for tenantID, sets up bridge & VTEP.
 func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*SubnetRecord, error) {
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1) carve out subnet
+	//trie subnet allocation
 	node, err := m.Trie.AllocateSubnet(id)
 	if err != nil {
 		return nil, fmt.Errorf("trie allocation: %w", err)
 	}
-	cidr := node.Prefix
 
-	// 2) create bridge
+	//create subnet record - should be called directly from the function new subnet record
 
-	bridge, bridgeIP, err := backend.CreateBridge(id, 1500, cidr)
+	//bridge creation
+	bridge, bridgeIP, err := backend.CreateBridge(id, node.Prefix)
 	if err != nil {
+		m.Trie.DeallocateSubnet(id)
 		return nil, fmt.Errorf("failed to create bridge %s: %w", id, err)
 	}
 
-	// 4) TODO: create Vxlan/VTEP device, attach to bridge, set up overlay
-
-	// 5) record state
+	// 5) create subnet record
 	rec := &SubnetRecord{
-		Network: cidr,
+		Network: node.Prefix,
 		Bridge: &BridgeRecord{
 			Name:      bridge.Attrs().Name,
 			GatewayIP: bridgeIP.String(),

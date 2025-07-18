@@ -12,6 +12,7 @@ const (
 	UnpausedTenant  = false
 )
 
+// generic configs
 const (
 	// setera_namespace is the namespace where Setera resources are deployed
 	SeteraNamespace = "default"

@@ -52,6 +52,12 @@ func (ns *NetworkService) AllocateTenant(id string) (seterav1.TenantInfra, error
 
 	}
 
+	// create bridge
+
+	//create vtep
+
+	// create subnet record (with bitmap and pass the two ips that are already in use: VTEP and Bridge)
+
 	tenantSubnet := subnetRecord.Network.String()
 
 	// Create TenantInfra object
