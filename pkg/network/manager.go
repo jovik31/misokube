@@ -11,6 +11,7 @@ import (
 	// internal packages
 	"github/setera/pkg/data/trie"
 	"github/setera/pkg/network/backend"
+	"github/setera/pkg/network/ipam"
 
 	"github.com/vishvananda/netlink"
 )
@@ -20,6 +21,28 @@ type NetworkManager struct {
 	Trie          *trie.IPTrie             // The trie that records the allocated and non-allocated subnets
 	SubnetRecords map[string]*SubnetRecord // tenantID <--> subnetRecord
 
+	// channel to communicate with the score client to update the orchestrator information
+
+}
+
+type SubnetRecord struct {
+	Network string        // the allocated subnet
+	Bridge  *BridgeRecord // bridge record for the tenant
+	VTEP    *VxlanRecord  // VTEP record for the tenant
+	IPAM    *ipam.IPAM    // IPAM instance for managing IPs in the subnet
+}
+
+type BridgeRecord struct {
+	Name       string
+	IPaddress  string // ip address for the bridge device
+	MACaddress string // mac address for the bridge device
+}
+
+type VxlanRecord struct {
+	Name string
+	IP   string
+	MAC  string
+	VNI  int
 }
 
 func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
@@ -33,8 +56,8 @@ func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
 	}, nil
 }
 
-// AllocateTenant carves out the best /30 for tenantID, sets up bridge & VTEP.
-func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*SubnetRecord, error) {
+// allocates a /30 subnet
+func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*net.IPNet, error) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -42,30 +65,37 @@ func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*Subnet
 	//trie subnet allocation
 	node, err := m.Trie.AllocateSubnet(id)
 	if err != nil {
+
+		m.Trie.DeallocateSubnet(id) // rollback on error
 		return nil, fmt.Errorf("trie allocation: %w", err)
 	}
 
-	//create subnet record - should be called directly from the function new subnet record
+	if node == nil {
+		m.Trie.DeallocateSubnet(id) // rollback on error
+		return nil, fmt.Errorf("no available subnet for tenant %s", id)
+	}
 
-	//bridge creation
-	bridge, bridgeIP, err := backend.CreateBridge(id, node.Prefix)
+	return node.Prefix, nil
+
+}
+
+// config and create a bridge for the tenant
+func (m *NetworkManager) ConfigBridge(ctx context.Context, network *net.IPNet, id string) (string, *net.IPNet, net.HardwareAddr, error) {
+
+	bridge, bridgeIP, err := backend.SetupBridge(id, network)
 	if err != nil {
 		m.Trie.DeallocateSubnet(id)
-		return nil, fmt.Errorf("failed to create bridge %s: %w", id, err)
+		return "", nil, nil, fmt.Errorf("failed to create bridge %s: %w", id, err)
+
 	}
 
-	// 5) create subnet record
-	rec := &SubnetRecord{
-		Network: node.Prefix,
-		Bridge: &BridgeRecord{
-			Name:      bridge.Attrs().Name,
-			GatewayIP: bridgeIP.String(),
-		},
-		VTEP: nil, // fill in once you create it
-		IPs:  make(map[string]ContainerNetInfo),
-	}
-	m.SubnetRecords[id] = rec
-	return rec, nil
+	return bridge.Attrs().Name, bridgeIP, bridge.Attrs().HardwareAddr, nil
+}
+
+// register the tenant in the network manager map
+func (m *NetworkManager) RegisterTenant(tenantID string, subnet *net.IPNet, bridgeName string, bridgeIP *net.IPNet) error {
+
+	return nil
 }
 
 // ExpandTenant merges sibling subnets (via trie), then updates bridge IP.
@@ -96,8 +126,8 @@ func (m *NetworkManager) ExpandTenant(ctx context.Context, id string) (*SubnetRe
 	// 3) TODO: update VTEP, iptables, routes for new CIDR
 
 	// 4) update record
-	rec.Network = cidr
-	rec.Bridge.GatewayIP = cidr.IP.Mask(cidr.Mask).String()
+	rec.Network = cidr.String()
+	rec.Bridge.IPaddress = cidr.IP.Mask(cidr.Mask).String()
 	m.SubnetRecords[id] = rec
 
 	return rec, nil

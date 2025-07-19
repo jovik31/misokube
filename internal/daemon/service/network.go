@@ -12,6 +12,7 @@ import (
 
 	// pkg
 	"github/setera/pkg/network"
+	// backend
 )
 
 type NetworkService struct {
@@ -42,34 +43,31 @@ func NewNetworkService(nodeCIDR string) (*NetworkService, error) {
 	}, nil
 }
 
-func (ns *NetworkService) AllocateTenant(id string) (seterav1.TenantInfra, error) {
+func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, error) {
 
 	ctx := context.Background()
 	// allocate a subnet for the tenant
-	subnetRecord, err := ns.NetMgr.AllocateSubnet(ctx, id)
+	subnet, err := ns.NetMgr.AllocateSubnet(ctx, id)
 	if err != nil {
-		return seterav1.TenantInfra{}, fmt.Errorf("failed to allocate subnet for tenant %s: %w", id, err)
-
+		return nil, fmt.Errorf("failed to allocate subnet for tenant %s: %w", id, err)
 	}
 
 	// create bridge
+	bridgeName, bridgeIP, err := ns.NetMgr.ConfigBridge(ctx, subnet, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bridge for tenant %s: %w", id, err)
+	}
+	bridgeRecord := &network.BridgeRecord{
+		Name: bridgeName,
+		IP:   bridgeIP.String(),
+	}
 
 	//create vtep
 
 	// create subnet record (with bitmap and pass the two ips that are already in use: VTEP and Bridge)
+	subnetRecord := ns.NetMgr.RegisterTenant(id, bridgeRecord)
 
-	tenantSubnet := subnetRecord.Network.String()
-
-	// Create TenantInfra object
-	tenantInfra := seterav1.TenantInfra{
-		Name:       id,
-		TenantCIDR: tenantSubnet,
-		VNI:        subnetRecord.VTEP.VNI,
-		VTEP_IP:    subnetRecord.VTEP.IP,
-		VTEP_MAC:   subnetRecord.VTEP.MAC,
-	}
-
-	return tenantInfra, nil
+	return seterav1.TenantInfra{}, nil
 
 }
 
