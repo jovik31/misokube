@@ -94,7 +94,18 @@ func (m *NetworkManager) ConfigBridge(ctx context.Context, network *net.IPNet, i
 	return bridge.Attrs().Name, bridgeIP, bridge.Attrs().HardwareAddr, nil
 }
 
-func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) {}
+func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) {
+
+	// create a VTEP for the tenant
+	vtep, err := backend.SetupVxlan(network, id, m.NodeName)
+	if err != nil {
+		m.Trie.DeallocateSubnet(id) // rollback on error
+		fmt.Printf("failed to create VTEP %s: %v\n", id, err)
+		return
+	}
+	// ATTENTION NEEDS ATTENTOIN TO ITS RETURN VALUES
+
+}
 
 // register the tenant in the network manager map
 func (m *NetworkManager) RegisterTenant(tenantID string, subnet *net.IPNet, bridgeName string, bridgeIP *net.IPNet) error {

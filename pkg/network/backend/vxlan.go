@@ -16,7 +16,57 @@ import (
 	// internal packages
 )
 
-func SetupVxlan() {}
+func SetupVxlan(subnet *net.IPNet, id string, nodeName string) (*netlink.Vxlan, error) {
+
+	// generate VTEP name
+	vtepName, err := GenerateDeviceName(config.VxlanPrefix, id)
+	if err != nil {
+		return nil, errors.Wrapf(err, "generate VTEP name for %s", id)
+	}
+
+	// generate VTEP MAC address
+	vtepMac := VtepMAC(id, nodeName).String()
+	// generate VNI
+	vni := VNI(id)
+
+	vxlanLink, err := newVxlanDevice(vtepName, vni, vtepMac)
+	if err != nil {
+		return nil, errors.Wrapf(err, "create vxlan device %s", vtepName)
+	}
+
+	// check if the vtep has an address, if not, assign the first IP of the subnet
+	existingAddrs, err := netlink.AddrList(vxlanLink, netlink.FAMILY_V4)
+	if err != nil {
+		return nil, errors.Wrapf(err, "get existing addresses for vxlan device %s", vtepName)
+	}
+
+	// if no address exists, assign the first IP of the subnet
+	if len(existingAddrs) == 0 {
+		hostIP, err := HostIP(subnet)
+		if err != nil {
+			return nil, errors.Wrapf(err, "get host IP for subnet %s", subnet)
+		}
+
+		// ATENTION: this must be used with a /32 mask
+		if err := netlink.AddrAdd(vxlanLink, &netlink.Addr{
+			IPNet: &net.IPNet{
+				IP:   hostIP.IP,
+				Mask: net.IPv4Mask(255, 255, 255, 255), // /32 mask for vxlan host IP
+			},
+		}); err != nil {
+			return nil, errors.Wrapf(err, "add address %s to vxlan device %s", hostIP, vtepName)
+		}
+	}
+
+	// set the vxlan link up
+	if err := netlink.LinkSetUp(vxlanLink); err != nil {
+		return nil, errors.Wrapf(err, "set vxlan device %s up", vtepName)
+	}
+	log.Printf("vxlan device %s created with VNI %d and MAC %s", vtepName, vni, vtepMac)
+	// set the vxlan link as a tunnel device
+	return vxlanLink, nil
+
+}
 
 func newVxlanDevice(vtepName string, vni int, vtepMac string) (*netlink.Vxlan, error) {
 
