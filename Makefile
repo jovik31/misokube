@@ -134,8 +134,8 @@ kind-cluster: ## Create kind cluster
 	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml 
 
 .PHONY: kind-cluster-orch-dev
-kind-cluster-orch-dev: ## Create kind cluster for orchestrator development
-	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_orch_dev.yaml 
+kind-cluster-dev: ## Create kind cluster for orchestrator development
+	kind create cluster --name=setera-cluster-orch-dev --config=config/cluster/kind_cluster_orch_dev.yaml 
 
 .PHONY: kind-cluster-delete
 kind-cluster-delete: ## Delete kind cluster

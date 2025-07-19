@@ -53,21 +53,25 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 	}
 
 	// create bridge
-	bridgeName, bridgeIP, err := ns.NetMgr.ConfigBridge(ctx, subnet, id)
+	_, bridgeIP, bridgeMac, err := ns.NetMgr.ConfigBridge(ctx, subnet, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge for tenant %s: %w", id, err)
 	}
-	bridgeRecord := &network.BridgeRecord{
-		Name: bridgeName,
-		IP:   bridgeIP.String(),
+
+	ti := &seterav1.TenantInfra{
+		Name:       id,
+		TenantCIDR: subnet.String(),
+		BRIDGE_IP:  bridgeIP.String(),
+		BRIDGE_MAC: bridgeMac.String(),
 	}
+
+	// create vtep
 
 	//create vtep
 
 	// create subnet record (with bitmap and pass the two ips that are already in use: VTEP and Bridge)
-	subnetRecord := ns.NetMgr.RegisterTenant(id, bridgeRecord)
 
-	return seterav1.TenantInfra{}, nil
+	return ti, nil
 
 }
 

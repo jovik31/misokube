@@ -17,6 +17,8 @@ import (
 )
 
 type NetworkManager struct {
+	RootCIDR      *net.IPNet // node cidr
+	NodeName      string     // node name
 	mu            sync.RWMutex
 	Trie          *trie.IPTrie             // The trie that records the allocated and non-allocated subnets
 	SubnetRecords map[string]*SubnetRecord // tenantID <--> subnetRecord
@@ -91,6 +93,8 @@ func (m *NetworkManager) ConfigBridge(ctx context.Context, network *net.IPNet, i
 
 	return bridge.Attrs().Name, bridgeIP, bridge.Attrs().HardwareAddr, nil
 }
+
+func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) {}
 
 // register the tenant in the network manager map
 func (m *NetworkManager) RegisterTenant(tenantID string, subnet *net.IPNet, bridgeName string, bridgeIP *net.IPNet) error {

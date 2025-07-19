@@ -24,6 +24,9 @@ const (
 	DefaultMTU          = 1500
 	BrPrefix            = "br-"
 	VxlanPrefix         = "vxlan-"
-	MaxDeviceNameLength = 15 // max length for a network device name in Linux
+	MaxDeviceNameLength = 15       // max length for a network device name in Linux
+	MaxVNI              = 16777215 // max VNI for VXLAN (24 bits, 2^24 - 1 = 16777215 = 0xFFFFFF
+	VxlanPort           = 8472
+	EncapOverhead       = 50 // VXLAN encapsulation overhead (UDP + VXLAN + IP + Ethernet headers)
 
 )

@@ -83,6 +83,8 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 				return
 			}
 
+			// before enqueuing, check if the tenant is already assigned to this node
+
 			// trigger addNodeStore for this node
 			n.Base.Enqueue(nodeStore, WaitingNodeTenantEvent)
 
