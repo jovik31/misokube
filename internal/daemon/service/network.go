@@ -87,11 +87,12 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 
 // ATTENTION all this pre preprocessing can be implemented in the network manager
 func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
+	tenantName string,
 	localTenant seterav1.NodeInfo,
 	remoteTenant seterav1.NodeInfo) error {
 
 	// get local tenant record
-	localTenantRecord, err := ns.NetMgr.GetSubnetRecord(localTenant.Name)
+	localTenantRecord, err := ns.NetMgr.GetSubnetRecord(tenantName)
 	if err != nil {
 		return fmt.Errorf("failed to get local tenant record %s: %w", localTenant.Name, err)
 	}

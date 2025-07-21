@@ -54,17 +54,20 @@ spec:
                 description: assigned nodes
                 items:
                   properties:
-                    ip:
-                      type: string
                     name:
+                      type: string
+                    node ip:
+                      type: string
+                    tenant network:
                       type: string
                     vtepIP:
                       type: string
                     vtepMAC:
                       type: string
                   required:
-                  - ip
                   - name
+                  - node ip
+                  - tenant network
                   type: object
                 type: array
               conditions:

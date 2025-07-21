@@ -51,6 +51,22 @@ func (n *NodeStoreOperator) assignedNodestore(key string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get local node info for node %s in tenant %s: %w", n.nodeName, name, err)
 	}
+
+	// check if the tenant record exists in the network service
+	_, exists, err := n.NetService.GetTenantRecord(name)
+	if err != nil {
+		return fmt.Errorf("failed to get tenant %s infrastructure: %w", name, err)
+	}
+	if !exists {
+		// ATTENTION CHECK if the tenant infrastructure exists
+		// create the tenant infrastructure if it does not exist
+		_, err = n.NetService.AllocateTenant(name)
+		if err != nil {
+			return fmt.Errorf("failed to allocate tenant %s infrastructure: %w", name, err)
+		}
+		return fmt.Errorf("tenant %s infrastructure does not exist", name)
+	}
+
 	for _, node := range assignedNodes {
 
 		// only setup routes for the remote nodes, not the self
@@ -58,7 +74,7 @@ func (n *NodeStoreOperator) assignedNodestore(key string) error {
 			continue // skip self
 		}
 
-		err := n.NetService.ConfigureTenantRoutes(ctx, localNodeInfo, node)
+		err := n.NetService.ConfigureTenantRoutes(ctx, mod.Name, localNodeInfo, node)
 		if err != nil {
 			return fmt.Errorf("failed to configure tenant routes for node %s in tenant %s: %w", node.Name, name, err)
 		}
