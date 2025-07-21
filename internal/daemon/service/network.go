@@ -70,16 +70,16 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 	// create subnet record
 
 	ti := &seterav1.TenantInfra{
-		Name:       id,
-		TenantCIDR: subnetRecord.Network,
-		BRIDGE_IP:  subnetRecord.Bridge.IPaddress,
-		BRIDGE_MAC: subnetRecord.Bridge.MACaddress,
-		VNI:        subnetRecord.VTEP.VNI,
-		VTEP_IP:    subnetRecord.VTEP.IP,
-		VTEP_MAC:   subnetRecord.VTEP.MAC,
+		Name:        id,
+		TenantCIDR:  subnetRecord.Network,
+		BRIDGE_NAME: subnetRecord.Bridge.Name,
+		BRIDGE_IP:   subnetRecord.Bridge.IPaddress,
+		BRIDGE_MAC:  subnetRecord.Bridge.MACaddress,
+		VNI:         subnetRecord.VTEP.VNI,
+		VTEP_NAME:   subnetRecord.VTEP.Name,
+		VTEP_IP:     subnetRecord.VTEP.IP,
+		VTEP_MAC:    subnetRecord.VTEP.MAC,
 	}
-
-	// create subnet record (with bitmap and pass the two ips that are already in use: VTEP and Bridge)
 
 	return ti, nil
 
@@ -88,6 +88,33 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 func (ns *NetworkService) DeallocateTenant(ctx context.Context, id string) error {
 	// Deallocate the tenant's subnet and clean up resources
 	return ns.NetMgr.DeletetSubnet(ctx, id)
+}
+
+// returns the tenant's subnet record in the form of TenantInfra
+func (ns *NetworkService) GetTenantRecord(id string) (*seterav1.TenantInfra, bool, error) {
+
+	// check if tenant exists
+	if _, exists := ns.NetMgr.SubnetRecords[id]; !exists {
+		return nil, false, nil
+	}
+
+	sr, err := ns.NetMgr.GetSubnetRecord(id)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get subnet record for tenant %s: %w", id, err)
+	}
+	// convert to TenantInfra
+	return &seterav1.TenantInfra{
+		Name:        id,
+		TenantCIDR:  sr.Network,
+		BRIDGE_NAME: sr.Bridge.Name,
+		BRIDGE_IP:   sr.Bridge.IPaddress,
+		BRIDGE_MAC:  sr.Bridge.MACaddress,
+		VNI:         sr.VTEP.VNI,
+		VTEP_NAME:   sr.VTEP.Name,
+		VTEP_IP:     sr.VTEP.IP,
+		VTEP_MAC:    sr.VTEP.MAC,
+	}, true, nil
+
 }
 
 /*func (ns *NetworkService) GetTenantInfra(id string) (seterav1.TenantInfra, error) {

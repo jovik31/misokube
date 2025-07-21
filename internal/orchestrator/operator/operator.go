@@ -85,8 +85,8 @@ func (t *TenantOperator) RegisterEventHandler() {
 
 	t.NodestoreInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
-		UpdateFunc: t.updateTenantFromNodestoreHandler,
-		DeleteFunc: t.deleteTenantFromNodestoreHandler,
+		UpdateFunc: t.updateFromNodestoreHandler,
+		DeleteFunc: t.deleteFromNodestoreHandler,
 	})
 }
 
@@ -137,6 +137,9 @@ func (t *TenantOperator) Process() bool {
 
 	case operator.DeleteEvent:
 		err = t.deleteTenant(key)
+
+	case updateNodestoreEvent:
+		err = t.updateFromNodestore(key)
 
 	}
 

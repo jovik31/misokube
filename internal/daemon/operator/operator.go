@@ -158,7 +158,7 @@ func (n *NodeStoreOperator) RegisterEventHandler() {
 
 	n.TenantInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,                                // handled by the orchestrator tenant operator - we need the tenant to have nodes in waiting or assigned
-		UpdateFunc: n.updateNodestoreFromTenantHandler, // when a tenant is updated we need to trigger the node wait config or the node assign config
+		UpdateFunc: n.updateFromTenantHandler,          // when a tenant is updated we need to trigger the node wait config or the node assign config
 		DeleteFunc: n.deleteNodestoreFromTenantHandler, // when a tenant is deleted we need to trigger the node remove tenant config
 	})
 
@@ -220,7 +220,7 @@ func (n *NodeStoreOperator) Process() bool {
 
 	// tenant created with awaiting node configuration for this node
 	case WaitingNodeTenantEvent:
-		err = n.configNodestore(key)
+		err = n.configTenant(key)
 
 	// tenant updated with assigned node configuration for this node
 	case AssignedNodeTenantEvent:

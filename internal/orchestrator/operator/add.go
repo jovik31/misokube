@@ -49,7 +49,7 @@ func (t *TenantOperator) addTenant(key string) error {
 
 	// ------------------------------------------------------------------------------------------//
 
-	// create two copies
+	// create copy
 	//og := tenant.DeepCopy()
 	mod := tenant.DeepCopy()
 
@@ -66,6 +66,12 @@ func (t *TenantOperator) addTenant(key string) error {
 		}
 
 		jsonPatch, err := json.Marshal(patchPayload)
+		if err != nil {
+			t.Base.Logger.WithValues("tenant", tenant.Name, "namespace", namespace).Error(err, "Failed to marshal finalizer patch payload")
+			t.Base.Recorder.Eventf(mod, "Warning", "PatchFailed", "Failed to marshal finalizer patch payload for Tenant %s: %v", mod.Name, err)
+			return fmt.Errorf("failed to marshal finalizer patch payload for tenant %s: %w", mod.Name, err)
+		}
+
 		// patch the tenant with the finalizer
 		_, err = t.Base.Seterav1Clientset.SeteraV1().Tenants(namespace).Patch(ctx, tenant.Name, types.MergePatchType, jsonPatch, metav1.PatchOptions{})
 		if err != nil {
@@ -84,26 +90,30 @@ func (t *TenantOperator) addTenant(key string) error {
 
 	// new tenant status
 	seterav1TenantStatus := seterav1.TenantStatus{
-		AwaitingNodeConfiguration: []string{},
-		AssignedNodes:             []seterav1.NodeInfo{},
+		AwaitingNodeConfiguration: make([]string, 0),
+		AssignedNodes:             make([]seterav1.NodeInfo, 0),
 	}
 
 	//add status to the modified tenant
 	mod.Status = seterav1TenantStatus
 
-	for _, store := range nodeStores {
-		nodeID := store.Spec.Name
-		mod.Status.AwaitingNodeConfiguration = append(mod.Status.AwaitingNodeConfiguration, nodeID)
+	for index, store := range nodeStores {
+
+		if index < mod.Spec.Zones {
+			nodeID := store.Spec.Name
+			mod.Status.AwaitingNodeConfiguration = append(mod.Status.AwaitingNodeConfiguration, nodeID)
+		}
 	}
 
 	// update the tenant with the finalizer and awaiting nodes
-	_, err = t.Base.Seterav1Clientset.SeteraV1().Tenants(namespace).UpdateStatus(ctx, mod, metav1.UpdateOptions{})
+	_, err = t.Base.Seterav1Clientset.SeteraV1().Tenants(namespace).Update(ctx, mod, metav1.UpdateOptions{})
 	if err != nil {
+
 		t.Base.Logger.WithValues("tenant", mod.Name, "namespace", namespace).Error(err, "Failed to update Tenant with finalizer and awaiting nodes")
+
 		t.Base.Recorder.Eventf(mod, "Warning", "UpdateFailed", "Failed to update Tenant %s with finalizer and awaiting nodes: %v", mod.Name, err)
 		return fmt.Errorf("failed to update tenant %s with finalizer and awaiting nodes: %w", mod.Name, err)
 	}
-	t.Base.Logger.WithValues("tenant", mod.Name, "namespace", namespace).Info("Tenant updated with finalizer and awaiting nodes")
 
 	return nil
 }

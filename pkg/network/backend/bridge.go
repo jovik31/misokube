@@ -28,9 +28,6 @@ func SetupBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, erro
 		return nil, nil, fmt.Errorf("generate device name: %w", err)
 	}
 
-	// Normalize subnet base
-	networkBase := subnet.IP.Mask(subnet.Mask)
-
 	// If already exists, ensure it has (or add) the expected IP (network+1)
 	if existing, err := netlink.LinkByName(bridgeName); err == nil {
 		bridgeIPNet, err := FirstIP(subnet) // network+1/mask
@@ -56,6 +53,13 @@ func SetupBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, erro
 		}
 
 		_ = netlink.LinkSetUp(existing)
+
+		// ensure bridge name is correct
+		if existing.Attrs().Name != bridgeName {
+			if err := netlink.LinkSetName(existing, bridgeName); err != nil {
+				return existing, nil, fmt.Errorf("rename bridge %s to %s: %w", existing.Attrs().Name, bridgeName, err)
+			}
+		}
 
 		return existing, bridgeIPNet, nil
 
@@ -93,7 +97,6 @@ func SetupBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, erro
 		return dev, bridgeIPNet, fmt.Errorf("link set up: %w", err)
 	}
 
-	_ = networkBase // (just to show we normalized; remove if unused)
 	return dev, bridgeIPNet, nil
 }
 

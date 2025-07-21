@@ -5,9 +5,10 @@ import (
 	//std
 
 	// internal pkg
-	config "github/setera/pkg"
+
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/operator"
+	"slices"
 
 	// k8s
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -59,7 +60,8 @@ func (n *NodeStoreOperator) deleteNodeStoreHandler(obj any) {
 }
 
 // from tenantInformer --> config event
-func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any) {
+func (n *NodeStoreOperator) updateFromTenantHandler(oldObj, newObj any) {
+
 	// Add logic to handle updating NodeStore from Tenant
 	newTenant, ok := newObj.(*seterav1.Tenant)
 	if !ok {
@@ -73,40 +75,20 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 		return
 	}
 
-	// extract nodes from newTenant
-	nodes := newTenant.Status.AwaitingNodeConfiguration
-	for _, node := range nodes {
-
-		// node belongs to tenant and requires config
-		if node == n.nodeName {
-			logger.Info("tenant has node awaiting configuration", "node", node)
-
-			nodeStore, err := n.NodeStoreLister.NodeStores(config.SeteraNamespace).Get(n.nodeName)
-			if err != nil {
-				logger.Error(err, "failed to get NodeStore for node", "node", n.nodeName)
-				return
-			}
-
-			// before enqueuing, check if the tenant is already assigned to this node
-
-			// trigger addNodeStore for this node
-			n.Base.Enqueue(nodeStore, WaitingNodeTenantEvent)
-
-		} else {
-			logger.Info("tenant does not have node awaiting configuration", "node", node)
-		}
+	// check if the node is in the tenant's awaiting node configuration or assigned nodes
+	if !slices.Contains(newTenant.Status.AwaitingNodeConfiguration, n.nodeName) && !n.checkAssignedNodes(newTenant) {
+		return
 	}
-	configedNodes := newTenant.Status.AssignedNodes
-	for _, node := range configedNodes {
-		// node belongs to tenant and is configured
-		if node.Name == n.Base.Name {
-			logger.Info("tenant has node configured", "node", node)
 
-			// trigger updateNodeStore for this node
-			n.Base.Enqueue(node, AssignedNodeTenantEvent)
-		} else {
-			logger.Info("tenant does not have node configured", "node", node)
-		}
+	// the node needs to be configured
+	if slices.Contains(newTenant.Status.AwaitingNodeConfiguration, n.nodeName) {
+		n.Base.Enqueue(newTenant, WaitingNodeTenantEvent)
+	}
+
+	// if the node is already assigned, enqueue it for processing
+	if n.checkAssignedNodes(newTenant) {
+		n.Base.Enqueue(newTenant, AssignedNodeTenantEvent)
+
 	}
 }
 
@@ -120,4 +102,14 @@ func (n *NodeStoreOperator) addPod(obj any) {
 	// Add logic to handle adding a Pod
 	// This could involve checking if the Pod is associated with a NodeStore
 	// and then triggering any necessary updates or actions.
+}
+
+func (n *NodeStoreOperator) checkAssignedNodes(tenant *seterav1.Tenant) bool {
+
+	for _, node := range tenant.Status.AssignedNodes {
+		if node.Name == n.nodeName {
+			return true
+		}
+	}
+	return false
 }

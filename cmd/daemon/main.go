@@ -80,7 +80,7 @@ func main() {
 			Selectors: nil,
 		},
 		Status: seterav1.NodeStoreStatus{
-			Tenants: make(map[string]seterav1.TenantInfra, 1), // Initialize with capacity for one tenant,
+			Tenants: make(map[string]seterav1.TenantInfra), // Initialize with capacity for one tenant,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -108,11 +108,11 @@ func main() {
 	// create a new daemon instance
 	daemonInstance, err := daemon.NewDaemon(ctx, "setera-daemon", nodename, nodeIP, cidr, seteraclient, kubeclient)
 	if err != nil {
-		logger.Error(err, "failed to create daemon instance")
+		logger.Error(err, " [ERROR] - failed to create daemon instance")
 		os.Exit(1)
 	}
 
-	klog.Infof("Starting Setera Daemon on node %s with IP %s", nodename, nodeIP)
+	klog.Infof("[INFO][INIT] - Starting Setera Daemon on node %s: %s", nodename, nodeIP)
 
 	// Run the NodeStore operator
 	if err := daemonInstance.NodeStoreOperator.Base.Run(ctx); err != nil {

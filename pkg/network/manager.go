@@ -247,3 +247,15 @@ func (m *NetworkManager) ListTenants(ctx context.Context) map[string]*SubnetReco
 	}
 	return snap
 }
+
+func (m *NetworkManager) GetSubnetRecord(id string) (*SubnetRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	record, exists := m.SubnetRecords[id]
+	if !exists {
+		return nil, fmt.Errorf("tenant %s not found", id)
+	}
+
+	return record, nil
+}
