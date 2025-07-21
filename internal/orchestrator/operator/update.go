@@ -78,10 +78,11 @@ func (t *TenantOperator) updateFromNodestore(key string) error {
 
 		// place the node information in the tenant
 		nodestoreInfo := seterav1.NodeInfo{
-			Name:    nodestore.Name,
-			IP:      mod.Spec.NodeIP,
-			VtepIP:  tenantInfra.VTEP_IP,
-			VtepMAC: tenantInfra.VTEP_MAC,
+			Name:       nodestore.Name,
+			NodeIP:     mod.Spec.NodeIP,
+			TenantCIDR: tenantInfra.TenantCIDR,
+			VtepIP:     tenantInfra.VTEP_IP,
+			VtepMAC:    tenantInfra.VTEP_MAC,
 		}
 
 		// check if the node is already assigned to the tenant

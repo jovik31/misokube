@@ -42,10 +42,11 @@ type TenantStatus struct {
 }
 
 type NodeInfo struct {
-	Name    string `json:"name"`              // Name of the node
-	IP      string `json:"ip"`                // IP address of the node
-	VtepIP  string `json:"vtepIP,omitempty"`  // VTEP IP address of the node, if applicable
-	VtepMAC string `json:"vtepMAC,omitempty"` // VTEP MAC address of the node, if applicable
+	Name       string `json:"name"` // Name of the node
+	NodeIP     string `json:"node ip"`
+	TenantCIDR string `json:"tenant network"`    // IP address of the node
+	VtepIP     string `json:"vtepIP,omitempty"`  // VTEP IP address of the node, if applicable
+	VtepMAC    string `json:"vtepMAC,omitempty"` // VTEP MAC address of the node, if applicable
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

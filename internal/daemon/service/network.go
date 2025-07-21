@@ -85,6 +85,47 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 
 }
 
+func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
+	localTenant seterav1.NodeInfo,
+	remoteTenant seterav1.NodeInfo) error {
+
+	// get local tenant record
+	localTenantRecord, err := ns.NetMgr.GetSubnetRecord(localTenant.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get local tenant record %s: %w", localTenant.Name, err)
+	}
+	lvtep := localTenantRecord.VTEP.Name
+
+	// Parse the remote tenant CIDR
+	_, remoteTenantCIDR, err := net.ParseCIDR(remoteTenant.TenantCIDR)
+	if err != nil {
+		return fmt.Errorf("failed to parse remote tenant CIDR %s: %w", remoteTenant.TenantCIDR, err)
+	}
+	// Parse the remote tenant VTEP IP
+	remoteTenantVtep := net.ParseIP(remoteTenant.VtepIP)
+
+	// Parse the remote node IP
+	_, remoteNodeIP, err := net.ParseCIDR(remoteTenant.NodeIP)
+	if err != nil {
+		return fmt.Errorf("failed to parse remote node IP %s: %w", remoteTenant.NodeIP, err)
+	}
+
+	// parse the remote vtep mac
+	remoteTenantVtepMac, err := net.ParseMAC(remoteTenant.VtepMAC)
+	if err != nil {
+		return fmt.Errorf("failed to parse remote tenant VTEP MAC %s: %w", remoteTenant.VtepMAC, err)
+	}
+
+	// Configure routing for the tenant's network
+	// This is a placeholder for actual implementation
+	return ns.NetMgr.ConfigureRoutes(lvtep,
+		remoteTenantCIDR,
+		remoteNodeIP,
+		remoteTenantVtep,
+		remoteTenantVtepMac)
+
+}
+
 func (ns *NetworkService) DeallocateTenant(ctx context.Context, id string) error {
 	// Deallocate the tenant's subnet and clean up resources
 	return ns.NetMgr.DeletetSubnet(ctx, id)

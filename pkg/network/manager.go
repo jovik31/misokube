@@ -12,6 +12,7 @@ import (
 	"github/setera/pkg/data/trie"
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
+	"github/setera/pkg/network/routing"
 
 	"github.com/vishvananda/netlink"
 )
@@ -258,4 +259,27 @@ func (m *NetworkManager) GetSubnetRecord(id string) (*SubnetRecord, error) {
 	}
 
 	return record, nil
+}
+
+func (m *NetworkManager) ConfigureRoutes(localVtepName string,
+	remoteTenantCIDR *net.IPNet,
+	remoteNodeIP *net.IPNet,
+	remoteVtepIP net.IP,
+	remoteVtepMac net.HardwareAddr) error {
+
+	// get vtep ID
+	dvtep, err := netlink.LinkByName(localVtepName)
+	if err != nil {
+		return fmt.Errorf("failed to get local VTEP %s: %w", localVtepName, err)
+	}
+
+	// configure ARP
+	routing.AddARP(dvtep.Attrs().Index, remoteVtepIP, remoteVtepMac)
+	// configure FDB
+	routing.AddFDB(dvtep.Attrs().Index, remoteNodeIP.IP, remoteVtepMac)
+	// configure route
+	routing.AddRoutes(dvtep.Attrs().Index, remoteTenantCIDR, remoteVtepIP)
+
+	return nil
+
 }
