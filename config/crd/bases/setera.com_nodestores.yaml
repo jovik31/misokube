@@ -59,6 +59,8 @@ spec:
                       type: string
                     bridge_mac:
                       type: string
+                    bridge_name:
+                      type: string
                     name:
                       type: string
                     pods:
@@ -81,15 +83,19 @@ spec:
                       type: string
                     vtep_mac:
                       type: string
+                    vtep_name:
+                      type: string
                   required:
                   - bridge_ip
                   - bridge_mac
+                  - bridge_name
                   - name
                   - pods
                   - tenant_cidr
                   - vni
                   - vtep_ip
                   - vtep_mac
+                  - vtep_name
                   type: object
                 type: object
             type: object

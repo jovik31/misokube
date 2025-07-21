@@ -21,7 +21,7 @@ type NetworkService struct {
 	NetMgr *network.NetworkManager
 }
 
-func NewNetworkService(nodeCIDR string) (*NetworkService, error) {
+func NewNetworkService(nodeCIDR string, nodeName string) (*NetworkService, error) {
 
 	if nodeCIDR == "" {
 
@@ -34,7 +34,7 @@ func NewNetworkService(nodeCIDR string) (*NetworkService, error) {
 		return nil, fmt.Errorf("invalid nodeCIDR %s: %w", nodeCIDR, err)
 	}
 
-	netMgr, err := network.NewNetworkManager(cidr)
+	netMgr, err := network.NewNetworkManager(cidr, nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize network manager: %w", err)
 	}
@@ -49,13 +49,15 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 	if sr, exists := ns.NetMgr.SubnetRecords[id]; exists {
 
 		return &seterav1.TenantInfra{
-			Name:       id,
-			TenantCIDR: sr.Network,
-			BRIDGE_IP:  sr.Bridge.IPaddress,
-			BRIDGE_MAC: sr.Bridge.MACaddress,
-			VNI:        sr.VTEP.VNI,
-			VTEP_IP:    sr.VTEP.IP,
-			VTEP_MAC:   sr.VTEP.MAC,
+			Name:        id,
+			TenantCIDR:  sr.Network,
+			BRIDGE_NAME: sr.Bridge.Name,
+			BRIDGE_IP:   sr.Bridge.IPaddress,
+			BRIDGE_MAC:  sr.Bridge.MACaddress,
+			VTEP_NAME:   sr.VTEP.Name,
+			VNI:         sr.VTEP.VNI,
+			VTEP_IP:     sr.VTEP.IP,
+			VTEP_MAC:    sr.VTEP.MAC,
 		}, nil
 	}
 

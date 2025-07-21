@@ -63,7 +63,7 @@ func NewDaemon(
 
 ) (*Daemon, error) {
 
-	netService, err := service.NewNetworkService(nodeCIDR)
+	netService, err := service.NewNetworkService(nodeCIDR, nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network service: %w", err)
 

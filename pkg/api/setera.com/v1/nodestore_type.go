@@ -43,14 +43,16 @@ type NodeStoreList struct {
 }
 
 type TenantInfra struct {
-	Name       string     `json:"name"`        //Tenant Name
-	TenantCIDR string     `json:"tenant_cidr"` //Tenant CIDR
-	VNI        int        `json:"vni"`         //Tenant VNI identification
-	VTEP_IP    string     `json:"vtep_ip"`     //VTEP IP address
-	VTEP_MAC   string     `json:"vtep_mac"`    //VTEP MAC address
-	BRIDGE_IP  string     `json:"bridge_ip"`   //Bridge IP address
-	BRIDGE_MAC string     `json:"bridge_mac"`  //Bridge MAC address
-	Pods       []Pod_Info `json:"pods"`        //Pods that are deployed on this tenant
+	Name        string     `json:"name"`        //Tenant Name
+	TenantCIDR  string     `json:"tenant_cidr"` //Tenant CIDR
+	VTEP_NAME   string     `json:"vtep_name"`   //VTEP Name
+	VNI         int        `json:"vni"`         //Tenant VNI identification
+	VTEP_IP     string     `json:"vtep_ip"`     //VTEP IP address
+	VTEP_MAC    string     `json:"vtep_mac"`    //VTEP MAC address
+	BRIDGE_NAME string     `json:"bridge_name"` //Bridge Name
+	BRIDGE_IP   string     `json:"bridge_ip"`   //Bridge IP address
+	BRIDGE_MAC  string     `json:"bridge_mac"`  //Bridge MAC address
+	Pods        []Pod_Info `json:"pods"`        //Pods that are deployed on this tenant
 
 }
 

@@ -47,12 +47,14 @@ type VxlanRecord struct {
 	VNI  int
 }
 
-func NewNetworkManager(rootCIDR *net.IPNet) (*NetworkManager, error) {
+func NewNetworkManager(rootCIDR *net.IPNet, nodeName string) (*NetworkManager, error) {
 
 	ipTrie := trie.NewTrie(rootCIDR)
 	ipTrie.Build(30) // Build trie down to /30 subnets
 
 	return &NetworkManager{
+		RootCIDR:      rootCIDR,
+		NodeName:      nodeName,
 		Trie:          ipTrie,
 		SubnetRecords: make(map[string]*SubnetRecord),
 	}, nil

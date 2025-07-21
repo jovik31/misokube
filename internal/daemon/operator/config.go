@@ -80,19 +80,14 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 		}
 		configed_tenant_infra.Pods = make([]seterav1.Pod_Info, 0)
 		// patch the nodestore with the tenant infrastructure
+		if mod.Status.Tenants == nil {
+			mod.Status.Tenants = make(map[string]seterav1.TenantInfra, 1)
+		}
+		// add the tenant infra to the nodestore status
 		mod.Status.Tenants[tenant.Name] = *configed_tenant_infra
 
-		// get the nodestore
-		nodestore, err := n.NodeStoreLister.NodeStores("default").Get(nodestore.Name)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				n.Base.Logger.Error(err, "NodeStore not found", "nodestore", nodestore.Name)
-			}
-		}
-		n.Base.Logger.Info("DEBUG NODESTORE FOUND", "nodestore", nodestore.Name)
-
 		// patch the nodestore with the tenant infra
-		_, err = n.Base.Seterav1Clientset.SeteraV1().NodeStores("default").UpdateStatus(ctx, mod, metav1.UpdateOptions{})
+		_, err = n.Base.Seterav1Clientset.SeteraV1().NodeStores("default").Update(ctx, mod, metav1.UpdateOptions{})
 		if err != nil {
 			n.Base.Logger.Error(err, "Failed to update NodeStore status", "nodestore", nodestore.Name)
 			return fmt.Errorf("failed to update nodestore %s status: %v", nodestore.Name, err)

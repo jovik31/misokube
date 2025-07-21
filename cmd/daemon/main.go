@@ -80,7 +80,7 @@ func main() {
 			Selectors: nil,
 		},
 		Status: seterav1.NodeStoreStatus{
-			Tenants: make(map[string]seterav1.TenantInfra),
+			Tenants: make(map[string]seterav1.TenantInfra, 1), // Initialize with capacity for one tenant,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
