@@ -48,12 +48,11 @@ func main() {
 	if config == nil {
 		logger.Error(nil, "kubeconfig is nil, cannot proceed")
 		os.Exit(1)
-	} else {
-		logger.Info("kubeconfig initialized successfully")
 	}
 
 	kubeclient, seteraclient, err := k8s.InitClients(config)
 	if err != nil {
+		logger.Error(err, "failed to initialize Kubernetes clients")
 		os.Exit(1)
 	}
 
@@ -61,19 +60,27 @@ func main() {
 	nodename := os.Getenv("NODE_NAME")
 	nodeIP := os.Getenv("NODE_IP")
 	if nodename == "" || nodeIP == "" {
-		klog.Fatal("NODE_NAME and NODE_IP environment variables must be set")
+		logger.Error(nil, "NODE_NAME and NODE_IP environment variables must be set")
+		os.Exit(1)
 	}
 
 	// create NodeStore object for the node
 	_, err = seteraclient.SeteraV1().NodeStores("default").Create(ctx, &seterav1.NodeStore{
+
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodeStore",
+			APIVersion: seterav1.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodename,
-			Namespace: "default",
+			Name: nodename,
 		},
 		Spec: seterav1.NodeStoreSpec{
 			Name:      nodename,
 			NodeIP:    nodeIP,
 			Selectors: nil,
+		},
+		Status: seterav1.NodeStoreStatus{
+			Tenants: make(map[string]seterav1.TenantInfra),
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

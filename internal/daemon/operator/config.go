@@ -3,6 +3,7 @@ package daemon
 import (
 
 	// internals
+	"context"
 	"fmt"
 
 	// api types
@@ -15,6 +16,7 @@ import (
 	"github/setera/pkg/operator"
 	// k8s
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
@@ -24,6 +26,8 @@ import (
 
 // Config holds the configuration for the NodeStoreOperator - called when a new tenant is created
 func (n *NodeStoreOperator) configNodestore(key string) error {
+
+	ctx := context.Background()
 
 	n.Base.Logger.Info("Configuring NodeStore", "key", key)
 
@@ -45,6 +49,8 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 			return err
 		}
 	}
+
+	n.Base.Logger.Info("DEBUG INFO", "nodestore", nodestore.Name, "namespace", nodestore.Namespace)
 
 	// create a copy of the nodestore
 	mod := nodestore.DeepCopy()
@@ -72,9 +78,28 @@ func (n *NodeStoreOperator) configNodestore(key string) error {
 		if err != nil {
 			n.Base.Logger.Error(err, "Failed to allocate tenant infrastructure", "tenant", tenant.Name)
 		}
-		n.Base.Logger.Info("Allocated tenant infrastructure", "tenant", tenant.Name, "infra", configed_tenant_infra)
-		// check if the tenant is already configured in this node or is configured in the tenant
-		// Call network manager to perform tenant configuration and return a TenantInfo object
+		configed_tenant_infra.Pods = make([]seterav1.Pod_Info, 0)
+		// patch the nodestore with the tenant infrastructure
+		mod.Status.Tenants[tenant.Name] = *configed_tenant_infra
+
+		// get the nodestore
+		nodestore, err := n.NodeStoreLister.NodeStores("default").Get(nodestore.Name)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				n.Base.Logger.Error(err, "NodeStore not found", "nodestore", nodestore.Name)
+			}
+		}
+		n.Base.Logger.Info("DEBUG NODESTORE FOUND", "nodestore", nodestore.Name)
+
+		// patch the nodestore with the tenant infra
+		_, err = n.Base.Seterav1Clientset.SeteraV1().NodeStores("default").UpdateStatus(ctx, mod, metav1.UpdateOptions{})
+		if err != nil {
+			n.Base.Logger.Error(err, "Failed to update NodeStore status", "nodestore", nodestore.Name)
+			return fmt.Errorf("failed to update nodestore %s status: %v", nodestore.Name, err)
+		}
+		n.Base.Logger.Info("NodeStore status updated", "nodestore", nodestore.Name, "tenant", tenant.Name)
+
+		// remove the tenant from the awaiting nodes
 
 	}
 

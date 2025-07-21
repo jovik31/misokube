@@ -94,23 +94,87 @@ func (m *NetworkManager) ConfigBridge(ctx context.Context, network *net.IPNet, i
 	return bridge.Attrs().Name, bridgeIP, bridge.Attrs().HardwareAddr, nil
 }
 
-func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) {
+func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) (string, int, *net.IPNet, net.HardwareAddr, error) {
 
 	// create a VTEP for the tenant
-	vtep, err := backend.SetupVxlan(network, id, m.NodeName)
+	vtep, vtepIP, err := backend.SetupVxlan(network, id, m.NodeName)
 	if err != nil {
 		m.Trie.DeallocateSubnet(id) // rollback on error
-		fmt.Printf("failed to create VTEP %s: %v\n", id, err)
-		return
+		return "", 0, nil, nil, fmt.Errorf("failed to create VTEP %s: %w", id, err)
 	}
-	// ATTENTION NEEDS ATTENTOIN TO ITS RETURN VALUES
+
+	return vtep.Attrs().Name, vtep.VxlanId, vtepIP, vtep.Attrs().HardwareAddr, nil
 
 }
 
-// register the tenant in the network manager map
-func (m *NetworkManager) RegisterTenant(tenantID string, subnet *net.IPNet, bridgeName string, bridgeIP *net.IPNet) error {
+func (m *NetworkManager) ConfigIPAM(ctx context.Context, network *net.IPNet, id string) (*ipam.IPAM, error) {
 
-	return nil
+	// create an IPAM instance for the tenant
+	ipamInstance, err := ipam.NewIPAM(network)
+	if err != nil {
+		m.Trie.DeallocateSubnet(id) // rollback on error
+		return nil, fmt.Errorf("failed to create IPAM for tenant %s: %w", id, err)
+	}
+
+	return ipamInstance, nil
+}
+
+// register and configures the tenant and returns a subnet record
+func (m *NetworkManager) RegisterTenant(tenantID string) (*SubnetRecord, error) {
+
+	tenant_subnet, err := m.AllocateSubnet(context.Background(), tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("allocate subnet for tenant %s: %w", tenantID, err)
+	}
+
+	// create bridge
+	bridgeName, bridgeIP, bridgeMac, err := m.ConfigBridge(context.Background(), tenant_subnet, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("config bridge for tenant %s: %w", tenantID, err)
+	}
+	bridgeRecord := &BridgeRecord{
+		Name:       bridgeName,
+		IPaddress:  bridgeIP.String(),
+		MACaddress: bridgeMac.String(),
+	}
+
+	// create VTEP
+	vtep_name, vni, vtepIP, vtepMac, err := m.ConfigVxlan(context.Background(), tenant_subnet, tenantID)
+	if err != nil {
+		m.Trie.DeallocateSubnet(tenantID) // rollback subnet allocation on error
+		return nil, fmt.Errorf("config VTEP for tenant %s: %w", tenantID, err)
+	}
+	vtepRecord := &VxlanRecord{
+		Name: vtep_name,
+		IP:   vtepIP.String(),
+		MAC:  vtepMac.String(),
+		VNI:  vni,
+	}
+
+	// create IPAM instance
+	ipamInstance, err := m.ConfigIPAM(context.Background(), tenant_subnet, tenantID)
+	if err != nil {
+		m.Trie.DeallocateSubnet(tenantID) // rollback subnet allocation on error
+		return nil, fmt.Errorf("config IPAM for tenant %s: %w", tenantID, err)
+	}
+
+	// create subnet record
+	subnetRecord := &SubnetRecord{
+		Network: tenant_subnet.String(),
+		Bridge:  bridgeRecord,
+		VTEP:    vtepRecord,
+		IPAM:    ipamInstance,
+	}
+
+	// register the subnet record
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.SubnetRecords[tenantID]; exists {
+		return nil, fmt.Errorf("tenant %s already registered", tenantID)
+	}
+	m.SubnetRecords[tenantID] = subnetRecord
+
+	return subnetRecord, nil
 }
 
 // ExpandTenant merges sibling subnets (via trie), then updates bridge IP.

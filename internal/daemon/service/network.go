@@ -45,29 +45,37 @@ func NewNetworkService(nodeCIDR string) (*NetworkService, error) {
 
 func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, error) {
 
-	ctx := context.Background()
+	// check if the tenant already exists
+	if sr, exists := ns.NetMgr.SubnetRecords[id]; exists {
+
+		return &seterav1.TenantInfra{
+			Name:       id,
+			TenantCIDR: sr.Network,
+			BRIDGE_IP:  sr.Bridge.IPaddress,
+			BRIDGE_MAC: sr.Bridge.MACaddress,
+			VNI:        sr.VTEP.VNI,
+			VTEP_IP:    sr.VTEP.IP,
+			VTEP_MAC:   sr.VTEP.MAC,
+		}, nil
+	}
+
 	// allocate a subnet for the tenant
-	subnet, err := ns.NetMgr.AllocateSubnet(ctx, id)
+	subnetRecord, err := ns.NetMgr.RegisterTenant(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate subnet for tenant %s: %w", id, err)
 	}
 
-	// create bridge
-	_, bridgeIP, bridgeMac, err := ns.NetMgr.ConfigBridge(ctx, subnet, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create bridge for tenant %s: %w", id, err)
-	}
+	// create subnet record
 
 	ti := &seterav1.TenantInfra{
 		Name:       id,
-		TenantCIDR: subnet.String(),
-		BRIDGE_IP:  bridgeIP.String(),
-		BRIDGE_MAC: bridgeMac.String(),
+		TenantCIDR: subnetRecord.Network,
+		BRIDGE_IP:  subnetRecord.Bridge.IPaddress,
+		BRIDGE_MAC: subnetRecord.Bridge.MACaddress,
+		VNI:        subnetRecord.VTEP.VNI,
+		VTEP_IP:    subnetRecord.VTEP.IP,
+		VTEP_MAC:   subnetRecord.VTEP.MAC,
 	}
-
-	// create vtep
-
-	//create vtep
 
 	// create subnet record (with bitmap and pass the two ips that are already in use: VTEP and Bridge)
 

@@ -26,9 +26,13 @@ func (n *NodeStoreOperator) addNodeStoreHandler(obj any) {
 	if !ok {
 		logger.Info("Failed to cast object to NodeStore in add handler")
 
+	}
+
+	// check if this is my nodestore
+	if nodestore.Name != n.nodeName {
+		logger.WithValues("nodestore", nodestore.Name, "node", n.nodeName).Info("NodeStore is not for this node, skipping")
 	} else {
 		n.Base.Enqueue(nodestore, operator.AddEvent)
-
 	}
 }
 
@@ -92,7 +96,6 @@ func (n *NodeStoreOperator) updateNodestoreFromTenantHandler(oldObj, newObj any)
 			logger.Info("tenant does not have node awaiting configuration", "node", node)
 		}
 	}
-
 	configedNodes := newTenant.Status.AssignedNodes
 	for _, node := range configedNodes {
 		// node belongs to tenant and is configured

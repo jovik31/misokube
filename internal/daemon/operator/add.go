@@ -4,6 +4,7 @@ import (
 
 	//std
 	"context"
+	"encoding/json"
 	"fmt"
 
 	//internal packages
@@ -16,6 +17,7 @@ import (
 	//k8s
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func (n *NodeStoreOperator) addNodeStore(key string) error {
@@ -51,10 +53,18 @@ func (n *NodeStoreOperator) addNodeStore(key string) error {
 		n.Base.Logger.WithValues("nodestore", nodestore.Name).Info("Adding finalizer to NodeStore")
 	}
 
-	// update the nodestore with the finalizer
-	_, err = n.Base.Seterav1Clientset.SeteraV1().NodeStores(namespace).Update(ctx, mod, metav1.UpdateOptions{})
+	// add finalizer load
+	patchPayload := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"finalizers": []string{config.NodeStoreFinalizer},
+		},
+	}
+	jsonPatch, err := json.Marshal(patchPayload)
+
+	// patch the nodestore with the finalizer
+	_, err = n.Base.Seterav1Clientset.SeteraV1().NodeStores("default").Patch(ctx, mod.Name, types.MergePatchType, jsonPatch, metav1.PatchOptions{})
 	if err != nil {
-		n.Base.Logger.WithValues("nodestore", mod.Name).Error(err, "Failed to update NodeStore with finalizer")
+		n.Base.Logger.WithValues("nodestore", mod.Name).Error(err, "Failed to patch NodeStore with finalizer")
 		n.Base.Recorder.Eventf(mod, "Warning", "UpdateFailed", "Failed to update NodeStore %s with finalizer: %v", mod.Name, err)
 
 		return fmt.Errorf("failed to update nodestore %s with finalizer: %w", nodestore.Name, err)

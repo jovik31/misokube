@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 
 	"github.com/vishvananda/netlink"
@@ -53,9 +54,12 @@ func SetupBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, erro
 				return existing, nil, fmt.Errorf("attach bridge addr: %w", err)
 			}
 		}
+
 		_ = netlink.LinkSetUp(existing)
+
 		return existing, bridgeIPNet, nil
-	} else if !errors.Is(err, syscall.ENOENT) {
+
+	} else if !isLinkNotFound(err) {
 		return nil, nil, fmt.Errorf("lookup bridge %s: %w", bridgeName, err)
 	}
 
@@ -91,4 +95,18 @@ func SetupBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, erro
 
 	_ = networkBase // (just to show we normalized; remove if unused)
 	return dev, bridgeIPNet, nil
+}
+
+func isLinkNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ENOENT) {
+		return true
+	}
+	// Fallback on substring checks used by netlink library.
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "link not found") ||
+		strings.Contains(msg, "no such device") ||
+		strings.Contains(msg, "not exist") || strings.Contains(msg, "Link not found")
 }
