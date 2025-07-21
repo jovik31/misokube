@@ -85,6 +85,7 @@ func (ns *NetworkService) AllocateTenant(id string) (*seterav1.TenantInfra, erro
 
 }
 
+// ATTENTION all this pre preprocessing can be implemented in the network manager
 func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
 	localTenant seterav1.NodeInfo,
 	remoteTenant seterav1.NodeInfo) error {
