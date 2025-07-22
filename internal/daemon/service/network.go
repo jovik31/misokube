@@ -11,6 +11,7 @@ import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// pkg
+	config "github/setera/pkg"
 	"github/setera/pkg/network"
 	// backend
 )
@@ -99,6 +100,7 @@ func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
 	lvtep := localTenantRecord.VTEP.Name
 
 	// Parse the remote tenant CIDR
+
 	_, remoteTenantCIDR, err := net.ParseCIDR(remoteTenant.TenantCIDR)
 	if err != nil {
 		return fmt.Errorf("failed to parse remote tenant CIDR %s: %w", remoteTenant.TenantCIDR, err)
@@ -106,8 +108,9 @@ func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
 	// Parse the remote tenant VTEP IP
 	remoteTenantVtep := net.ParseIP(remoteTenant.VtepIP)
 
-	// Parse the remote node IP
-	_, remoteNodeIP, err := net.ParseCIDR(remoteTenant.NodeIP)
+	// Parse the remote node IP -- CHECK IF IT WORKING
+	remoteNodeCIDR := remoteTenant.NodeIP + config.Node_CIDR_MASK
+	_, remoteNodeIP, err := net.ParseCIDR(remoteNodeCIDR)
 	if err != nil {
 		return fmt.Errorf("failed to parse remote node IP %s: %w", remoteTenant.NodeIP, err)
 	}

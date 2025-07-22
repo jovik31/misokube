@@ -16,9 +16,13 @@ require (
 )
 
 require (
-	github.com/alexflint/go-filemutex v1.3.0 // indirect
+	github.com/alexflint/go-filemutex v1.3.0
+	github.com/containernetworking/plugins v1.7.1
+	github.com/vishvananda/netlink v1.3.1
+)
+
+require (
 	github.com/containernetworking/cni v1.3.0 // indirect
-	github.com/containernetworking/plugins v1.7.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
@@ -38,7 +42,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/safchain/ethtool v0.5.10 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect

@@ -17,6 +17,7 @@ import (
 const (
 	WaitingNodeTenantEvent  operator.EventType = "Config"
 	AssignedNodeTenantEvent operator.EventType = "Assigned"
+	DeletedTenantEvent      operator.EventType = "Remove"
 )
 
 // from nodestoreInformer --> add event
@@ -93,8 +94,18 @@ func (n *NodeStoreOperator) updateFromTenantHandler(oldObj, newObj any) {
 }
 
 // from tenantInformer --> delete event
-func (n *NodeStoreOperator) deleteNodestoreFromTenantHandler(obj any) {
-	// Add logic to handle deleting NodeStore from Tenant
+func (n *NodeStoreOperator) deleteFromTenantHandler(obj any) {
+
+	newTenant, ok := obj.(*seterav1.Tenant)
+	if !ok {
+		n.Base.Logger.Error(nil, "failed to cast new object to tenant in delete handler")
+	}
+
+	// check if the local nodestore is in the tenant
+	if n.checkAssignedNodes(newTenant) {
+		n.Base.Enqueue(newTenant, DeletedTenantEvent)
+	}
+
 }
 
 // from podInformer --> add event

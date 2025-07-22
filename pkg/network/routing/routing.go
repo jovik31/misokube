@@ -73,7 +73,7 @@ func AddRoutes(localVtepID int, remoteTenantCIDR *net.IPNet, remoteVtepIP net.IP
 	netlink.RouteDel(&netlink.Route{
 		LinkIndex: localVtepID,
 		Scope:     netlink.SCOPE_UNIVERSE,
-		Dst:       &net.IPNet{IP: remoteVtepIP, Mask: net.CIDRMask(32, 32)},
+		Dst:       &net.IPNet{IP: remoteVtepIP, Mask: net.CIDRMask(32, 32)}, // it is always a /32 ip address
 		Flags:     syscall.RTNH_F_ONLINK,
 	})
 	return nil

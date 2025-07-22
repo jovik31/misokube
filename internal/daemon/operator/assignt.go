@@ -11,7 +11,7 @@ import (
 )
 
 // called when the node is part of the assigned slice in the tenant
-func (n *NodeStoreOperator) assignedNodestore(key string) error {
+func (n *NodeStoreOperator) assignTenant(key string) error {
 
 	ctx := context.Background()
 
@@ -58,7 +58,8 @@ func (n *NodeStoreOperator) assignedNodestore(key string) error {
 		return fmt.Errorf("failed to get tenant %s infrastructure: %w", name, err)
 	}
 	if !exists {
-		// ATTENTION CHECK if the tenant infrastructure exists
+
+		// ---------------ATTENTION CHECK if the tenant infrastructure exists-----------------
 		// create the tenant infrastructure if it does not exist
 		_, err = n.NetService.AllocateTenant(name)
 		if err != nil {
