@@ -1,17 +1,8 @@
 package daemon
 
-import (
-	"context"
-	"fmt"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
-)
-
 // removes the tenant infrastructure on the node when it receives a delete tenant event
 
-func (n *NodeStoreOperator) removeTenant(key string) error {
+/*func (n *NodeStoreOperator) removeTenant(key string) error {
 
 	ctx := context.Background()
 
@@ -46,6 +37,4 @@ func (n *NodeStoreOperator) removeTenant(key string) error {
 
 
 	return nil
-}
-
-func (n *NodeStoreOperator)
+}*/

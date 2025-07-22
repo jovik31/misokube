@@ -228,7 +228,7 @@ func (n *NodeStoreOperator) Process() bool {
 
 		// tenant deleted --> remove from local nodestore
 	case DeletedTenantEvent:
-		err = n.removeTenant(key)
+		//err = n.removeTenant(key)
 
 	}
 

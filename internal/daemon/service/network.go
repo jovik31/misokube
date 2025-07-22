@@ -11,7 +11,7 @@ import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// pkg
-	config "github/setera/pkg"
+
 	"github/setera/pkg/network"
 	// backend
 )
@@ -99,34 +99,32 @@ func (ns *NetworkService) ConfigureTenantRoutes(ctx context.Context,
 	}
 	lvtep := localTenantRecord.VTEP.Name
 
-	// Parse the remote tenant CIDR
-
+	// parse the remote tenant CIDR
 	_, remoteTenantCIDR, err := net.ParseCIDR(remoteTenant.TenantCIDR)
 	if err != nil {
 		return fmt.Errorf("failed to parse remote tenant CIDR %s: %w", remoteTenant.TenantCIDR, err)
 	}
-	// Parse the remote tenant VTEP IP
-	remoteTenantVtep := net.ParseIP(remoteTenant.VtepIP)
+	// parse the remote tenant VTEP IP
+	_, remoteTenantVtep, err := net.ParseCIDR(remoteTenant.VtepIP)
 
-	// Parse the remote node IP -- CHECK IF IT WORKING
-	remoteNodeCIDR := remoteTenant.NodeIP + config.Node_CIDR_MASK
-	_, remoteNodeIP, err := net.ParseCIDR(remoteNodeCIDR)
-	if err != nil {
-		return fmt.Errorf("failed to parse remote node IP %s: %w", remoteTenant.NodeIP, err)
+	// parse the remote tenant node IP
+	remoteNodeIP := net.ParseIP(remoteTenant.NodeIP)
+	remoteNodeCIDR := net.IPNet{
+		IP:   remoteNodeIP,
+		Mask: net.CIDRMask(16, 32), // Assuming /16 mask for node CIDR - remove magic number
+
 	}
-
 	// parse the remote vtep mac
 	remoteTenantVtepMac, err := net.ParseMAC(remoteTenant.VtepMAC)
 	if err != nil {
 		return fmt.Errorf("failed to parse remote tenant VTEP MAC %s: %w", remoteTenant.VtepMAC, err)
 	}
 
-	// Configure routing for the tenant's network
-	// This is a placeholder for actual implementation
+	// configure routing for the tenant's network
 	return ns.NetMgr.ConfigureRoutes(lvtep,
 		remoteTenantCIDR,
-		remoteNodeIP,
-		remoteTenantVtep,
+		&remoteNodeCIDR,
+		remoteTenantVtep.IP,
 		remoteTenantVtepMac)
 
 }
