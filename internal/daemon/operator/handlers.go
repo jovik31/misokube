@@ -53,6 +53,10 @@ func (n *NodeStoreOperator) updateNodeStoreHandler(oldObj, newObj any) {
 		n.Base.Enqueue(newNodestore, operator.UpdateEvent)
 	}
 
+	// what are the update scenarios we need to handle
+	// 1. adding tenant information - configure the node
+	// 2. change in tenant information - reconfigure the nodestore
+
 }
 
 // from nodestoreInformer --> delete event
