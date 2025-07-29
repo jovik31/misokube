@@ -13,22 +13,21 @@ type base_device struct {
 	mac  net.HardwareAddr
 }
 
-func (bd *base_device) Get() (device_name string, device_ip string, device_mac string, err error) {
-
-	if bd.name == "" || bd.ip == nil || bd.mac == nil {
-		return "", "", "", fmt.Errorf("failed to get device data")
-	}
-
-	return bd.name, bd.ip.String(), bd.mac.String(), nil
-}
+func (bd *base_device) GetName() string          { return bd.name }
+func (bd *base_device) GetIP() *net.IPNet        { return bd.ip }
+func (bd *base_device) GetMAC() net.HardwareAddr { return bd.mac }
 
 func (bd *base_device) Update() error {
-
-	// update ip of device
+	// update device fields
 	return nil
 }
 
 func (bd *base_device) Delete() error {
+	// delete device from the host
+	return fmt.Errorf("Delete method not implemented for %s", bd.name)
+}
 
-	return nil
+type vtep_device struct {
+	base_device
+	vni int
 }
