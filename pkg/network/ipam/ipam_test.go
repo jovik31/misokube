@@ -150,7 +150,10 @@ func Test_Remaining(t *testing.T) {
 
 func test_remaining(t *testing.T, a IPAM, wanted_remaining int) {
 	t.Helper()
-	remaining := a.Remaining()
+	remaining, err := a.Remaining()
+	if err != nil {
+		t.Errorf("failed to retrive remaining IP addreses with error %s", err)
+	}
 	if remaining != wanted_remaining { // /30 has 4 addresses, but 2 are reserved (network + broadcast)
 		t.Errorf("expected remaining %d, got %d", remaining, wanted_remaining)
 	}
@@ -179,7 +182,10 @@ func test_allocate(t *testing.T, a IPAM) {
 			t.Fatalf("AllocateIP #%d failed: %v", i, err)
 		}
 	}
-	if rem := a.Remaining(); rem != 0 {
+	if rem, err := a.Remaining(); rem != 0 {
+		if err != nil {
+			t.Fatalf("failed to retrieve remaining IPs with error %s", err)
+		}
 		t.Errorf("Remaining after full alloc = %d; want 0", rem)
 	}
 }

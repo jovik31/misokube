@@ -32,7 +32,7 @@ type SubnetRecord struct {
 	Network string        // the allocated subnet
 	Bridge  *BridgeRecord // bridge record for the tenant
 	VTEP    *VxlanRecord  // VTEP record for the tenant
-	IPAM    *ipam.IPAM    // IPAM instance for managing IPs in the subnet
+	IPAM    ipam.IP  AM     // IPAM instance for managing IPs in the subnet
 }
 
 type BridgeRecord struct {
@@ -110,16 +110,31 @@ func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id
 
 }
 
-func (m *NetworkManager) ConfigIPAM(ctx context.Context, network *net.IPNet, id string) (*ipam.IPAM, error) {
+func (m *NetworkManager) ConfigIPAM(ctx context.Context, network *net.IPNet, id string) (ipam.IPAM, error) {
 
 	// create an IPAM instance for the tenant
-	ipamInstance, err := ipam.NewIPAM(network)
+	ipamInstance, err := ipam.NewBitmapIPAM(network)
 	if err != nil {
 		m.Trie.DeallocateSubnet(id) // rollback on error
 		return nil, fmt.Errorf("failed to create IPAM for tenant %s: %w", id, err)
 	}
 
 	return ipamInstance, nil
+}
+
+func (m *NetworkManager) AllocatePod(tenant string, containerID string, ifName string) error {
+
+	// get pod tenant
+	// get tenant subnet record
+	//tenant_record := m.SubnetRecords[tenant]
+
+	// allocate IP
+	//tenant_record.IPAM.Allocate()
+	// setup veth
+	// connect veth to bridge
+	// add riute
+	//bridge_ip := tenant_record.Bridge.IPaddress
+	return nil
 }
 
 // register and configures the tenant and returns a subnet record

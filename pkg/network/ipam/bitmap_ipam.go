@@ -75,11 +75,11 @@ func (ipam *BitmapIPAM) Capacity() (int, error) {
 }
 
 // remaining returns free ip slots
-func (ipam *BitmapIPAM) Remaining() int {
+func (ipam *BitmapIPAM) Remaining() (int, error) {
 
 	cap, err := ipam.Capacity()
 	if err != nil {
-		return 0 // if capacity fails, return 0 remaining
+		return 0, nil // if capacity fails, return 0 remaining
 	}
 	used := 0
 	for _, w := range ipam.bitmap {
@@ -89,7 +89,7 @@ func (ipam *BitmapIPAM) Remaining() int {
 		used = cap // sanity check, should not happen
 	}
 
-	return cap - used
+	return cap - used, nil
 
 }
 

@@ -14,7 +14,7 @@ type IPAM interface {
 	Capacity() (int, error)
 
 	// get the number of free IPs available in the subnet.
-	Remaining() int
+	Remaining() (int, error)
 
 	// expand the subnet
 	Expand()
