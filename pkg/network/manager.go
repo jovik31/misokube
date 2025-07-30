@@ -32,7 +32,7 @@ type SubnetRecord struct {
 	Network string        // the allocated subnet
 	Bridge  *BridgeRecord // bridge record for the tenant
 	VTEP    *VxlanRecord  // VTEP record for the tenant
-	IPAM    ipam.IP  AM     // IPAM instance for managing IPs in the subnet
+	IPAM    ipam.IPAM     // IPAM instance for managing IPs in the subnet
 }
 
 type BridgeRecord struct {
