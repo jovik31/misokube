@@ -1,4 +1,4 @@
-package backend
+package device
 
 import (
 	"crypto/sha1"

@@ -1,4 +1,4 @@
-package backend
+package device
 
 import (
 	"errors"
@@ -164,6 +164,7 @@ func needsAddr(link netlink.Link, want *net.IPNet) bool {
 
 // DelVeth deletes the interface named ifName inside the given network namespace.
 // Idempotent: succeeds (returns nil) if the interface does not exist.
+
 func DelVeth(netns ns.NetNS, ifName string) error {
 	if netns == nil {
 		return errors.New("DelVeth: nil netns")

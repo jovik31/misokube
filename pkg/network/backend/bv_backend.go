@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"github/setera/pkg/network/device"
 	"net"
 )
 
@@ -8,11 +9,11 @@ import (
 var _ Backend = (*bv_backend)(nil)
 
 type bv_backend struct {
-	bridgeManager deviceManager
-	vtepManager   deviceManager
+	bridgeManager device.DeviceManager // manages the bridge device
+	vtepManager   device.DeviceManager // manages the VTEP device
 
-	Bridge device
-	VTEP   device
+	Bridge device.Device // Bridge device
+	VTEP   device.Device // VTEP device
 }
 
 func (bv *bv_backend) Create(tenantID string, subnet *net.IPNet, host string) error {
@@ -23,29 +24,70 @@ func (bv *bv_backend) Create(tenantID string, subnet *net.IPNet, host string) er
 	}
 
 	vtep, err := bv.vtepManager.Create(tenantID, subnet, host)
+	if err != nil {
+		// If VTEP creation fails, we should clean up the bridge
+		if delErr := bv.bridgeManager.Delete(bridge); delErr != nil {
+			return delErr // return the original error if cleanup fails
+		}
+	}
 
 	bv.Bridge = bridge
 	bv.VTEP = vtep
 
 	return nil
 }
-func (bv *bv_backend) Update(subnet *net.IPNet, host string) error { return nil }
-func (bv *bv_backend) Delete() error                               { return nil }
-func (bv *bv_backend) Type() string                                { return "bv_backend" }
+func (bv *bv_backend) Update(subnet *net.IPNet, host string) error {
 
-type deviceManager interface {
-	Create(tenantID string, subnet *net.IPNet, host string) (device, error)
-	Update(device device, subnet *net.IPNet) error // called to update a device
-	Delete(device device) error                    // called to delete the entire backend
+	if err := bv.bridgeManager.Update(bv.Bridge, subnet); err != nil {
+		return err
+	}
+	if err := bv.vtepManager.Update(bv.VTEP, subnet); err != nil {
+		return err
+	}
+
+	return nil
+}
+func (bv *bv_backend) Delete() error {
+
+	if err := bv.vtepManager.Delete(bv.VTEP); err != nil {
+		return err
+	}
+	if err := bv.bridgeManager.Delete(bv.Bridge); err != nil {
+		return err
+	}
+	bv.Bridge = nil
+	bv.VTEP = nil
+
+	// delete the managers
+	bv.bridgeManager = nil
+	bv.vtepManager = nil
+
+	return nil
+}
+func (bv *bv_backend) Type() string { return "bv_backend" }
+
+// ---------------------------bridge manager-----------------------------
+
+// base device
+var _ device.Device = (*base_device)(nil)
+
+type base_device struct {
+	name string
+	ip   *net.IPNet
+	mac  net.HardwareAddr
 }
 
-var _ deviceManager = (*bridgeManager)(nil)
+func (bd *base_device) GetName() string          { return bd.name }
+func (bd *base_device) GetIP() *net.IPNet        { return bd.ip }
+func (bd *base_device) GetMAC() net.HardwareAddr { return bd.mac }
+
+var _ device.DeviceManager = (*bridgeManager)(nil)
 
 type bridgeManager struct{}
 
-func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string) (device, error) {
+func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string) (device.Device, error) {
 
-	link, ip, err := SetupBridge(tenantID, subnet)
+	link, ip, err := device.SetupBridge(tenantID, subnet)
 	if err != nil {
 		return nil, err
 	}
@@ -58,43 +100,22 @@ func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string)
 	}
 	return bridge, nil
 }
-func (bm *bridgeManager) Update(device device, subnet *net.IPNet) error { return nil }
-func (bm *bridgeManager) Delete(device device) error                    { return nil }
+func (bm *bridgeManager) Update(dv device.Device, subnet *net.IPNet) error {
 
-var _ deviceManager = (*vtepManager)(nil)
-
-type vtepManager struct{}
-
-func (vm *vtepManager) Create(tenantID string, subnet *net.IPNet, host string) (device, error) {
-
-	return nil, nil
+	// check if the device is a base_device
+	err := device.UpdateBridgeIP(dv, subnet)
+	if err != nil {
+		return err
+	}
+	return nil
 }
-func (vm *vtepManager) Update(device device, subnet *net.IPNet) error { return nil }
-func (vm *vtepManager) Delete(device device) error                    { return nil }
+func (bm *bridgeManager) Delete(dv device.Device) error {
 
-type device interface {
-	GetName() string          // get device name
-	GetIP() *net.IPNet        // get device ip
-	GetMAC() net.HardwareAddr // get name, ip and mac from device
+	//delete the device
+	err := device.DeleteBridge(dv)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
-
-var _ device = (*base_device)(nil)
-
-type base_device struct {
-	name string
-	ip   *net.IPNet
-	mac  net.HardwareAddr
-}
-
-func (bd *base_device) GetName() string          { return bd.name }
-func (bd *base_device) GetIP() *net.IPNet        { return bd.ip }
-func (bd *base_device) GetMAC() net.HardwareAddr { return bd.mac }
-
-var _ device = (*vtep_device)(nil)
-
-type vtep_device struct {
-	base_device
-	vni int
-}
-
-func (vd *vtep_device) GetVNI() int { return vd.vni }

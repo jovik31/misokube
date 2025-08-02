@@ -18,6 +18,7 @@ require (
 require (
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/containernetworking/plugins v1.7.1
+	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netlink v1.3.1
 )
 
@@ -40,6 +41,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/safchain/ethtool v0.5.10 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
