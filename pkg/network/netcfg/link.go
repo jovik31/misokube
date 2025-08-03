@@ -1,4 +1,4 @@
-package devlink
+package netcfg
 
 import (
 	"github.com/vishvananda/netlink"
@@ -19,4 +19,10 @@ type LinkAPI interface {
 
 	LinkAdd(netlink.Link) error
 	LinkDel(link netlink.Link) error
+}
+
+var DefaultLinkAPI LinkAPI
+
+func SetLinkAPI(linkAPI LinkAPI) {
+	DefaultLinkAPI = linkAPI
 }

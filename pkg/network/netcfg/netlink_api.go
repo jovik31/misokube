@@ -1,9 +1,13 @@
-package devlink
+package netcfg
 
 import (
 	"github.com/vishvananda/netlink"
 	"net"
 )
+
+func init() {
+	SetLinkAPI(DefaultLinkAPI)
+}
 
 type NetlinkAPI struct{}
 
