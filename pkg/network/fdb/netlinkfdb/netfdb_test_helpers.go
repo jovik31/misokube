@@ -2,6 +2,8 @@ package netlinkfdb
 
 import (
 	"github.com/vishvananda/netlink"
+	"github/setera/pkg/network/fdb"
+	"net"
 	"syscall"
 )
 
@@ -50,4 +52,17 @@ func (m *MockNetlinkFDB) NeighList(ifindex int, family int) ([]netlink.Neigh, er
 
 func NewMockNetlinkFDB() *MockNetlinkFDB {
 	return &MockNetlinkFDB{linkIndex: map[string]int{}}
+}
+
+func sampleEntry(dev string, ip net.IP, mac string) fdb.FDBEntry {
+
+	hw, _ := net.ParseMAC(mac)
+	return fdb.FDBEntry{
+		Device: dev,
+		Family: syscall.AF_BRIDGE,
+		State:  netlink.NUD_PERMANENT,
+		Flags:  netlink.NTF_SELF,
+		IP:     ip,
+		Mac:    hw,
+	}
 }
