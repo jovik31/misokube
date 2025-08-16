@@ -24,74 +24,70 @@ func init() {
 
 func (n netlinkARPManager) Add(ae arp.ARPEntry) error {
 
-	link, err := n.nl.LinkByName(ae.Device)
+	if ae.Device == "" || ae.IP == nil || len(ae.MAC) == 0 {
+		return fmt.Errorf("arp add: invalid entry")
+	}
+	l, err := n.nl.LinkByName(ae.Device)
 	if err != nil {
-		return err
+		return fmt.Errorf("arp add: link %q: %w", ae.Device, err)
 	}
-
-	if ae.IP == nil || ae.IP.To4() == nil {
-		return fmt.Errorf("IP is nil")
-	}
-
-	if len(ae.MAC) == 0 {
-		return fmt.Errorf("MAC is nil")
-	}
-
-	return n.nl.NeighSet(&netlink.Neigh{
-		LinkIndex:    link.Attrs().Index,
+	ne := &netlink.Neigh{
+		LinkIndex:    l.Attrs().Index,
+		Family:       pickFamily(ae),
 		State:        netlink.NUD_PERMANENT,
-		Family:       syscall.AF_INET,
 		Type:         syscall.RTN_UNICAST,
 		IP:           ae.IP,
 		HardwareAddr: ae.MAC,
-	})
-
+	}
+	return n.nl.NeighAdd(ne)
 }
 func (n netlinkARPManager) Update(ae arp.ARPEntry) error {
 
-	link, err := n.nl.LinkByName(ae.Device)
+	if ae.Device == "" || ae.IP == nil || len(ae.MAC) == 0 {
+		return fmt.Errorf("arp update: invalid entry")
+	}
+	l, err := n.nl.LinkByName(ae.Device)
 	if err != nil {
-		return err
+		return fmt.Errorf("arp update: link %q: %w", ae.Device, err)
 	}
-
-	neighs, err := n.nl.NeighList(link.Attrs().Index, syscall.AF_INET)
-	if err != nil {
-		return err
-	}
-
-	var ei *netlink.Neigh
-
-	for i := range neighs {
-		if neighs[i].IP.Equal(ei.IP) {
-			ei = &neighs[i]
-			break
-		}
-	}
-
-	if ei == nil {
-		return fmt.Errorf("Neighbor %v not found", ei)
-	}
-
-	ei.HardwareAddr = ae.MAC
-	ei.State = netlink.NUD_PERMANENT
-	ei.Family = syscall.AF_INET
-	ei.Type = syscall.RTN_UNICAST
-
-	return n.nl.NeighSet(ei)
-}
-func (n netlinkARPManager) Delete(ae arp.ARPEntry) error {
-
-	link, err := n.nl.LinkByName(ae.Device)
-	if err != nil {
-		return err
-	}
-	return n.nl.NeighDel(&netlink.Neigh{
-		LinkIndex:    link.Attrs().Index,
-		Family:       syscall.AF_INET,
+	ne := &netlink.Neigh{
+		LinkIndex:    l.Attrs().Index,
+		Family:       pickFamily(ae),
 		State:        netlink.NUD_PERMANENT,
 		Type:         syscall.RTN_UNICAST,
 		IP:           ae.IP,
 		HardwareAddr: ae.MAC,
-	})
+	}
+	return n.nl.NeighSet(ne) // replace semantics
+}
 
+func (n netlinkARPManager) Delete(ae arp.ARPEntry) error {
+
+	if ae.Device == "" || ae.IP == nil || len(ae.MAC) == 0 {
+		return fmt.Errorf("arp delete: invalid entry")
+	}
+	l, err := n.nl.LinkByName(ae.Device)
+	if err != nil {
+		return fmt.Errorf("arp delete: link %q: %w", ae.Device, err)
+	}
+	ne := &netlink.Neigh{
+		LinkIndex:    l.Attrs().Index,
+		Family:       pickFamily(ae),
+		State:        netlink.NUD_PERMANENT,
+		Type:         syscall.RTN_UNICAST,
+		IP:           ae.IP,
+		HardwareAddr: ae.MAC,
+	}
+	return n.nl.NeighDel(ne)
+
+}
+
+func pickFamily(ae arp.ARPEntry) int {
+	if ae.Family != 0 {
+		return ae.Family
+	}
+	if ae.IP.To4() != nil {
+		return netlink.FAMILY_V4
+	}
+	return netlink.FAMILY_V6
 }
