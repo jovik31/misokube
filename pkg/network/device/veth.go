@@ -5,11 +5,23 @@ import (
 	"fmt"
 	"net"
 	"syscall"
-
-	//current "github.com/containernetworking/cni/pkg/types/100"
+	
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+)
+
+var (
+	ipSetupVeth = ip.SetupVeth
+
+	nlLinkByName    = netlink.LinkByName
+	nlAddrAdd       = netlink.AddrAdd
+	nlAddrList      = netlink.AddrList
+	nlLinkSetMTU    = netlink.LinkSetMTU
+	nlLinkSetUp     = netlink.LinkSetUp
+	nlRouteAdd      = netlink.RouteAdd
+	nlLinkSetMaster = netlink.LinkSetMaster
+	nlLinkDel       = netlink.LinkDel
 )
 
 const maxIfNameLen = 15
@@ -66,7 +78,7 @@ func SetupVeth(
 	}
 
 	// Lookup bridge once (host namespace).
-	brLink, err := netlink.LinkByName(bridgeName)
+	brLink, err := nlLinkByName(bridgeName)
 	if err != nil {
 		return fmt.Errorf("lookup bridge %q: %w", bridgeName, err)
 	}
@@ -76,32 +88,32 @@ func SetupVeth(
 	// ------------- Work inside the pod net namespace -------------
 	err = netns.Do(func(hostNS ns.NetNS) error {
 		// Create veth pair; host end moves to hostNS.
-		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, "", hostNS)
+		hostVeth, containerVeth, err := ipSetupVeth(ifName, mtu, "", hostNS)
 		if err != nil {
 			return fmt.Errorf("setup veth pair: %w", err)
 		}
 		hostIfaceName = hostVeth.Name
 
 		// Retrieve container end link.
-		conLink, err := netlink.LinkByName(containerVeth.Name)
+		conLink, err := nlLinkByName(containerVeth.Name)
 		if err != nil {
 			return fmt.Errorf("lookup container link %q: %w", containerVeth.Name, err)
 		}
 
 		// Add (idempotent) IP address.
 		if needsAddr(conLink, podIPNet) {
-			if err := netlink.AddrAdd(conLink, &netlink.Addr{IPNet: podIPNet}); err != nil && !isEExist(err) {
+			if err := nlAddrAdd(conLink, &netlink.Addr{IPNet: podIPNet}); err != nil && !isEExist(err) {
 				return fmt.Errorf("add addr %s: %w", podIPNet, err)
 			}
 		}
 
 		// Enforce MTU.
-		if err := netlink.LinkSetMTU(conLink, mtu); err != nil {
+		if err := nlLinkSetMTU(conLink, mtu); err != nil {
 			return fmt.Errorf("set MTU: %w", err)
 		}
 
 		// Bring container interface up.
-		if err := netlink.LinkSetUp(conLink); err != nil {
+		if err := nlLinkSetUp(conLink); err != nil {
 			return fmt.Errorf("link up container veth: %w", err)
 		}
 
@@ -110,7 +122,7 @@ func SetupVeth(
 			LinkIndex: conLink.Attrs().Index,
 			Gw:        gateway,
 		}
-		if err := netlink.RouteAdd(rt); err != nil && !isEExist(err) {
+		if err := nlRouteAdd(rt); err != nil && !isEExist(err) {
 			return fmt.Errorf("add default route via %s: %w", gateway, err)
 		}
 
@@ -121,23 +133,23 @@ func SetupVeth(
 	}
 
 	// ------------- Host namespace adjustments -------------
-	hostVeth, err := netlink.LinkByName(hostIfaceName)
+	hostVeth, err := nlLinkByName(hostIfaceName)
 	if err != nil {
 		return fmt.Errorf("lookup host veth %q: %w", hostIfaceName, err)
 	}
 
 	// Enforce MTU (host side).
-	if err := netlink.LinkSetMTU(hostVeth, mtu); err != nil {
+	if err := nlLinkSetMTU(hostVeth, mtu); err != nil {
 		return fmt.Errorf("set host veth MTU: %w", err)
 	}
 
 	// Attach to bridge.
-	if err := netlink.LinkSetMaster(hostVeth, brLink); err != nil {
+	if err := nlLinkSetMaster(hostVeth, brLink); err != nil {
 		return fmt.Errorf("attach %q to bridge %q: %w", hostVeth.Attrs().Name, bridgeName, err)
 	}
 
 	// Bring host side up.
-	if err := netlink.LinkSetUp(hostVeth); err != nil {
+	if err := nlLinkSetUp(hostVeth); err != nil {
 		return fmt.Errorf("bring host veth up: %w", err)
 	}
 
@@ -146,7 +158,7 @@ func SetupVeth(
 
 // needsAddr checks whether podIPNet is already present.
 func needsAddr(link netlink.Link, want *net.IPNet) bool {
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	addrs, err := nlAddrList(link, netlink.FAMILY_V4)
 	if err != nil {
 		// If we can't list, assume we need to add.
 		return true
@@ -177,7 +189,7 @@ func DelVeth(netns ns.NetNS, ifName string) error {
 	}
 
 	return netns.Do(func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(ifName)
+		link, err := nlLinkByName(ifName)
 		if err != nil {
 			// netlink returns syscall.ENOENT if link is missing
 			if errors.Is(err, syscall.ENOENT) {
@@ -185,7 +197,7 @@ func DelVeth(netns ns.NetNS, ifName string) error {
 			}
 			return fmt.Errorf("DelVeth: lookup %q: %w", ifName, err)
 		}
-		if err := netlink.LinkDel(link); err != nil {
+		if err := nlLinkDel(link); err != nil {
 			return fmt.Errorf("DelVeth: delete %q: %w", ifName, err)
 		}
 		return nil
@@ -207,12 +219,12 @@ func CheckVeth(netns ns.NetNS, ifName string, podIP net.IP) error {
 	}
 
 	return netns.Do(func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(ifName)
+		link, err := nlLinkByName(ifName)
 		if err != nil {
 			return fmt.Errorf("CheckVeth: link %q: %w", ifName, err)
 		}
 
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		addrs, err := nlAddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			return fmt.Errorf("CheckVeth: list addrs for %q: %w", ifName, err)
 		}
@@ -234,11 +246,11 @@ func CheckVethIPNet(netns ns.NetNS, ifName string, podIPNet *net.IPNet) error {
 		return fmt.Errorf("CheckVethIPNet: only IPv4 supported (%s)", podIPNet.IP)
 	}
 	return netns.Do(func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(ifName)
+		link, err := nlLinkByName(ifName)
 		if err != nil {
 			return fmt.Errorf("CheckVethIPNet: link %q: %w", ifName, err)
 		}
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		addrs, err := nlAddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			return fmt.Errorf("CheckVethIPNet: list addrs: %w", err)
 		}
@@ -264,7 +276,7 @@ func HasVeth(netns ns.NetNS, ifName string) (bool, error) {
 	}
 	var found bool
 	err := netns.Do(func(_ ns.NetNS) error {
-		_, err := netlink.LinkByName(ifName)
+		_, err := nlLinkByName(ifName)
 		if err != nil {
 			if errors.Is(err, syscall.ENOENT) {
 				found = false

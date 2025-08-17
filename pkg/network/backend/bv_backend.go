@@ -2,6 +2,7 @@ package backend
 
 import (
 	"github/setera/pkg/network/device"
+	"github/setera/pkg/network/device/bridge"
 	"net"
 )
 
@@ -64,7 +65,9 @@ func (bv *bv_backend) Delete() error {
 
 	return nil
 }
-func (bv *bv_backend) Type() string { return "bv_backend" }
+func (bv *bv_backend) Type() string                { return "bv_backend" }
+func (bv *bv_backend) BridgeDevice() device.Device { return bv.Bridge }
+func (bv *bv_backend) VtepDevice() device.Device   { return bv.VTEP }
 
 // ---------------------------bridge manager-----------------------------
 
@@ -87,7 +90,7 @@ type bridgeManager struct{}
 
 func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string) (device.Device, error) {
 
-	link, ip, err := device.SetupBridge(tenantID, subnet)
+	link, ip, err := bridge.SetupBridge(tenantID, subnet)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +106,7 @@ func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string)
 func (bm *bridgeManager) Update(dv device.Device, subnet *net.IPNet) error {
 
 	// check if the device is a base_device
-	err := device.UpdateBridgeIP(dv, subnet)
+	err := bridge.UpdateBridgeIP(dv, subnet)
 	if err != nil {
 		return err
 	}
@@ -112,7 +115,7 @@ func (bm *bridgeManager) Update(dv device.Device, subnet *net.IPNet) error {
 func (bm *bridgeManager) Delete(dv device.Device) error {
 
 	//delete the device
-	err := device.DeleteBridge(dv)
+	err := bridge.DeleteBridge(dv)
 	if err != nil {
 		return err
 	}

@@ -1,44 +1,52 @@
 package network
 
 import (
-
-	//std
+	// std
 	"context"
 	"fmt"
 	"net"
 	"sync"
 
-	// internal packages
+	// internal
 	"github/setera/pkg/data/trie"
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
-	"github/setera/pkg/network/routing"
+
+	// managers
+	"github/setera/pkg/network/arp"
+	"github/setera/pkg/network/fdb"
+	"github/setera/pkg/network/iptable"
+	"github/setera/pkg/network/route"
 
 	"github.com/vishvananda/netlink"
 )
 
 type NetworkManager struct {
-	RootCIDR      *net.IPNet // node cidr
-	NodeName      string     // node name
+	RootCIDR *net.IPNet
+	NodeName string
+
 	mu            sync.RWMutex
-	Trie          *trie.IPTrie             // The trie that records the allocated and non-allocated subnets
-	SubnetRecords map[string]*SubnetRecord // tenantID <--> subnetRecord
+	Trie          *trie.IPTrie
+	SubnetRecords map[string]*SubnetRecord
 
-	// channel to communicate with the score client to update the orchestrator information
-
+	// deps
+	Route    route.RouteManager
+	ARP      arp.ARPManager
+	FDB      fdb.FDBManager
+	IPTables iptable.IPtableManager
 }
 
 type SubnetRecord struct {
-	Network string        // the allocated subnet
-	Bridge  *BridgeRecord // bridge record for the tenant
-	VTEP    *VxlanRecord  // VTEP record for the tenant
-	IPAM    ipam.IPAM     // IPAM instance for managing IPs in the subnet
+	Network string
+	Bridge  *BridgeRecord
+	VTEP    *VxlanRecord
+	IPAM    ipam.IPAM
 }
 
 type BridgeRecord struct {
 	Name       string
-	IPaddress  string // ip address for the bridge device
-	MACaddress string // mac address for the bridge device
+	IPaddress  string
+	MACaddress string
 }
 
 type VxlanRecord struct {
@@ -48,105 +56,89 @@ type VxlanRecord struct {
 	VNI  int
 }
 
+// NewNetworkManager wires the default registered managers.
+// If you prefer explicit DI, add a NewNetworkManagerWithDeps that accepts the interfaces.
 func NewNetworkManager(rootCIDR *net.IPNet, nodeName string) (*NetworkManager, error) {
-
 	ipTrie := trie.NewTrie(rootCIDR)
-	ipTrie.Build(30) // Build trie down to /30 subnets
+	ipTrie.Build(30)
 
-	return &NetworkManager{
+	nm := &NetworkManager{
 		RootCIDR:      rootCIDR,
 		NodeName:      nodeName,
 		Trie:          ipTrie,
 		SubnetRecords: make(map[string]*SubnetRecord),
-	}, nil
+
+		// pull the defaults (registered at package init of each impl)
+		Route:    route.Manager(),   // default set by your netlink impl’s init() :contentReference[oaicite:0]{index=0}
+		ARP:      arp.Manager(),     // default set by netlink ARP impl’s init() :contentReference[oaicite:1]{index=1}
+		FDB:      fdb.Manager(),     // default set by netlink FDB impl’s init() :contentReference[oaicite:2]{index=2}
+		IPTables: iptable.Manager(), // default set when iptablesmgr init created v4 manager
+	}
+	return nm, nil
 }
 
-// allocates a /30 subnet
+// AllocateSubnet allocates a /30 from the trie.
 func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*net.IPNet, error) {
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	//trie subnet allocation
 	node, err := m.Trie.AllocateSubnet(id)
-	if err != nil {
-
-		m.Trie.DeallocateSubnet(id) // rollback on error
-		return nil, fmt.Errorf("trie allocation: %w", err)
-	}
-
-	if node == nil {
-		m.Trie.DeallocateSubnet(id) // rollback on error
+	if err != nil || node == nil {
+		m.Trie.DeallocateSubnet(id)
+		if err != nil {
+			return nil, fmt.Errorf("trie allocation: %w", err)
+		}
 		return nil, fmt.Errorf("no available subnet for tenant %s", id)
 	}
-
 	return node.Prefix, nil
-
 }
 
-// config and create a bridge for the tenant
+// ConfigBridge: create/configure bridge via your backend.
 func (m *NetworkManager) ConfigBridge(ctx context.Context, network *net.IPNet, id string) (string, *net.IPNet, net.HardwareAddr, error) {
-
 	bridge, bridgeIP, err := backend.SetupBridge(id, network)
 	if err != nil {
 		m.Trie.DeallocateSubnet(id)
 		return "", nil, nil, fmt.Errorf("failed to create bridge %s: %w", id, err)
-
 	}
-
 	return bridge.Attrs().Name, bridgeIP, bridge.Attrs().HardwareAddr, nil
 }
 
+// ConfigVxlan: create/configure VTEP via your backend.
 func (m *NetworkManager) ConfigVxlan(ctx context.Context, network *net.IPNet, id string) (string, int, *net.IPNet, net.HardwareAddr, error) {
-
-	// create a VTEP for the tenant
 	vtep, vtepIP, err := backend.SetupVxlan(network, id, m.NodeName)
 	if err != nil {
-		m.Trie.DeallocateSubnet(id) // rollback on error
+		m.Trie.DeallocateSubnet(id)
 		return "", 0, nil, nil, fmt.Errorf("failed to create VTEP %s: %w", id, err)
 	}
-
 	return vtep.Attrs().Name, vtep.VxlanId, vtepIP, vtep.Attrs().HardwareAddr, nil
-
 }
 
+// ConfigIPAM: create per-tenant IPAM.
 func (m *NetworkManager) ConfigIPAM(ctx context.Context, network *net.IPNet, id string) (ipam.IPAM, error) {
-
-	// create an IPAM instance for the tenant
 	ipamInstance, err := ipam.NewBitmapIPAM(network)
 	if err != nil {
-		m.Trie.DeallocateSubnet(id) // rollback on error
+		m.Trie.DeallocateSubnet(id)
 		return nil, fmt.Errorf("failed to create IPAM for tenant %s: %w", id, err)
 	}
-
 	return ipamInstance, nil
 }
 
-func (m *NetworkManager) AllocatePod(tenant string, containerID string, ifName string) error {
-
-	// get pod tenant
-	// get tenant subnet record
-	//tenant_record := m.SubnetRecords[tenant]
-
-	// allocate IP
-	//tenant_record.IPAM.Allocate()
-	// setup veth
-	// connect veth to bridge
-	// add riute
-	//bridge_ip := tenant_record.Bridge.IPaddress
+// AllocatePod – left as a TODO (depends on your CNI plumbing/veth helper).
+func (m *NetworkManager) AllocatePod(tenant, containerID, ifName string) error {
+	// 1) tenant record -> IPAM allocate
+	// 2) create veth, move peer to pod ns, connect host end to bridge
+	// 3) add default route inside pod via bridge IP using Route manager (ns variant)
 	return nil
 }
 
-// register and configures the tenant and returns a subnet record
+// RegisterTenant: allocate subnet, build L2, create IPAM, program iptables.
 func (m *NetworkManager) RegisterTenant(tenantID string) (*SubnetRecord, error) {
-
-	tenant_subnet, err := m.AllocateSubnet(context.Background(), tenantID)
+	tenantSubnet, err := m.AllocateSubnet(context.Background(), tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("allocate subnet for tenant %s: %w", tenantID, err)
 	}
 
-	// create bridge
-	bridgeName, bridgeIP, bridgeMac, err := m.ConfigBridge(context.Background(), tenant_subnet, tenantID)
+	bridgeName, bridgeIP, bridgeMac, err := m.ConfigBridge(context.Background(), tenantSubnet, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("config bridge for tenant %s: %w", tenantID, err)
 	}
@@ -156,58 +148,63 @@ func (m *NetworkManager) RegisterTenant(tenantID string) (*SubnetRecord, error) 
 		MACaddress: bridgeMac.String(),
 	}
 
-	// create VTEP
-	vtep_name, vni, vtepIP, vtepMac, err := m.ConfigVxlan(context.Background(), tenant_subnet, tenantID)
+	vtepName, vni, vtepIP, vtepMac, err := m.ConfigVxlan(context.Background(), tenantSubnet, tenantID)
 	if err != nil {
-		m.Trie.DeallocateSubnet(tenantID) // rollback subnet allocation on error
+		m.Trie.DeallocateSubnet(tenantID)
 		return nil, fmt.Errorf("config VTEP for tenant %s: %w", tenantID, err)
 	}
 	vtepRecord := &VxlanRecord{
-		Name: vtep_name,
+		Name: vtepName,
 		IP:   vtepIP.String(),
 		MAC:  vtepMac.String(),
 		VNI:  vni,
 	}
 
-	// create IPAM instance
-	ipamInstance, err := m.ConfigIPAM(context.Background(), tenant_subnet, tenantID)
+	ipamInstance, err := m.ConfigIPAM(context.Background(), tenantSubnet, tenantID)
 	if err != nil {
-		m.Trie.DeallocateSubnet(tenantID) // rollback subnet allocation on error
+		m.Trie.DeallocateSubnet(tenantID)
 		return nil, fmt.Errorf("config IPAM for tenant %s: %w", tenantID, err)
 	}
 
-	// create subnet record
+	// Program iptables isolation for this tenant (interface-based).
+	// Accept intra-tenant (bridge <-> vxlan), default-drop, allow egress to uplinks if you pass them here.
+	if m.IPTables != nil {
+		if err := m.IPTables.EnsureTenantChains(tenantID); err != nil {
+			return nil, err
+		}
+		if err := m.IPTables.EnsureTenantIsolationByIface(tenantID, bridgeName, vtepName /* uplinks... */); err != nil {
+			return nil, err
+		}
+		_ = m.IPTables.EnsureForwardFastPath()
+	}
+
 	subnetRecord := &SubnetRecord{
-		Network: tenant_subnet.String(),
+		Network: tenantSubnet.String(),
 		Bridge:  bridgeRecord,
 		VTEP:    vtepRecord,
 		IPAM:    ipamInstance,
 	}
 
-	// register the subnet record
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.SubnetRecords[tenantID]; exists {
 		return nil, fmt.Errorf("tenant %s already registered", tenantID)
 	}
 	m.SubnetRecords[tenantID] = subnetRecord
-
 	return subnetRecord, nil
 }
 
-// ExpandTenant merges sibling subnets (via trie), then updates bridge IP.
+// ExpandTenant: keeps your trie+bridge behavior; iptables is iface-based so no rule churn needed here.
 func (m *NetworkManager) ExpandTenant(ctx context.Context, id string) (*SubnetRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1) merge via trie
 	if err := m.Trie.MergeSubnet(id); err != nil {
 		return nil, fmt.Errorf("trie merge: %w", err)
 	}
 	node := m.Trie.GetNodeByID(id)
 	cidr := node.Prefix
 
-	// 2) update bridge address
 	rec, ok := m.SubnetRecords[id]
 	if !ok {
 		return nil, fmt.Errorf("no subnet record for %s", id)
@@ -220,43 +217,38 @@ func (m *NetworkManager) ExpandTenant(ctx context.Context, id string) (*SubnetRe
 		return nil, fmt.Errorf("addr replace %s: %w", cidr, err)
 	}
 
-	// 3) TODO: update VTEP, iptables, routes for new CIDR
-
-	// 4) update record
 	rec.Network = cidr.String()
 	rec.Bridge.IPaddress = cidr.IP.Mask(cidr.Mask).String()
 	m.SubnetRecords[id] = rec
 
+	// If you keep any prefix-based iptables rules, update them here. (Not needed with iface isolation.)
 	return rec, nil
 }
 
-// DeleteTenant tears down bridge/VTEP and frees the subnet in the trie.
+// DeletetSubnet: also clears the iptables chain for the tenant.
 func (m *NetworkManager) DeletetSubnet(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1) free trie allocation
 	if err := m.Trie.DeallocateSubnet(id); err != nil {
 		return fmt.Errorf("trie deallocate: %w", err)
 	}
-
-	// 2) teardown bridge
 	if rec, ok := m.SubnetRecords[id]; ok {
-		if link, err := netlink.LinkByName(rec.Bridge.Name); err == nil && link != nil {
-			netlink.LinkDel(link)
+		if m.IPTables != nil {
+			_ = m.IPTables.DeleteTenantChains(id)
 		}
-		// TODO: teardown VTEP
-		delete(m.SubnetRecords, id) // remove from records
+		if link, err := netlink.LinkByName(rec.Bridge.Name); err == nil && link != nil {
+			_ = netlink.LinkDel(link)
+		}
+		// TODO: delete VTEP link
+		delete(m.SubnetRecords, id)
 	}
-
 	return nil
 }
 
-// ListTenants returns a snapshot of all current SubnetRecords.
 func (m *NetworkManager) ListTenants(ctx context.Context) map[string]*SubnetRecord {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	snap := make(map[string]*SubnetRecord, len(m.SubnetRecords))
 	for k, v := range m.SubnetRecords {
 		snap[k] = v
@@ -267,34 +259,64 @@ func (m *NetworkManager) ListTenants(ctx context.Context) map[string]*SubnetReco
 func (m *NetworkManager) GetSubnetRecord(id string) (*SubnetRecord, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	record, exists := m.SubnetRecords[id]
 	if !exists {
 		return nil, fmt.Errorf("tenant %s not found", id)
 	}
-
 	return record, nil
 }
 
-func (m *NetworkManager) ConfigureRoutes(localVtepName string,
+// ConfigureRoutes now uses the managers (ARP/FDB/Route) instead of the old routing helpers.
+func (m *NetworkManager) ConfigureRoutes(
+	localVtepName string,
 	remoteTenantCIDR *net.IPNet,
 	remoteNodeIP *net.IPNet,
 	remoteVtepIP net.IP,
-	remoteVtepMac net.HardwareAddr) error {
+	remoteVtepMac net.HardwareAddr,
+) error {
 
-	// get vtep ID
-	dvtep, err := netlink.LinkByName(localVtepName)
-	if err != nil {
-		return fmt.Errorf("failed to get local VTEP %s: %w", localVtepName, err)
+	// 1) ARP (neighbor) entry for remote VTEP on the local VTEP device.
+	if err := m.ARP.Add(arp.ARPEntry{
+		Device: localVtepName,
+		IP:     remoteVtepIP,
+		MAC:    remoteVtepMac,
+	}); err != nil {
+		return fmt.Errorf("arp add: %w", err)
+	} // :contentReference[oaicite:3]{index=3}
+
+	// 2) FDB entry mapping remote host IP -> remote VTEP MAC on the vxlan device.
+	if err := m.FDB.Add(fdb.FDBEntry{
+		Device: localVtepName,
+		IP:     remoteNodeIP.IP,
+		Mac:    remoteVtepMac,
+	}); err != nil {
+		return fmt.Errorf("fdb add: %w", err)
+	} // :contentReference[oaicite:4]{index=4}
+
+	// 3) Routes:
+	// 3a) onlink /32 (or /128) host route to the remote VTEP IP on the vxlan device
+	mask := 32
+	if remoteVtepIP.To4() == nil {
+		mask = 128
 	}
+	vtepHost := &net.IPNet{IP: remoteVtepIP, Mask: net.CIDRMask(mask, 8*len(remoteVtepIP))}
+	if err := m.Route.Ensure(&route.Route{
+		Dst:    vtepHost,
+		Device: localVtepName,
+		Onlink: true,
+	}); err != nil {
+		return fmt.Errorf("ensure vtep-host route: %w", err)
+	} // :contentReference[oaicite:5]{index=5}
 
-	// configure ARP
-	routing.AddARP(dvtep.Attrs().Index, remoteVtepIP, remoteVtepMac)
-	// configure FDB
-	routing.AddFDB(dvtep.Attrs().Index, remoteNodeIP.IP, remoteVtepMac)
-	// configure route
-	routing.AddRoutes(dvtep.Attrs().Index, remoteTenantCIDR, remoteVtepIP)
+	// 3b) tenant CIDR via remote VTEP IP (onlink) on the vxlan device
+	if err := m.Route.Ensure(&route.Route{
+		Dst:     remoteTenantCIDR,
+		Device:  localVtepName,
+		Gateway: remoteVtepIP,
+		Onlink:  true,
+	}); err != nil {
+		return fmt.Errorf("ensure tenant route: %w", err)
+	} // :contentReference[oaicite:6]{index=6}
 
 	return nil
-
 }

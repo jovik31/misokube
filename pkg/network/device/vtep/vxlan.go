@@ -1,9 +1,10 @@
-package device
+package vtep
 
 import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
+	"github/setera/pkg/network/device"
 	"log"
 	"strings"
 
@@ -19,7 +20,7 @@ import (
 func SetupVxlan(subnet *net.IPNet, id string, nodeName string) (*netlink.Vxlan, *net.IPNet, error) {
 
 	// generate VTEP name
-	vtepName, err := GenerateDeviceName(config.VxlanPrefix, id)
+	vtepName, err := device.GenerateDeviceName(config.VxlanPrefix, id)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "generate VTEP name for %s", id)
 	}
@@ -41,7 +42,7 @@ func SetupVxlan(subnet *net.IPNet, id string, nodeName string) (*netlink.Vxlan, 
 	}
 
 	// init the IPNet for the VTEP
-	hostIP, err := HostIP(subnet)
+	hostIP, err := device.HostIP(subnet)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "get host IP for subnet %s", subnet)
 	}
@@ -54,7 +55,7 @@ func SetupVxlan(subnet *net.IPNet, id string, nodeName string) (*netlink.Vxlan, 
 
 	// if no address exists, assign the first IP of the subnet
 	if len(existingAddrs) == 0 {
-		hostIP, err := HostIP(subnet)
+		hostIP, err := device.HostIP(subnet)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "get host IP for subnet %s", subnet)
 		}

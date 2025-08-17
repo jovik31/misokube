@@ -31,6 +31,6 @@ func RegisterIPtableManager(mgr IPtableManager) {
 	DefaultIPtableManager = mgr
 }
 
-func IPTableManager() IPtableManager {
+func Manager() IPtableManager {
 	return DefaultIPtableManager
 }
