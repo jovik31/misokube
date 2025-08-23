@@ -3,6 +3,7 @@ package backend
 import (
 	"github/setera/pkg/network/device"
 	"github/setera/pkg/network/device/bridge"
+	"github/setera/pkg/network/device/vtep"
 	"net"
 )
 
@@ -10,8 +11,8 @@ import (
 var _ Backend = (*bv_backend)(nil)
 
 type bv_backend struct {
-	bridgeManager device.DeviceManager // manages the bridge device
-	vtepManager   device.DeviceManager // manages the VTEP device
+	bridgeManager *bridge.Manager // manages the bridge device
+	vtepManager   *vtep.Manager   // manages the VTEP device
 
 	Bridge device.Device // Bridge device
 	VTEP   device.Device // VTEP device
@@ -19,21 +20,22 @@ type bv_backend struct {
 
 func (bv *bv_backend) Create(tenantID string, subnet *net.IPNet, host string) error {
 
-	bridge, err := bv.bridgeManager.Create(tenantID, subnet, host)
+	br, err := bv.bridgeManager.Create(tenantID, subnet, host)
 	if err != nil {
 		return err
 	}
 
-	vtep, err := bv.vtepManager.Create(tenantID, subnet, host)
+	vt, err := bv.vtepManager.Create(tenantID, subnet, host)
 	if err != nil {
 		// If VTEP creation fails, we should clean up the bridge
-		if delErr := bv.bridgeManager.Delete(bridge); delErr != nil {
+		if delErr := bv.bridgeManager.Delete(br); delErr != nil {
 			return delErr // return the original error if cleanup fails
 		}
 	}
 
-	bv.Bridge = bridge
-	bv.VTEP = vtep
+
+	bv.Bridge = br
+	bv.VTEP = vt
 
 	return nil
 }

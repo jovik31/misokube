@@ -4,6 +4,7 @@ import (
 	// std
 	"context"
 	"fmt"
+	"github/setera/pkg/network/subnet"
 	"net"
 	"sync"
 
@@ -25,34 +26,34 @@ type NetworkManager struct {
 	RootCIDR *net.IPNet
 	NodeName string
 
-	mu            sync.RWMutex
-	Trie          *trie.IPTrie
-	SubnetRecords map[string]*SubnetRecord
+	TenantRecords map[string]*TenantRecord
 
 	// deps
+	Subnet   subnet.Manager
 	Route    route.RouteManager
 	ARP      arp.ARPManager
 	FDB      fdb.FDBManager
 	IPTables iptable.IPtableManager
 }
 
-type SubnetRecord struct {
-	Network string
+type TenantRecord struct {
+	Subnet  *net.IPNet
 	Bridge  *BridgeRecord
-	VTEP    *VxlanRecord
+	Vtep    *VxlanRecord
+	Backend backend.Backend
 	IPAM    ipam.IPAM
 }
 
 type BridgeRecord struct {
 	Name       string
-	IPaddress  string
-	MACaddress string
+	IPAddress  *net.IPNet
+	MACAddress net.HardwareAddr
 }
 
 type VxlanRecord struct {
 	Name string
-	IP   string
-	MAC  string
+	IP   *net.IPNet
+	MAC  net.HardwareAddr
 	VNI  int
 }
 
@@ -66,7 +67,7 @@ func NewNetworkManager(rootCIDR *net.IPNet, nodeName string) (*NetworkManager, e
 		RootCIDR:      rootCIDR,
 		NodeName:      nodeName,
 		Trie:          ipTrie,
-		SubnetRecords: make(map[string]*SubnetRecord),
+		TenantRecords: make(map[string]*TenantRecord),
 
 		// pull the defaults (registered at package init of each impl)
 		Route:    route.Manager(),   // default set by your netlink impl’s init() :contentReference[oaicite:0]{index=0}
@@ -78,7 +79,7 @@ func NewNetworkManager(rootCIDR *net.IPNet, nodeName string) (*NetworkManager, e
 }
 
 // AllocateSubnet allocates a /30 from the trie.
-func (m *NetworkManager) AllocateSubnet(ctx context.Context, id string) (*net.IPNet, error) {
+func (m *NetworkManager) AllocateTenant(ctx context.Context, id string) (*net.IPNet, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

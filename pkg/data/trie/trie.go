@@ -32,7 +32,7 @@ func (trie *IPTrie) Build(maxMaskSize int) {
 }
 
 // Deallocate a tenant from a trie node
-func (trie *IPTrie) DeallocateSubnet(id string) error {
+func (trie *IPTrie) Deallocate(id string) error {
 	node := trie.GetNodeByID(id)
 	if node == nil {
 		return fmt.Errorf("tenant %q not found", id)
@@ -59,7 +59,7 @@ func (trie *IPTrie) DeallocateSubnet(id string) error {
 }
 
 // Allocate a tenant to a trie node, returns false and with error if allocation fails
-func (trie *IPTrie) AllocateSubnet(id string) (*TrieNode, error) {
+func (trie *IPTrie) Allocate(id string) (*TrieNode, error) {
 
 	// check if the root exists
 	if trie.Root == nil {
@@ -71,7 +71,7 @@ func (trie *IPTrie) AllocateSubnet(id string) (*TrieNode, error) {
 		return nil, fmt.Errorf("tenant %q, aleardy exists and has an allocated subnet", id)
 	}
 
-	freeSubnets := trie.FindAllFreeSubnets()
+	freeSubnets := trie.FindAllFree()
 
 	// no more space for tenants
 	if len(freeSubnets) == 0 {
@@ -105,7 +105,7 @@ func (trie *IPTrie) AllocateSubnet(id string) (*TrieNode, error) {
 	return bestNode, nil
 }
 
-func (trie *IPTrie) FindAllFreeSubnets() []*TrieNode {
+func (trie *IPTrie) FindAllFree() []*TrieNode {
 
 	var freeSubnets []*TrieNode
 
@@ -114,7 +114,7 @@ func (trie *IPTrie) FindAllFreeSubnets() []*TrieNode {
 	return freeSubnets
 }
 
-func (trie *IPTrie) MergeSubnet(id string) error {
+func (trie *IPTrie) Merge(id string) error {
 
 	node := trie.GetNodeByID(id)
 
@@ -174,7 +174,10 @@ func (trie *IPTrie) PrintTree() {
 }
 
 func (trie *IPTrie) GetNodeByID(id string) *TrieNode {
-	var result *TrieNode
+
+	return trie.AllocMap[id]
+	// do a more thorugh check
+	/*var result *TrieNode
 
 	var dfs func(node *TrieNode)
 	dfs = func(node *TrieNode) {
@@ -193,5 +196,5 @@ func (trie *IPTrie) GetNodeByID(id string) *TrieNode {
 
 	dfs(trie.Root)
 
-	return result
+	return result, nil*/
 }
