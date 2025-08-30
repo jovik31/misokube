@@ -139,6 +139,64 @@ func ensureVxLan(vxlan *netlink.Vxlan) (*netlink.Vxlan, error) {
 	return link.(*netlink.Vxlan), nil
 }
 
+func UpdateIP(dv device.Device, subnet *net.IPNet) (*net.IPNet, error) {
+	if dv == nil {
+		return nil, errors.New("UpdateIP: nil device")
+	}
+	if subnet == nil || subnet.IP == nil || subnet.Mask == nil {
+		return nil, errors.Errorf("UpdateIP: invalid subnet %v", subnet)
+	}
+
+	link, err := netlink.LinkByName(dv.GetName())
+	if err != nil {
+		return nil, errors.Wrapf(err, "UpdateIP: link %q", dv.GetName())
+	}
+	vx, ok := link.(*netlink.Vxlan)
+	if !ok {
+		return nil, errors.Errorf("UpdateIP: link %q not a vxlan", dv.GetName())
+	}
+
+	// Compute host (/32) address inside the tenant subnet.
+	hostIP, err := device.HostIP(subnet)
+	if err != nil {
+		return nil, errors.Wrapf(err, "UpdateIP: hostIP(%s)", subnet)
+	}
+	vtepIP := &net.IPNet{IP: hostIP.IP, Mask: net.IPv4Mask(255, 255, 255, 255)}
+
+	// Ensure MTU stays correct in case default iface MTU changed.
+	if gw, err := routing.GetDefaultGatewayInterface(); err == nil {
+		_ = netlink.LinkSetMTU(vx, gw.MTU-config.EncapOverhead)
+	}
+
+	// Idempotent address programming.
+	if err := netlink.AddrReplace(vx, &netlink.Addr{IPNet: vtepIP}); err != nil {
+		return nil, errors.Wrapf(err, "UpdateIP: AddrReplace(%s)", vtepIP)
+	}
+	if err := netlink.LinkSetUp(vx); err != nil {
+		return nil, errors.Wrapf(err, "UpdateIP: LinkSetUp(%s)", dv.GetName())
+	}
+	return vtepIP, nil
+}
+
+// Delete removes the VTEP link by name. Idempotent: returns nil if missing.
+func Delete(dv device.Device) error {
+	if dv == nil {
+		return errors.New("Delete: nil device")
+	}
+	link, err := netlink.LinkByName(dv.GetName())
+	if err != nil {
+		// netlink usually returns "Link not found" text; treat as gone.
+		if strings.Contains(err.Error(), "Link not found") {
+			return nil
+		}
+		return errors.Wrapf(err, "Delete: link %q", dv.GetName())
+	}
+	if err := netlink.LinkDel(link); err != nil {
+		return errors.Wrapf(err, "Delete: LinkDel(%q)", dv.GetName())
+	}
+	return nil
+}
+
 func VtepMAC(tenantID, nodeName string) net.HardwareAddr {
 	key := tenantID + "|" + nodeName
 	sum := sha1.Sum([]byte(key)) // 20 bytes

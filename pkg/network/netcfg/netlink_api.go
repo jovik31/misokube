@@ -1,8 +1,9 @@
 package netcfg
 
 import (
-	"github.com/vishvananda/netlink"
 	"net"
+
+	"github.com/vishvananda/netlink"
 )
 
 func init() {
@@ -22,10 +23,12 @@ func (n NetlinkAPI) LinkSetName(link netlink.Link, name string) error {
 }
 
 func (n NetlinkAPI) AddrAdd(link netlink.Link, ip *net.IPNet) error {
+	addr := &netlink.Addr{IPNet: ip}
 	return netlink.AddrAdd(link, addr)
 }
 
 func (n NetlinkAPI) AddrReplace(link netlink.Link, ipnet *net.IPNet) error {
+	addr := &netlink.Addr{IPNet: ipnet}
 	return netlink.AddrReplace(link, addr)
 }
 

@@ -11,7 +11,7 @@ type Manager struct{}
 
 func NewDeviceManager() *Manager { return &Manager{} }
 
-func (m *Manager) Create(tenantID string, subnet *net.IPNet, host string) (device.Device, error) {
+func (m *Manager) Create(tenantID string, subnet *net.IPNet, args ...string) (device.Device, error) {
 
 	link, ip, err := SetupBridge(tenantID, subnet)
 	if err != nil {
@@ -26,11 +26,20 @@ func (m *Manager) Create(tenantID string, subnet *net.IPNet, host string) (devic
 }
 
 func (m *Manager) Update(device device.Device, subnet *net.IPNet) error {
-	//TODO implement me
-	panic("implement me")
+
+	err := UpdateBridgeIP(device, subnet)
+	if err != nil {
+
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) Delete(device device.Device) error {
-	//TODO implement me
-	panic("implement me")
+
+	err := DeleteBridge(device)
+	if err != nil {
+		return err
+	}
+	return nil
 }

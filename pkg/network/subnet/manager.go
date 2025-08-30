@@ -16,6 +16,5 @@ type SubnetManager interface {
 	// introspection
 	Get(id string) (*net.IPNet, error)
 	List() map[string]*net.IPNet
-	Root() *net.IPNet //to remove
 }
 

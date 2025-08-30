@@ -9,7 +9,6 @@ import (
 )
 
 var _ subnet.SubnetManager = (*TrieManager)(nil)
-var Default TrieManager
 
 type TrieManager struct {
 	mu       sync.Mutex

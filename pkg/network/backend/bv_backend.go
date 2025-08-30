@@ -20,19 +20,18 @@ type bv_backend struct {
 
 func (bv *bv_backend) Create(tenantID string, subnet *net.IPNet, host string) error {
 
-	br, err := bv.bridgeManager.Create(tenantID, subnet, host)
+	br, err := bv.bridgeManager.Create(tenantID, subnet)
 	if err != nil {
 		return err
 	}
 
-	vt, err := bv.vtepManager.Create(tenantID, subnet, host)
+	vt, err := bv.vtepManager.Create(tenantID, subnet, host) // pass node name as arg
 	if err != nil {
 		// If VTEP creation fails, we should clean up the bridge
 		if delErr := bv.bridgeManager.Delete(br); delErr != nil {
 			return delErr // return the original error if cleanup fails
 		}
 	}
-
 
 	bv.Bridge = br
 	bv.VTEP = vt
@@ -70,57 +69,3 @@ func (bv *bv_backend) Delete() error {
 func (bv *bv_backend) Type() string                { return "bv_backend" }
 func (bv *bv_backend) BridgeDevice() device.Device { return bv.Bridge }
 func (bv *bv_backend) VtepDevice() device.Device   { return bv.VTEP }
-
-// ---------------------------bridge manager-----------------------------
-
-// base device
-var _ device.Device = (*base_device)(nil)
-
-type base_device struct {
-	name string
-	ip   *net.IPNet
-	mac  net.HardwareAddr
-}
-
-func (bd *base_device) GetName() string          { return bd.name }
-func (bd *base_device) GetIP() *net.IPNet        { return bd.ip }
-func (bd *base_device) GetMAC() net.HardwareAddr { return bd.mac }
-
-var _ device.DeviceManager = (*bridgeManager)(nil)
-
-type bridgeManager struct{}
-
-func (bm *bridgeManager) Create(tenantID string, subnet *net.IPNet, host string) (device.Device, error) {
-
-	link, ip, err := bridge.SetupBridge(tenantID, subnet)
-	if err != nil {
-		return nil, err
-	}
-
-	bridge := &base_device{
-
-		name: link.Attrs().Name,
-		ip:   ip,
-		mac:  link.Attrs().HardwareAddr,
-	}
-	return bridge, nil
-}
-func (bm *bridgeManager) Update(dv device.Device, subnet *net.IPNet) error {
-
-	// check if the device is a base_device
-	err := bridge.UpdateBridgeIP(dv, subnet)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-func (bm *bridgeManager) Delete(dv device.Device) error {
-
-	//delete the device
-	err := bridge.DeleteBridge(dv)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}

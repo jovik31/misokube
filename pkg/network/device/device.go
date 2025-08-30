@@ -16,7 +16,7 @@ type VTEPDevice interface {
 }
 
 type DeviceManager interface {
-	Create(tenantID string, subnet *net.IPNet, host string) (Device, error)
+	Create(tenantID string, subnet *net.IPNet, args ...string) (Device, error)
 	Update(device Device, subnet *net.IPNet) error
 	Delete(device Device) error
 }
