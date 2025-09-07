@@ -10,7 +10,7 @@ import (
 	// api types
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
-	// pkg
+	// pkg - "second test"
 
 	"github/setera/pkg/network"
 	// backend - // change to test the integration between jira and github
