@@ -13,7 +13,7 @@ import (
 	// pkg
 
 	"github/setera/pkg/network"
-	// backend
+	// backend - // change to test the integration between jira and github
 )
 
 type NetworkService struct {
