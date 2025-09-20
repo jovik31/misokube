@@ -179,7 +179,7 @@ func UpdateIP(dv device.Device, subnet *net.IPNet) (*net.IPNet, error) {
 }
 
 // Delete removes the VTEP link by name. Idempotent: returns nil if missing.
-func Delete(dv device.Device) error {
+func DeleteVTEP(dv device.Device) error {
 	if dv == nil {
 		return errors.New("Delete: nil device")
 	}
