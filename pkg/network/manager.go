@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github/setera/pkg/network/subnet"
 	"net"
-	"sync"
 
 	// internal
 	"github/setera/pkg/data/trie"
