@@ -1,5 +1,6 @@
 package manager
 
+/*
 import "net"
 
 type Event int
@@ -18,3 +19,4 @@ type Request struct {
 	Peer     *PeerSpec
 	PodSpec  *PodSpec
 }
+*/

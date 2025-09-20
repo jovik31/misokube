@@ -1,5 +1,6 @@
 package manager
 
+/*
 const (
 
 	// tenant lifecycle events - tenant operator
@@ -19,3 +20,4 @@ const (
 	PodDelete
 	PodCheck
 )
+*/

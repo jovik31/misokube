@@ -1,5 +1,6 @@
 package daemon
 
+/*
 import (
 	"encoding/json"
 	"fmt"
@@ -63,3 +64,4 @@ func NewCNIServer(socketPath string) error {
 	}
 	return nil
 }
+*/
