@@ -4,23 +4,39 @@ import (
 	"context"
 	"net"
 	"os"
-
-	"k8s.io/klog/v2"
+	"sync"
+	"time"
 )
+
+type ConnHandler func(ctx context.Context, c net.Conn) error
 
 // SocketServer represents a Unix domain socket server for CNI communication
 type SocketServer struct {
-	socketPath string
-	listener   net.Listener
-	logger     klog.Logger
+	Path         string
+	MaxConns     int
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	Handler      ConnHandler
+
+	ln     net.Listener
+	wg     sync.WaitGroup
+	sem    chan struct{}
+	mu     sync.Mutex
+	start  bool
+	cancel context.CancelFunc
 }
 
-// NewSocketServer creates a new socket server instance
-func NewSocketServer(socketPath string, logger klog.Logger) *SocketServer {
-	return &SocketServer{
-		socketPath: socketPath,
-		logger:     logger,
-	}
+type Option func(*SocketServer)
+
+// New creates a new socket server instance
+func New(path string, h ConnHandler, opts ...Option) *SocketServer {
+
+	s := &SocketServer{
+		Path: 	   path,
+		Handler: h,
+		MaxConns: ,
+		,
+
 }
 
 // Start starts the socket server
