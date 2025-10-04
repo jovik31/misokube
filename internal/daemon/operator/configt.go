@@ -1,27 +1,24 @@
 package daemon
 
-import (
+/*import (
 
 	// internals
 	"context"
 	"fmt"
 
 	// api types
-	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	// configs
 	config "github/setera/pkg"
 
-	// internals
-
 	// k8s
-	"k8s.io/apimachinery/pkg/api/equality"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// client-go
 	"k8s.io/client-go/tools/cache"
-)
+)*/
 
 // config nodestore that is called from a tenant that added them to the awaiting nodes
 
@@ -68,14 +65,14 @@ func (n *NodeStoreOperator) configTenant(key string) error {
 	n.Base.Logger.Info("Configuring Tenant", "key", key)
 
 	// get the tenant key
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	/*namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		n.Base.Logger.Error(err, "Failed to split key", "key", key)
 		return err
 	}
 
 	// fetch tenant from cache
-	tenant, err := n.TenantLister.Tenants(namespace).Get(name)
+	/*tenant, err := n.TenantLister.Tenants(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			n.Base.Logger.Error(err, "Tenant not found in cache", "key", key)
@@ -87,19 +84,19 @@ func (n *NodeStoreOperator) configTenant(key string) error {
 	}
 
 	// fetch local nodestore from api
-	nodestore, err := n.Base.Seterav1Clientset.SeteraV1().NodeStores(config.SeteraNamespace).Get(context.Background(), n.nodeName, metav1.GetOptions{})
+	/*nodestore, err := n.Base.Seterav1Clientset.SeteraV1().NodeStores(config.SeteraNamespace).Get(context.Background(), n.nodeName, metav1.GetOptions{})
 	if err != nil {
 		n.Base.Logger.Error(err, "Failed to get local NodeStore from API", "nodestore", n.nodeName)
 		return err
-	}
+	}*/
 
 	// local copy
-	mod := nodestore.DeepCopy()
+	//mod := nodestore.DeepCopy()
 
 	// check if the tenant is already configured in the nodestore
-	remoteInfra, existsNodestore := nodestore.Status.Tenants[tenant.Name]
+	//remoteInfra, existsNodestore := nodestore.Status.Tenants[tenant.Name]
 
-	infra, existsNode, err := n.NetService.GetTenantRecord(tenant.Name)
+	/*infra, existsNode, err := n.NetService.GetTenantRecord(tenant.Name)
 	if err != nil {
 		n.Base.Logger.Error(err, "Failed to get tenant infrastructure", "tenant", tenant.Name)
 		return fmt.Errorf("failed to get tenant %s infrastructure: %v", tenant.Name, err)
@@ -145,7 +142,7 @@ func (n *NodeStoreOperator) configTenant(key string) error {
 	if err != nil {
 		n.Base.Logger.Error(err, "Failed to update NodeStore status", "nodestore", mod.Name)
 		return fmt.Errorf("failed to update nodestore %s status: %v", mod, err)
-	}
+	}*/
 
 	return nil
 }

@@ -1,6 +1,6 @@
 package service
 
-import (
+/*import (
 
 	// std
 	"context"
@@ -185,11 +185,13 @@ func (ns *NetworkService) ListTenants() ([]TenantInfra, error) {
 	}
 
 	return tenants, nil
-}*/
+}
 
 /*func (ns *NetworkService) ConfigureTenantRoutes(id string, config TenantNetworkConfig) error {
 
-}*/
+}
 
 /*func (ns *NetworkService) ConfigureTenantIPtables(id string, config TenantNetworkConfig) error {
-}*/
+}
+
+*/
