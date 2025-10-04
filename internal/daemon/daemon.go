@@ -31,10 +31,8 @@ import (
 
 	//std
 	"context"
-	"fmt"
 
 	// internal packages
-	"github/setera/internal/daemon/service"
 
 	doperator "github/setera/internal/daemon/operator"
 	"github/setera/pkg/generated/clientset/versioned"
@@ -45,7 +43,7 @@ import (
 type Daemon struct {
 	NodeStoreOperator *doperator.NodeStoreOperator // manages local nodestore and tenant interactions
 
-	NetworkService *service.NetworkService // manages tenant network configurations
+	//NetworkService *service.NetworkService // manages tenant network configurations
 
 	//CNIServer *daemon.SocketServer // provides CNI plugin communication interface
 
@@ -63,14 +61,14 @@ func NewDaemon(
 
 ) (*Daemon, error) {
 
-	netService, err := service.NewNetworkService(nodeCIDR, nodeName)
+	/*netService, err := service.NewNetworkService(nodeCIDR, nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network service: %w", err)
 
-	}
+	}*/
 	return &Daemon{
-		NodeStoreOperator: doperator.NewNodeStoreOperator(ctx, componentName, nodeName, nodeIP, seteraclientset, kubeclientset, netService),
-		NetworkService:    netService,
+		NodeStoreOperator: doperator.NewNodeStoreOperator(ctx, componentName, nodeName, nodeIP, seteraclientset, kubeclientset),
+		//NetworkService:    netService,
 		//CNIServer:         daemon.NewSocketServer(),
 		//scoreClient:       http.Client{},
 	}, nil

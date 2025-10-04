@@ -15,7 +15,6 @@ import (
 
 	// internal packages
 
-	"github/setera/internal/daemon/service"
 	v1 "github/setera/pkg/api/setera.com/v1"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	seterav1Factory "github/setera/pkg/generated/informers/externalversions"
@@ -90,7 +89,7 @@ type NodeStoreOperator struct {
 	PodInformer cache.SharedIndexInformer
 
 	// injected network service
-	NetService *service.NetworkService
+	//NetService *service.NetworkService
 }
 
 func NewNodeStoreOperator(
@@ -99,8 +98,7 @@ func NewNodeStoreOperator(
 	nodestoreName string,
 	nodestoreIP string,
 	seterav1Clientset seterav1clientset.Interface,
-	kubeClientset kubernetes.Interface,
-	networkService *service.NetworkService) *NodeStoreOperator {
+	kubeClientset kubernetes.Interface) *NodeStoreOperator {
 
 	// create setera informer factory, informers and listers
 	factorySetera := seterav1Factory.NewSharedInformerFactory(seterav1Clientset, 30*time.Second)
@@ -136,7 +134,6 @@ func NewNodeStoreOperator(
 		NodeStoreInformer: nodeStoreInformer,
 		PodLister:         podLister,
 		PodInformer:       podInformer,
-		NetService:        networkService,
 	}
 
 	//inject informers and lister to base operator

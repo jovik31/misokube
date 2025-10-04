@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -24,6 +25,7 @@ type SocketServer struct {
 	mu     sync.Mutex
 	start  bool
 	cancel context.CancelFunc
+	logger *slog.Logger
 }
 
 type Option func(*SocketServer)
@@ -32,28 +34,29 @@ type Option func(*SocketServer)
 func New(path string, h ConnHandler, opts ...Option) *SocketServer {
 
 	s := &SocketServer{
-		Path: 	   path,
-		Handler: h,
-		MaxConns: ,
-		,
-
+		Path:        path,
+		Handler:     h,
+		MaxConns:    10,
+		ReadTimeout: 5 * time.Second,
+	}
+	return s
 }
 
 // Start starts the socket server
 func (s *SocketServer) Start(ctx context.Context) error {
 	// Remove existing socket file if it exists
-	if err := os.RemoveAll(s.socketPath); err != nil {
+	if err := os.RemoveAll(s.Path); err != nil {
 		return err
 	}
 
 	// Create Unix domain socket listener
-	listener, err := net.Listen("unix", s.socketPath)
+	listener, err := net.Listen("unix", s.Path)
 	if err != nil {
 		return err
 	}
-	s.listener = listener
+	s.ln = listener
 
-	s.logger.Info("Socket server started", "path", s.socketPath)
+	s.logger.Info("Socket server started", "path", s.Path)
 
 	// Accept connections
 	go s.acceptConnections(ctx)
@@ -63,8 +66,8 @@ func (s *SocketServer) Start(ctx context.Context) error {
 
 // Stop stops the socket server
 func (s *SocketServer) Stop() error {
-	if s.listener != nil {
-		return s.listener.Close()
+	if s.ln != nil {
+		return s.ln.Close()
 	}
 	return nil
 }
@@ -76,9 +79,9 @@ func (s *SocketServer) acceptConnections(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
-			conn, err := s.listener.Accept()
+			conn, err := s.ln.Accept()
 			if err != nil {
-				s.logger.Error(err, "Failed to accept connection")
+				s.logger.Error("Failed to accept connection", "error", err)
 				continue
 			}
 

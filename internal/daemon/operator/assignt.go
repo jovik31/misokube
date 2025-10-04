@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,7 +12,7 @@ import (
 // called when the node is part of the assigned slice in the tenant
 func (n *NodeStoreOperator) assignTenant(key string) error {
 
-	ctx := context.Background()
+	//ctx := context.Background()
 
 	// get the tenant
 	// extract the assigned nodes
@@ -47,13 +46,13 @@ func (n *NodeStoreOperator) assignTenant(key string) error {
 	}
 
 	// get this node info
-	localNodeInfo, err := n.getLocalNodeInfo(assignedNodes)
+	_, err = n.getLocalNodeInfo(assignedNodes)
 	if err != nil {
 		return fmt.Errorf("failed to get local node info for node %s in tenant %s: %w", n.nodeName, name, err)
 	}
 
 	// check if the tenant record exists in the network service
-	_, exists, err := n.NetService.GetTenantRecord(name)
+	/*_, exists, err := n.NetService.GetTenantRecord(name)
 	if err != nil {
 		return fmt.Errorf("failed to get tenant %s infrastructure: %w", name, err)
 	}
@@ -66,7 +65,7 @@ func (n *NodeStoreOperator) assignTenant(key string) error {
 			return fmt.Errorf("failed to allocate tenant %s infrastructure: %w", name, err)
 		}
 		return fmt.Errorf("tenant %s infrastructure does not exist", name)
-	}
+	}*/
 
 	for _, node := range assignedNodes {
 
@@ -75,10 +74,10 @@ func (n *NodeStoreOperator) assignTenant(key string) error {
 			continue // skip self
 		}
 
-		err := n.NetService.ConfigureTenantRoutes(ctx, mod.Name, localNodeInfo, node)
+		/*err := n.NetService.ConfigureTenantRoutes(ctx, mod.Name, localNodeInfo, node)
 		if err != nil {
 			return fmt.Errorf("failed to configure tenant routes for node %s in tenant %s: %w", node.Name, name, err)
-		}
+		}*/
 	}
 
 	return nil
