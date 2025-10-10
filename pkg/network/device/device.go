@@ -4,10 +4,20 @@ import (
 	"net"
 )
 
+// DeviceType identifies the concrete kind of device implementation.
+type DeviceType string
+
+const (
+	TypeBridge DeviceType = "bridge"
+	TypeVTEP   DeviceType = "vtep"
+)
+
 type Device interface {
 	GetName() string
 	GetIP() *net.IPNet
 	GetMAC() net.HardwareAddr
+	// Type returns the concrete device kind (e.g., bridge, vtep).
+	Type() DeviceType
 }
 
 type VTEPDevice interface {
