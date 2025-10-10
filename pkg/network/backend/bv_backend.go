@@ -31,6 +31,7 @@ func (bv *bv_backend) Create(tenantID string, subnet *net.IPNet, host string) er
 		if delErr := bv.bridgeManager.Delete(br); delErr != nil {
 			return delErr // return the original error if cleanup fails
 		}
+		return err
 	}
 
 	bv.Bridge = br
@@ -66,6 +67,16 @@ func (bv *bv_backend) Delete() error {
 
 	return nil
 }
-func (bv *bv_backend) Type() string                { return "bv_backend" }
-func (bv *bv_backend) BridgeDevice() device.Device { return bv.Bridge }
-func (bv *bv_backend) VtepDevice() device.Device   { return bv.VTEP }
+func (bv *bv_backend) Type() string { return "bv_backend" }
+
+// Devices returns the set of devices managed by this backend.
+func (bv *bv_backend) Devices() []device.Device {
+	var devs []device.Device
+	if bv.Bridge != nil {
+		devs = append(devs, bv.Bridge)
+	}
+	if bv.VTEP != nil {
+		devs = append(devs, bv.VTEP)
+	}
+	return devs
+}

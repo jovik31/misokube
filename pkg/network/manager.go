@@ -1,6 +1,6 @@
 package network
 
-/* import (
+import (
 	// std
 	"context"
 	"fmt"
@@ -172,7 +172,7 @@ func (m *NetworkManager) RegisterTenant(tenantID string) (*SubnetRecord, error) 
 		if err := m.IPTables.EnsureTenantChains(tenantID); err != nil {
 			return nil, err
 		}
-		if err := m.IPTables.EnsureTenantIsolationByIface(tenantID, bridgeName, vtepName /* uplinks... ); err != nil {
+		if err := m.IPTables.EnsureTenantIsolationByIface(tenantID, bridgeName, vtepName.uplinks...); err != nil {
 			return nil, err
 		}
 		_ = m.IPTables.EnsureForwardFastPath()
@@ -319,4 +319,4 @@ func (m *NetworkManager) ConfigureRoutes(
 	} // :contentReference[oaicite:6]{index=6}
 
 	return nil
-} */
+}
