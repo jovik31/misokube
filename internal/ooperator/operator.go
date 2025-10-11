@@ -4,7 +4,7 @@
 // +kubebuilder:rbac:groups=setera.com,resources=nodeStores/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
 
-package orchestrator
+package ooperator
 
 import (
 
