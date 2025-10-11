@@ -9,7 +9,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	"github/setera/internal/daemon"
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/k8s"
 )
@@ -154,20 +153,5 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.nodeCIDR = node.Spec.PodCIDR
-
-	// create a new daemon instance
-	daemonInstance, err := daemon.NewDaemon(ctx, "setera-daemon", cfg.nodeName, cfg.nodeIP, cfg.nodeCIDR, seteraclient, kubeclient)
-	if err != nil {
-		logger.Error(err, " [ERROR] - failed to create daemon instance")
-		os.Exit(1)
-	}
-
-	klog.Infof("[INFO][INIT] - Starting Setera Daemon on node %s: %s", cfg.nodeName, cfg.nodeIP)
-
-	// Run the NodeStore operator
-	if err := daemonInstance.NodeStoreOperator.Base.Run(ctx); err != nil {
-		logger.Error(err, "NodeStore operator failed to run")
-		os.Exit(1)
-	}
 
 }
