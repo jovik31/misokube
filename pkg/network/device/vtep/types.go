@@ -19,3 +19,4 @@ func (v *VTEP) GetVNI() int              { return v.vni }
 func (v *VTEP) GetName() string          { return v.name }
 func (v *VTEP) GetIP() *net.IPNet        { return v.ip }
 func (v *VTEP) GetMAC() net.HardwareAddr { return v.mac }
+func (v *VTEP) Type() device.DeviceType  { return device.TypeVTEP }

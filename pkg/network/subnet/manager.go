@@ -12,9 +12,20 @@ type SubnetManager interface {
 	Reduce(id string) (*net.IPNet, error)
 	Release(id string) error
 
-
 	// introspection
 	Get(id string) (*net.IPNet, error)
 	List() map[string]*net.IPNet
 }
 
+var DefaultSubnetManager SubnetManager
+
+func RegisterSubnetManager(mgr SubnetManager) {
+	if mgr == nil {
+		panic("subnet manager is nil")
+	}
+	DefaultSubnetManager = mgr
+}
+
+func Manager() SubnetManager {
+	return DefaultSubnetManager
+}

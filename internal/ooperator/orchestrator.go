@@ -1,4 +1,4 @@
-package orchestrator
+package ooperator
 
 import (
 
@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	//internals
-	tenant_operator "github/setera/internal/orchestrator/operator"
 	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
 	scoreCache "github/setera/pkg/nodescore"
 
@@ -23,7 +22,7 @@ import (
 */
 
 type Orchestrator struct {
-	Operator    *tenant_operator.TenantOperator
+	Operator    *TenantOperator
 	ScoreCache  *scoreCache.NodeScoreCache
 	ScoreServer *http.Server
 }
@@ -38,7 +37,7 @@ func NewOrchestrator(
 
 	cache := scoreCache.NewNodeScoreCache()
 
-	tenantOp := tenant_operator.NewTenantOperator(ctx, name, seteraClient, kubeClientset, cache)
+	tenantOp := NewTenantOperator(ctx, name, seteraClient, kubeClientset, cache)
 
 	return &Orchestrator{
 		Operator:   tenantOp,

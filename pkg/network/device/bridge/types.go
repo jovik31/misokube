@@ -16,3 +16,4 @@ type Bridge struct {
 func (b *Bridge) GetName() string          { return b.name }
 func (b *Bridge) GetIP() *net.IPNet        { return b.ip }
 func (b *Bridge) GetMAC() net.HardwareAddr { return b.mac }
+func (b *Bridge) Type() device.DeviceType  { return device.TypeBridge }

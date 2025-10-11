@@ -1,0 +1,106 @@
+package dispatcher
+
+import (
+	"context"
+	"fmt"
+	"github/setera/internal/nmanager"
+	"time"
+)
+
+func WithInboxSize(n int) Option {
+	return func(d *Dispatcher) {
+
+		if n > 0 {
+			d.inbox = make(chan Command, n)
+		}
+	}
+}
+
+func WithSinkSize(n int) Option {
+	return func(d *Dispatcher) {
+
+		if n > 0 {
+			d.sink = make(chan Event, n)
+		}
+	}
+}
+
+func New(nm nmanager.TenantOps, opts ...Option) *Dispatcher {
+	d := &Dispatcher{
+		nm:    nm,
+		inbox: make(chan Command, 128),
+		sink:  make(chan Event, 128),
+	}
+	for _, o := range opts {
+		o(d)
+	}
+
+	// ensure inbox and sink are initialized
+	if d.inbox == nil {
+		d.inbox = make(chan Command, 128)
+	}
+	if d.sink == nil {
+		d.sink = make(chan Event, 128)
+	}
+
+	return d
+}
+
+func (d *Dispatcher) Enqueue(cmd Command) {
+	if cmd.timestamp.IsZero() {
+		cmd.timestamp = time.Now()
+	}
+	d.inbox <- cmd
+}
+
+func (d *Dispatcher) EnqeueueCtx(ctx context.Context, cmd Command) error {
+
+	if cmd.timestamp.IsZero() {
+		cmd.timestamp = time.Now()
+	}
+
+	select {
+	case d.inbox <- cmd:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (d *Dispatcher) Events() <-chan Event { return d.sink }
+
+func (d *Dispatcher) Run(ctx context.Context) error {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case cmd := <-d.inbox:
+			ev := Event{
+				TenantID:  cmd.TenantID,
+				Op:        cmd.Op,
+				OpID:      cmd.OpID,
+				timestamp: time.Now(),
+			}
+
+			var err error
+			switch cmd.Op {
+			case OpEnsure:
+				err = d.nm.EnsureTenant(context.Background(), cmd.TenantID)
+			case OpRemove:
+				err = d.nm.RemoveTenant(context.Background(), cmd.TenantID)
+			default:
+				err = fmt.Errorf("unknown op %q", cmd.Op)
+			}
+			ev.err = err
+			ev.timestamp = time.Now()
+
+			// non-blocking send to sink
+			select {
+			case d.sink <- ev:
+			default:
+			}
+		}
+	}
+
+}

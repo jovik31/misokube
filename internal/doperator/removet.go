@@ -1,4 +1,4 @@
-package daemon
+package doperator
 
 // removes the tenant infrastructure on the node when it receives a delete tenant event
 
