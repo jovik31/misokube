@@ -1,4 +1,4 @@
-package daemon
+package doperator
 
 func (n *NodeStoreOperator) deleteNodeStore(key string) error {
 

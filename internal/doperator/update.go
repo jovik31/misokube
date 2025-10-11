@@ -1,4 +1,4 @@
-package daemon
+package doperator
 
 // this function needs to be called by the network manager when the tenant network configuration changes
 func (n *NodeStoreOperator) updateNodeStore(key string) error {
