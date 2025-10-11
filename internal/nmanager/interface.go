@@ -25,18 +25,20 @@ type TenantOps interface {
 	RemoveTenant(ctx context.Context, tenantID string) error
 }
 
-// NodestoreOps are operations related to the remote node store of tenant network state.
-// Implementations should be thread-safe and idempotent.
+// NodeStoreOps exposes inter-node wiring primitives and local snapshots for a tenant.
+// Synchronous and idempotent; used by the NodeStore operator.
 type NodestoreOps interface {
+	// SnapshotTenantInfra returns a read-only view of local tenant infra.
+	SnapshotTenantInfra(tenantID string) (TenantInfraSnapshot, error)
 
-	// EnsureRemoteTenantConn ensures that the node has connectivity to the remote tenant network.
-	EnsureRemoteTenantConn(ctx context.Context, tenantID, nodeName string) error
+	// EnsurePeer programs ARP, FDB, and route entries on the local VTEP towards a remote node.
+	EnsurePeer(ctx context.Context, tenantID string, remote RemoteTenantInfra) error
 
-	// UpdateRemoteTenantConn updates connectivity to the remote tenant network, e.g. after a config change.
-	UpdateRemoteTenantConn(ctx context.Context, tenantID, nodeName string) error
+	// RemovePeer removes ARP, FDB, and route entries towards a specific remote node.
+	RemovePeer(ctx context.Context, tenantID string, remote RemoteTenantInfra) error
 
-	// RemoveRemoteTenantConn removes connectivity to the remote tenant network.
-	RemoveRemoteTenantConn(ctx context.Context, tenantID, nodeName string) error
+	// FlushTenant flushes ARP/FDB/routes for the tenant on local devices (used on teardown).
+	FlushTenant(ctx context.Context, tenantID string) error
 }
 
 // PodOps are per-tenant, synchronous operations typically invoked by the CNI path via a Tenant Actor.
@@ -54,4 +56,25 @@ type PodOps interface {
 	ReleaseIP(ctx context.Context, tenantID, epKey string) error
 	AttachEndpoint(ctx context.Context, tenantID, epKey string) error
 	DetachEndpoint(ctx context.Context, tenantID, epKey string) error
+}
+
+// TenantInfraSnapshot is the local tenant network snapshot used by the NodeStore operator.
+type TenantInfraSnapshot struct {
+	Subnet  *net.IPNet
+	VNI     uint32
+	VTEPDev string
+	VTEPIP  net.IP
+	VTEPMAC net.HardwareAddr
+	MTU     int
+	Bridge  string // optional: local bridge name
+}
+
+// RemoteTenantInfra describes the remote node’s tenant attributes needed to program ARP/FDB/routes.
+type RemoteTenantInfra struct {
+	NodeName string
+	NodeIP   net.IP
+	VTEPIP   net.IP
+	VTEPMAC  net.HardwareAddr
+	Subnet   *net.IPNet
+	VNI      uint32
 }
