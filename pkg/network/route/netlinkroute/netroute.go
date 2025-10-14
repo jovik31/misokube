@@ -7,9 +7,10 @@ import (
 
 	//gitHub imports
 
+	"github/setera/pkg/network/route"
+
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
-	"github/setera/pkg/network/route"
 	"golang.org/x/sys/unix"
 )
 

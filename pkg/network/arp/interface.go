@@ -4,9 +4,6 @@ import "net"
 
 type ARPEntry struct {
 	Device string
-	State  int
-	Type   int
-	Family int
 	IP     net.IP
 	MAC    net.HardwareAddr
 }

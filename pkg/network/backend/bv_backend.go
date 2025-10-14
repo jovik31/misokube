@@ -89,3 +89,24 @@ func (bv *bv_backend) Devices() []device.Device {
 	}
 	return devs
 }
+
+// VTEP returns the VTEP device from a Backend, if present.
+func VTEP(b Backend) (device.Device, bool) {
+	for _, d := range b.Devices() {
+		// Prefer a typed check if you have one (e.g., vtep.Is(d) or device.KindVTEP)
+		if d.Type() == "vtep" {
+			return d, true
+		}
+	}
+	return nil, false
+}
+
+// Bridge returns the bridge device from a Backend, if present.
+func Bridge(b Backend) (device.Device, bool) {
+	for _, d := range b.Devices() {
+		if d.Type() == "bridge" {
+			return d, true
+		}
+	}
+	return nil, false
+}

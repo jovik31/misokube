@@ -2,9 +2,10 @@ package netlinkfdb
 
 import (
 	"errors"
-	"github.com/vishvananda/netlink"
 	"github/setera/pkg/network/fdb"
 	"syscall"
+
+	"github.com/vishvananda/netlink"
 )
 
 var _ fdb.FDBManager = (*netlinkFDBManager)(nil)
@@ -28,7 +29,7 @@ func (n netlinkFDBManager) Add(fe fdb.FDBEntry) error {
 	if err != nil {
 		return err
 	}
-	return n.nl.NeighAdd(&netlink.Neigh{
+	return n.nl.NeighSet(&netlink.Neigh{
 		LinkIndex:    link.Attrs().Index,
 		Family:       syscall.AF_BRIDGE,
 		State:        netlink.NUD_PERMANENT,
@@ -78,7 +79,7 @@ func (n netlinkFDBManager) Delete(fe fdb.FDBEntry) error {
 	if err != nil {
 		return err
 	}
-	return n.nl.NeighDel(&netlink.Neigh{
+	err = n.nl.NeighDel(&netlink.Neigh{
 		LinkIndex:    link.Attrs().Index,
 		Family:       syscall.AF_BRIDGE,
 		State:        netlink.NUD_PERMANENT,
@@ -86,4 +87,10 @@ func (n netlinkFDBManager) Delete(fe fdb.FDBEntry) error {
 		IP:           fe.IP,
 		HardwareAddr: fe.Mac,
 	})
+
+	if err != nil && !errors.Is(err, syscall.ENOENT) {
+		return err
+	}
+	return nil
+
 }

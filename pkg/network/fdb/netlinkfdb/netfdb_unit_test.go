@@ -2,10 +2,11 @@ package netlinkfdb
 
 import (
 	"errors"
-	"github.com/vishvananda/netlink"
 	"net"
 	"syscall"
 	"testing"
+
+	"github.com/vishvananda/netlink"
 )
 
 func TestAddFDB_SetCorrectFields(t *testing.T) {
@@ -21,11 +22,11 @@ func TestAddFDB_SetCorrectFields(t *testing.T) {
 	}
 
 	// check if add has the new entry
-	if len(mock.adds) != 1 {
-		t.Fatalf("expected 1 NeighAdd call, got %d", len(mock.adds))
+	if len(mock.sets) != 1 {
+		t.Fatalf("expected 1 NeighSet call, got %d", len(mock.sets))
 	}
 
-	ln := mock.adds[0]
+	ln := mock.sets[0]
 	if ln.LinkIndex != 1 {
 		t.Fatalf("link index = %d, expected %d", ln.LinkIndex, mock.linkIndex["vx1"])
 	}
