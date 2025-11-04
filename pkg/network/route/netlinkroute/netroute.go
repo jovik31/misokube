@@ -47,15 +47,9 @@ func (n *netlinkRouteManager) Ensure(route *route.Route, ns ...ns.NetNS) error {
 			return err
 		}
 
-		return n.nl.RouteAdd(&netlink.Route{
-			LinkIndex: link.Attrs().Index,
-			Scope:     netlink.SCOPE_UNIVERSE,
-			Dst:       route.Dst,
-			Flags:     syscall.RTNH_F_ONLINK,
-			Gw:        route.Gateway,
-			Table:     unix.RT_TABLE_MAIN,
-			Priority:  route.Metric,
-		})
+		rt := buildRoute(route, link.Attrs().Index)
+
+		return n.nl.RouteAdd(rt)
 
 	})
 
@@ -95,22 +89,7 @@ func (n *netlinkRouteManager) Update(route *route.Route, ns ...ns.NetNS) error {
 		}
 
 		// add new route
-		rt := &netlink.Route{
-			LinkIndex: link.Attrs().Index,
-			Dst:       route.Dst,
-			Gw:        route.Gateway,
-			Priority:  route.Metric,
-			Table:     unix.RT_TABLE_MAIN,
-			Scope:     netlink.SCOPE_LINK,
-		}
-
-		if route.Gateway != nil && !route.Gateway.IsUnspecified() {
-			rt.Scope = netlink.SCOPE_UNIVERSE
-		}
-		if route.Onlink {
-			rt.Flags |= syscall.RTNH_F_ONLINK
-		}
-
+		rt := buildRoute(route, link.Attrs().Index)
 		if err := n.nl.RouteAdd(rt); err != nil && !errors.Is(err, syscall.EEXIST) {
 			return err
 		}
@@ -133,13 +112,8 @@ func (n *netlinkRouteManager) Delete(route *route.Route, ns ...ns.NetNS) error {
 		if err != nil {
 			return fmt.Errorf("route delete: link %q: %w", route.Device, err)
 		}
-		rt := &netlink.Route{
-			LinkIndex: link.Attrs().Index,
-			Dst:       route.Dst,
-			Gw:        route.Gateway,
-			Priority:  route.Metric,
-			Table:     unix.RT_TABLE_MAIN,
-		}
+		rt := buildRoute(route, link.Attrs().Index)
+
 		return n.nl.RouteDel(rt)
 	})
 }
@@ -160,4 +134,25 @@ func do(inNS []ns.NetNS, op func() error) error {
 		return fmt.Errorf("atmost one namespace is allowed")
 
 	}
+}
+
+func buildRoute(r *route.Route, linkIndex int) *netlink.Route {
+
+	rt := &netlink.Route{
+		LinkIndex: linkIndex,
+		Dst:       r.Dst,
+		Gw:        r.Gateway,
+		Table:     unix.RT_TABLE_MAIN, // default table
+		Priority:  0,                  // default metric
+		Flags:     syscall.RTNH_F_ONLINK,
+	}
+
+	if r.Gateway != nil && !r.Gateway.IsUnspecified() {
+
+		rt.Scope = netlink.SCOPE_UNIVERSE
+	} else {
+		rt.Scope = netlink.SCOPE_LINK
+	}
+
+	return rt
 }

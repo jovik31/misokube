@@ -41,8 +41,10 @@ spec:
           spec:
             properties:
               name:
+                minLength: 1
                 type: string
               zones:
+                minimum: 1
                 type: integer
             required:
             - name
@@ -138,5 +140,10 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: spec.name is immutable; only spec.zones may change
+          rule: '!has(oldSelf) || self.spec.name == oldSelf.spec.name'
     served: true
     storage: true
+    subresources:
+      status: {}

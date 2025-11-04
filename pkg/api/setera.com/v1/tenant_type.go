@@ -12,6 +12,8 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=tn
+// +kubebuilder:subresource:status
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf) || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
 // Tenant is a specification for a Tenant resource
 type Tenant struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -22,8 +24,12 @@ type Tenant struct {
 }
 
 type TenantSpec struct {
-	Name  string `json:"name"`  //Tenant Name
-	Zones int    `json:"zones"` //Number of nodes where the tenant is to be deployed
+
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"` //Tenant Name
+
+	// +kubebuilder:validation:Minimum=1
+	Zones int `json:"zones"` //Number of nodes where the tenant is to be deployed
 }
 
 type TenantStatus struct {

@@ -1,17 +1,15 @@
 package route
 
 import (
-	"github.com/containernetworking/plugins/pkg/ns"
 	"net"
+
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 type Route struct {
 	Dst     *net.IPNet
 	Device  string
 	Gateway net.IP
-	Metric  int
-	Onlink  bool
-	Table   int
 }
 
 type RouteManager interface {

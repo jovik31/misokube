@@ -1,4 +1,4 @@
-package doperator
+package nodestore
 
 import (
 
@@ -20,13 +20,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+/*
+-> addNodestore() should only for the local node's nodestore
+- fetch the nodestore from the cache
+- ensures resource has finalizer
+*/
 func (n *NodeStoreOperator) addNodeStore(key string) error {
 
 	ctx := context.Background()
 
 	n.Base.Logger.WithValues("event", operator.AddEvent, "key", key).Info("Adding NodeStore")
 
-	// fetch the nodestore from the cache
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		n.Base.Logger.Error(err, "Failed to split key", "key", key)

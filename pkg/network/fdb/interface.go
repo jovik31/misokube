@@ -6,9 +6,6 @@ import (
 
 type FDBEntry struct {
 	Device string
-	Family int
-	State  int
-	Flags  int
 	IP     net.IP
 	Mac    net.HardwareAddr
 }

@@ -93,7 +93,7 @@ lint: golangci-lint ## Run golangci-lint against code
 	$(GOLANGCI_LINT) run
 
 .PHONY: webhook-ssl
-webhook-ssl: ## Generate new weobhook certificates
+webhook-ssl: ## Generate new webhook certificates
 	mkdir -p ${TMPDIR}/k8s-webhook-server/serving-certs
 	openssl req -x509 \
 			-newkey rsa:2048 \

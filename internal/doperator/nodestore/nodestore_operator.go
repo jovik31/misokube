@@ -4,7 +4,7 @@
 // +kubebuilder:rbac:groups=setera.com,resources=nodeStores/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 
-package doperator
+package nodestore
 
 import (
 

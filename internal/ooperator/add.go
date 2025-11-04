@@ -13,7 +13,6 @@ import (
 
 	// setera api tyes
 	seterav1 "github/setera/pkg/api/setera.com/v1"
-
 	// k8s
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

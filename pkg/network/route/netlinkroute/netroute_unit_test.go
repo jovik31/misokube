@@ -6,9 +6,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github/setera/pkg/network/route"
+
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
-	"github/setera/pkg/network/route"
 	"golang.org/x/sys/unix"
 )
 
@@ -27,11 +28,11 @@ func TestEnsure_Success(t *testing.T) {
 	mgr := NewNetlinkRouteManager(mock)
 
 	dst := mustCIDR(t, "10.10.0.0/24")
+
 	rt := &route.Route{
 		Device:  "vx100",
 		Dst:     dst,
 		Gateway: net.IPv4(192, 0, 2, 1),
-		Metric:  123,
 	}
 
 	if err := mgr.Ensure(rt); err != nil {
@@ -59,9 +60,6 @@ func TestEnsure_Success(t *testing.T) {
 	}
 	if !add.Gw.Equal(rt.Gateway) {
 		t.Fatalf("Gw = %s, want %s", add.Gw, rt.Gateway)
-	}
-	if add.Priority != rt.Metric {
-		t.Fatalf("Priority = %d, want %d", add.Priority, rt.Metric)
 	}
 }
 
@@ -113,8 +111,6 @@ func TestUpdate_DeletesOldAndAddsNew_NoGateway_ScopeLink(t *testing.T) {
 		Device:  "vx200",
 		Dst:     oldDst,
 		Gateway: net.IPv4zero, // no GW
-		Metric:  200,
-		Onlink:  true,
 	}
 
 	if err := mgr.Update(in); err != nil {
@@ -140,7 +136,7 @@ func TestUpdate_DeletesOldAndAddsNew_NoGateway_ScopeLink(t *testing.T) {
 	if add.Flags&syscall.RTNH_F_ONLINK == 0 {
 		t.Fatalf("expected RTNH_F_ONLINK flag set")
 	}
-	if add.Priority != 200 || add.Table != unix.RT_TABLE_MAIN || add.LinkIndex != 7 {
+	if add.Priority != 0 || add.Table != unix.RT_TABLE_MAIN || add.LinkIndex != 7 {
 		t.Fatalf("add mismatch: %+v", *add)
 	}
 }
@@ -160,8 +156,6 @@ func TestUpdate_WithGateway_ScopeUniverse_IgnoresEEXIST(t *testing.T) {
 		Device:  "vx300",
 		Dst:     dst,
 		Gateway: gw,
-		Metric:  30,
-		Onlink:  false,
 	}
 
 	if err := mgr.Update(in); err != nil {
@@ -229,7 +223,7 @@ func TestDelete_ValidationAndSuccess(t *testing.T) {
 	// success
 	dst := mustCIDR(t, "10.40.0.0/24")
 	gw := net.IPv4(192, 0, 2, 40)
-	r := &route.Route{Device: "vx400", Dst: dst, Gateway: gw, Metric: 400}
+	r := &route.Route{Device: "vx400", Dst: dst, Gateway: gw}
 
 	if err := mgr.Delete(r); err != nil {
 		t.Fatalf("Delete: %v", err)

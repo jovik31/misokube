@@ -1,5 +1,7 @@
 package operator
 
+/*package operator
+
 import (
 
 	//std
@@ -129,3 +131,5 @@ func (b *BaseOperator) worker(ctx context.Context) {
 	for b.Handler.Process() {
 	}
 }
+
+*/

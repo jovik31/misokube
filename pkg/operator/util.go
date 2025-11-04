@@ -1,55 +1,13 @@
 package operator
 
 import (
-
-	//std
-	"fmt"
-	"strings"
-
-	//client-go
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
-	// setera api types
+	// internal
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 )
-
-func (b *BaseOperator) Enqueue(obj any, event EventType) {
-
-	key, err := cache.MetaNamespaceKeyFunc(obj)
-	if err != nil {
-		b.Logger.Error(err, "Error in getting key for object", obj)
-		return
-	}
-
-	//wrap the key with the event type
-	wrappedKey := fmt.Sprintf("%s:%s", event, key)
-
-	b.Logger.WithValues("event", event, "key", key).Info("ENQUEUED")
-	b.Workqueue.Add(wrappedKey)
-
-}
-
-func (b *BaseOperator) EnqueueWithKey(event EventType, key string) {
-
-	// wrap the key with the event type
-	wrappedKey := fmt.Sprintf("%s:%s", event, key)
-
-	b.Logger.WithValues("event", event, "key", key).Info("ENQUEUED WITH KEY")
-	b.Workqueue.Add(wrappedKey)
-
-}
-
-func ParseQueuedKey(wrappedKey string) (EventType, string) {
-
-	parts := strings.Split(wrappedKey, ":")
-	if len(parts) < 2 {
-		return UnknownEvent, wrappedKey
-	}
-	event := EventType(parts[0])
-	key := parts[1]
-	return event, key
-}
 
 func ContainsString(slice []string, item string) bool {
 
@@ -109,4 +67,17 @@ func RemoveIndex[T comparable](slice []T, val T) []T {
 	}
 	// remove at idx
 	return append(slice[:idx], slice[idx+1:]...)
+}
+
+// metaObjectFrom extracts metav1.Object from regular objects or tombstones.
+func metaObjectFrom(obj any) (metav1.Object, bool) {
+	if o, ok := obj.(metav1.Object); ok {
+		return o, true
+	}
+	if tomb, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if o, ok := tomb.Obj.(metav1.Object); ok {
+			return o, true
+		}
+	}
+	return nil, false
 }

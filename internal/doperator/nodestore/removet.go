@@ -1,4 +1,4 @@
-package doperator
+package nodestore
 
 // removes the tenant infrastructure on the node when it receives a delete tenant event
 
