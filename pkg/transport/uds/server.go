@@ -22,6 +22,8 @@ func Listen(socketPath string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Ensure the socket file has restricted permissions. net.Listen("unix", ...) creates
+	// the filesystem node immediately, so chmod the actual socket path (not fd 0).
 	_ = os.Chmod(socketPath, 0o600)
 	return ln, nil
 }
@@ -32,27 +34,43 @@ func ReadRequest(conn net.Conn, out *wire.Request) (wire.Header, error) {
 	if err != nil {
 		return h, err
 	}
-	// Only JSON currently
-	if h.Flags&wire.FlagJSON == 0 {
-		return h, fmt.Errorf("unsupported codec flags=%#x", h.Flags)
-	}
 	body := make([]byte, h.Length)
 	if _, err := io.ReadFull(conn, body); err != nil {
 		return h, err
 	}
-	if err := (wire.JSONCodec{}).Unmarshal(body, out); err != nil {
-		return h, err
+	switch {
+	case h.Flags&wire.FlagJSON != 0:
+		if err := (wire.JSONCodec{}).Unmarshal(body, out); err != nil {
+			return h, err
+		}
+	case h.Flags&wire.FlagBIN != 0:
+		if err := (wire.BinaryCodec{}).Unmarshal(body, out); err != nil {
+			return h, err
+		}
+	default:
+		return h, fmt.Errorf("unsupported codec flags=%#x", h.Flags)
 	}
 	return h, nil
 }
 
-// WriteResponse writes a framed Response back to conn.
-func WriteResponse(conn net.Conn, cmd wire.Cmd, resp *wire.Response) error {
-	body, err := (wire.JSONCodec{}).Marshal(resp)
+// WriteResponse writes a framed Response back to conn using the same codec indicated by flags.
+func WriteResponse(conn net.Conn, cmd wire.Cmd, flags wire.Flags, resp *wire.Response) error {
+	var (
+		body []byte
+		err  error
+	)
+	switch {
+	case flags&wire.FlagJSON != 0:
+		body, err = (wire.JSONCodec{}).Marshal(resp)
+	case flags&wire.FlagBIN != 0:
+		body, err = (wire.BinaryCodec{}).Marshal(resp)
+	default:
+		return fmt.Errorf("unsupported codec flags=%#x", flags)
+	}
 	if err != nil {
 		return err
 	}
-	h := wire.Header{Version: 1, Cmd: cmd, Flags: wire.FlagJSON, Length: uint32(len(body))}
+	h := wire.Header{Version: 1, Cmd: cmd, Flags: flags, Length: uint32(len(body))}
 	if err := wire.WriteHeader(conn, h); err != nil {
 		return err
 	}

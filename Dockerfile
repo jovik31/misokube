@@ -1,4 +1,10 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
+
+#Build stage
+FROM golang:1.25-bookworm
+
+
+
 FROM golang:1.24 AS builder
 
 ARG BINARY

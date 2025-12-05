@@ -17,7 +17,7 @@ func indexNodestoreByTenant(obj any) ([]string, error) {
 	ns, ok := obj.(*seterav1.NodeStore)
 	if !ok || ns == nil || ns.Status.Tenants == nil {
 
-		return nil, nil
+		return nil, fmt.Errorf("object is not a nodestore: %d", obj)
 	}
 
 	out := make([]string, 0, len(ns.Status.Tenants))

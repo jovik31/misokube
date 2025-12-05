@@ -167,32 +167,3 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 	}
 	return nil
 }
-
-// helpers
-func equalNodeInfosByValue(a, b []seterav1.NodeInfo) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	m := make(map[string]seterav1.NodeInfo, len(a))
-	for _, x := range a {
-		m[x.Name] = x
-	}
-	for _, y := range b {
-		if x, ok := m[y.Name]; !ok || x != y {
-			return false
-		}
-	}
-	return true
-}
-
-func sameStrSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}

@@ -15,6 +15,7 @@ type Client struct {
 }
 
 func NewClientJSON() *Client { return &Client{Codec: wire.JSONCodec{}} }
+func NewClientBinary() *Client { return &Client{Codec: wire.BinaryCodec{}} }
 
 func (c *Client) Call(sock string, deadline time.Duration, req *wire.Request, out *wire.Response) error {
 	// Dial
@@ -36,7 +37,7 @@ func (c *Client) Call(sock string, deadline time.Duration, req *wire.Request, ou
 	hdr := wire.Header{
 		Version: 1,
 		Cmd:     wire.CommandToHeader(req.Cmd),
-		Flags:   wire.FlagJSON, // today
+		Flags:   wire.DetectFlags(c.Codec),
 		Length:  uint32(len(body)),
 	}
 	if err := wire.WriteHeader(conn, hdr); err != nil {

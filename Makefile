@@ -1,3 +1,9 @@
+# Include makefiles from make/ folder
+include $(wildcard make/*.mk)
+
+# Default target
+.DEFAULT_GOAL := help
+
 #TODO
 #
 #[ ]: Kind - Cluster creation
@@ -121,6 +127,20 @@ build-daemon: # Build daemon docker image
 	-f $(DOCKERFILE) \
 	-t $(DAEMON_IMG) .
 
+.PHONY: build-stub-daemon
+build-stub-daemon: ## Build stub-daemon docker image
+	docker build \
+	--build-arg BINARY=$(STUB_DAEMON_COMPONENT) \
+	-f $(DOCKERFILE) \
+	-t $(STUB_DAEMON_IMG) .
+
+.PHONY: build-cni
+build-cni: ## Build CNI plugin docker image (for installer DS)
+	docker build \
+	--build-arg BINARY=$(CNI_COMPONENT) \
+	-f $(DOCKERFILE) \
+	-t $(CNI_IMG) .
+
 
 ##@ Run
 .PHONY: run-orchestrator
@@ -149,6 +169,10 @@ kind-cluster-load-images: ## Load images into the kind cluster
 kind-cluster-load-daemon-image: ## Load daemon image into the kind cluster
 	kind load docker-image $(DAEMON_IMG) --name=setera-cluster-orch-dev
 
+.PHONY: kind-cluster-load-stub
+kind-cluster-load-stub: ## Load stub-daemon image into the kind cluster
+	kind load docker-image $(STUB_DAEMON_IMG) --name=setera-cluster-orch-dev
+	kind load docker-image $(CNI_IMG) --name=setera-cluster-orch-dev
 
 .PHONY: create-node-image
 create-node-image: ## Create custom kind node image
@@ -176,6 +200,14 @@ DAEMON_VERSION ?= v0.1.0
 ORCHESTRATOR_IMG ?= setera-$(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
 ORCHESTRATOR_VERSION ?= v0.1.0
 DOCKERFILE ?= Dockerfile
+
+STUB_DAEMON_COMPONENT ?= stub-daemon
+STUB_DAEMON_VERSION ?= dev
+STUB_DAEMON_IMG ?= daemon-uds-stub:$(STUB_DAEMON_VERSION)
+
+CNI_COMPONENT ?= cni
+CNI_VERSION ?= dev
+CNI_IMG ?= cni-uds-stub:$(CNI_VERSION)
 
 #CMD variables
 CMD_ORCHESTRATOR ?= cmd/orchestrator/

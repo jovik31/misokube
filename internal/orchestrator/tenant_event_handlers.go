@@ -75,18 +75,3 @@ func (t *Operator) deleteEventTenantHandler(obj any) {
 	t.logger.WithValues("event", EventDelete, "tenant", tenant.Name, "ns", tenant.Namespace).Info("enqueue tenant delete")
 	t.base.EnqueueObjectWith(SourceTenantCRD, EventDelete, tenant)
 }
-
-// add tenants key in deleted nodestore for processing
-func (t *Operator) deleteFromNodestoreHandler(obj any) {
-
-	nodestore, ok := obj.(*seterav1.NodeStore)
-	logger := t.logger.WithValues("event", EventDelete, "nodestore", nodestore.Name)
-	if !ok {
-		logger.Info("Failed to cast object to nodestore in delete handler")
-		return
-	}
-
-	logger.Info("Deleting nodestore")
-	//o.enqueue(nodestore, DeleteEvent)
-
-}

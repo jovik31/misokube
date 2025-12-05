@@ -64,3 +64,19 @@ func (o *Operator) updateEventNodestoreHandler(oldObj, newObj any) {
 		})
 	}
 }
+
+func (o *Operator) deleteEventNodestoreHandler(obj any) {
+	nodestore, ok := obj.(*seterav1.NodeStore)
+	if !ok {
+		return
+	}
+	for tenantName := range nodestore.Status.Tenants {
+		o.base.EnqueueWith(SourceNodeStoreCRD, EventDelete, operator.ResourceRef{
+			Group:     "setera.com",
+			Version:   "v1",
+			Kind:      "Tenant",
+			Namespace: nodestore.Namespace,
+			Name:      tenantName,
+		})
+	}
+}

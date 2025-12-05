@@ -30,6 +30,8 @@ type Operator struct {
 	// nodestore lister and informer
 	nodeStoreInf    cache.SharedIndexInformer
 	nodeStoreLister seteralisters.NodeStoreLister
+
+	router *op.Router
 }
 
 func New(
@@ -83,15 +85,11 @@ func New(
 	})
 	o.base.AddInformerWithHandlers(o.nodeStoreInf, cache.ResourceEventHandlerFuncs{
 		UpdateFunc: o.updateEventNodestoreHandler,
-		// Add/Delete optional if you need them
+		DeleteFunc: o.deleteEventNodestoreHandler,
 	})
 
-	return o
-}
+	o.router = op.NewRouter("orchestrator", map[op.Source]map[op.Event]op.ReconcileFunc{
 
-func (o *Operator) BuildRouter() *op.Router {
-
-	return op.NewRouter("orchestrator", map[op.Source]map[op.Event]op.ReconcileFunc{
 		SourceTenantCRD: {
 			EventAdd:    o.reconcileTenantAdd,
 			EventUpdate: o.reconcileTenantUpdate,
@@ -102,10 +100,12 @@ func (o *Operator) BuildRouter() *op.Router {
 			EventDelete: o.reconcileNodestoreDelete,
 		},
 	}, nil)
+
+	return o
 }
 
 func (o *Operator) Run(ctx context.Context) error {
 	o.logger.Info("starting orchestrator")
 	defer o.logger.Info("orchestrator stopped")
-	return o.base.Run(ctx, o.BuildRouter())
+	return o.base.Run(ctx, o.router)
 }

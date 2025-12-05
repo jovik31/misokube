@@ -37,6 +37,7 @@ const (
 	FlagJSON Flags = 0x01
 	FlagPB   Flags = 0x02
 	FlagZip  Flags = 0x04 // reserved for compression
+	FlagBIN  Flags = 0x08 // custom binary codec
 )
 
 type Header struct {

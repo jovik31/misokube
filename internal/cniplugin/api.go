@@ -1,0 +1,155 @@
+package cniplugin
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"time"
+
+	"github.com/containernetworking/cni/pkg/skel"
+
+	"github/setera/pkg/transport/uds"
+	"github/setera/pkg/wire"
+)
+
+type Options struct {
+	SocketPath string
+	Timeout    time.Duration
+}
+
+func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
+
+	log.Printf("Got an ADD command")
+	if err := validateArgs(args); err != nil {
+		return err
+	}
+	if err := checkReadiness(opt); err != nil {
+		return fmt.Errorf("daemon not ready: %w", err)
+	}
+	req := wire.Request{
+		Cmd:            wire.CmdADD,
+		ContainerID:    args.ContainerID,
+		NetNS:          args.Netns,
+		IfName:         args.IfName,
+		CNIArgs:        args.Args,
+		StdinNetconf:   args.StdinData,
+		TimeoutSeconds: int(opt.Timeout.Seconds()),
+	}
+	var resp wire.Response
+	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		return err
+	}
+	log.Print("This is the response:", resp.Message)
+	log.Print("This is the result:", string(resp.Result))
+	if !resp.OK {
+		return errors.New(nonEmpty(resp.Message, "daemon error"))
+	}
+	if len(resp.Result) == 0 {
+		ver := detectCNIVersion(args.StdinData)
+		_, _ = out.Write([]byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`))
+		return nil
+	}
+	_, err := out.Write(resp.Result)
+	return err
+}
+
+func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
+	if err := validateArgs(args); err != nil {
+		return err
+	}
+	if err := checkReadiness(opt); err != nil {
+		return fmt.Errorf("daemon not ready: %w", err)
+	}
+	req := wire.Request{
+		Cmd:            wire.CmdCHECK,
+		ContainerID:    args.ContainerID,
+		NetNS:          args.Netns,
+		IfName:         args.IfName,
+		CNIArgs:        args.Args,
+		StdinNetconf:   args.StdinData,
+		TimeoutSeconds: int(opt.Timeout.Seconds()),
+	}
+	var resp wire.Response
+	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		return err
+	}
+	if !resp.OK {
+		return errors.New(nonEmpty(resp.Message, "daemon error"))
+	}
+	if len(resp.Result) > 0 {
+		_, _ = out.Write(resp.Result)
+	}
+	return nil
+}
+
+func Del(args *skel.CmdArgs, opt Options) error {
+	if err := checkReadiness(opt); err != nil {
+		fmt.Fprintln(os.Stderr, "daemon not ready for DEL:", err)
+		return nil
+	}
+	req := wire.Request{
+		Cmd:            wire.CmdDEL,
+		ContainerID:    args.ContainerID,
+		NetNS:          args.Netns,
+		IfName:         args.IfName,
+		CNIArgs:        args.Args,
+		StdinNetconf:   args.StdinData,
+		TimeoutSeconds: int(opt.Timeout.Seconds()),
+	}
+	var resp wire.Response
+	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		fmt.Fprintln(os.Stderr, "daemon DEL error:", err)
+		return nil
+	}
+	if !resp.OK {
+		fmt.Fprintln(os.Stderr, "daemon DEL not OK:", nonEmpty(resp.Message, "error"))
+	}
+	return nil
+}
+
+func GC(args *skel.CmdArgs, out io.Writer, opt Options) error {
+	if err := checkReadiness(opt); err != nil {
+		return fmt.Errorf("daemon not ready: %w", err)
+	}
+	req := wire.Request{
+		Cmd:            wire.CmdSTATUS, // reuse status for GC if server supports; else define GC
+		CNIArgs:        args.Args,
+		StdinNetconf:   args.StdinData,
+		TimeoutSeconds: int(opt.Timeout.Seconds()),
+	}
+	var resp wire.Response
+	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		return err
+	}
+	if !resp.OK {
+		return errors.New(nonEmpty(resp.Message, "daemon error"))
+	}
+	if len(resp.Result) > 0 {
+		_, _ = out.Write(resp.Result)
+	}
+	return nil
+}
+
+func Status(args *skel.CmdArgs, out io.Writer, opt Options) error {
+	if err := checkReadiness(opt); err != nil {
+		return fmt.Errorf("daemon not ready: %w", err)
+	}
+	req := wire.Request{
+		Cmd:            wire.CmdSTATUS,
+		StdinNetconf:   args.StdinData,
+		TimeoutSeconds: int(opt.Timeout.Seconds()),
+	}
+	var resp wire.Response
+	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		return err
+	}
+	if !resp.OK {
+		return errors.New(nonEmpty(resp.Message, "daemon not OK"))
+	}
+	if len(resp.Result) > 0 {
+		_, _ = out.Write(resp.Result)
+	}
+	return nil
+}
