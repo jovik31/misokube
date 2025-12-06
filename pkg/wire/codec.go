@@ -105,8 +105,7 @@ func (b BinaryCodec) marshalRequest(r Request) ([]byte, error) {
 	writeString(&buf, r.ContainerID)
 	writeString(&buf, r.NetNS)
 	writeString(&buf, r.IfName)
-	writeString(&buf, r.CNIArgs)
-	writeBytes(&buf, []byte(r.StdinNetconf))
+
 	writeUvar(&buf, uint64(r.TimeoutSeconds))
 	writeString(&buf, r.IdemKey)
 	return buf.Bytes(), nil
@@ -160,14 +159,7 @@ func (b BinaryCodec) Unmarshal(data []byte, out any) error {
 		if o.IfName, err = readString(rd); err != nil {
 			return err
 		}
-		if o.CNIArgs, err = readString(rd); err != nil {
-			return err
-		}
-		raw, err := readBytes(rd)
-		if err != nil {
-			return err
-		}
-		o.StdinNetconf = raw
+
 		tsec, err := readUvar(rd)
 		if err != nil {
 			return err

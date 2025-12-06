@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"sync/atomic"
 
@@ -10,11 +11,13 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var _ Resolver = (*ResolverImpl)(nil)
+
 // ResolverImpl is the concrete resolver implementation.
 type ResolverImpl struct {
-	cfg  Config
-	log  *slog.Logger
-	pods coreinformers.PodInformer
+	cfg    Config
+	log    *slog.Logger
+	podInf coreinformers.PodInformer
 
 	snap       snap
 	podsSynced atomic.Bool
@@ -23,9 +26,9 @@ type ResolverImpl struct {
 func New(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 	cfg.SetDefaults()
 	r := &ResolverImpl{
-		cfg:  cfg,
-		log:  cfg.Logger,
-		pods: pods,
+		cfg:    cfg,
+		log:    cfg.Logger,
+		podInf: pods,
 	}
 
 	if r.log == nil {
@@ -41,33 +44,26 @@ func New(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 
 func (r *ResolverImpl) Start(ctx context.Context) error {
 	// Pod handlers
-	r.pods.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	r.podInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    r.onPodAdd,
 		UpdateFunc: func(_, newObj any) { r.onPodAdd(newObj) },
 		DeleteFunc: r.onPodDel,
 	})
 
-	// Initial sync in background (non-blocking Start).
-	go func() {
-		sctx := ctx
-		if d := r.cfg.InitialSyncTimeout; d > 0 {
-			var cancel context.CancelFunc
-			sctx, cancel = context.WithTimeout(ctx, d)
-			defer cancel()
-		}
-		okPods := cache.WaitForCacheSync(sctx.Done(), r.pods.Informer().HasSynced)
-
-		r.podsSynced.Store(okPods)
-
-		r.updateSynced()
-		if okPods {
-			r.log.Info("resolver informers synced")
-		} else {
-			r.log.Warn("resolver informers not fully synced", "pods", okPods)
-		}
-	}()
-
-	return nil
+	// Block until informers are synced (no timeout). Respect context cancellation.
+	okPods := cache.WaitForCacheSync(ctx.Done(), r.podInf.Informer().HasSynced)
+	if !okPods {
+		log.Print("[RESOLVER] failed to wait for informer sync")
+	}
+	r.podsSynced.Store(okPods)
+	r.updateSynced()
+	if okPods {
+		r.log.Info("resolver informers synced")
+		return nil
+	}
+	// Context canceled before sync completed.
+	r.log.Warn("resolver informers stopped before syncing", "pods", okPods)
+	return context.Canceled
 }
 
 func (r *ResolverImpl) Shutdown(ctx context.Context) error {
@@ -97,17 +93,19 @@ func (r *ResolverImpl) Resolve(ns, pod, uid string) (string, bool, error) {
 	}
 
 	key := PodKey(ns, pod)
-	obj, exists, err := r.pods.Informer().GetIndexer().GetByKey(key)
+	obj, exists, err := r.podInf.Informer().GetIndexer().GetByKey(key)
 	if err != nil || !exists {
 		return "", true, NotIndexedError{Namespace: ns, Pod: pod, UID: uid}
 	}
 
 	p, _ := obj.(*corev1.Pod)
-	if tenantFromLabels(p.Labels, r.cfg.TenantLabelKey) == "" {
-		return "", true, NoTenantLabelError{Namespace: ns, Pod: pod, UID: uid}
+	t := tenantFromLabels(p.Labels, r.cfg.TenantLabelKey)
+	if t == "" {
+		// Fall back to default tenant when label is missing.
+		return r.cfg.DefaultTenant, false, nil
+	} else {
+		return t, false, nil
 	}
-
-	return "", true, NotIndexedError{Namespace: ns, Pod: pod, UID: uid}
 }
 
 // --- event handlers (copy-on-write updates) ---

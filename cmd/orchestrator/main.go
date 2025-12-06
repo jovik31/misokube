@@ -1,7 +1,7 @@
 package main
 
 import (
-	orchestrator "github/setera/internal/ooperator"
+	"github/setera/internal/orchestrator"
 	"os"
 
 	"k8s.io/klog/v2"
@@ -38,10 +38,10 @@ func main() {
 	}
 
 	// Build the orchestrator operator (with base operator inside)
-	tenantOperator := orchestrator.NewTenantOperator(ctx, "setera-orchestrator-operator", seteraClient, kubeClient, nil)
+	orch := orchestrator.New()
 
 	// Run it
-	if err := tenantOperator.Base.Run(ctx); err != nil {
+	if err := tenantOperator.Base.Run(ctx, tenantOperator); err != nil {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}

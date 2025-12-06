@@ -27,15 +27,23 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	if err := checkReadiness(opt); err != nil {
 		return fmt.Errorf("daemon not ready: %w", err)
 	}
+
+	pod_name := get_pod_name_regex(args.Args)
+	pod_namespace := get_pod_namespace_regex(args.Args)
+	pod_uid := get_pod_uid_regex(args.Args)
+
 	req := wire.Request{
 		Cmd:            wire.CmdADD,
 		ContainerID:    args.ContainerID,
 		NetNS:          args.Netns,
 		IfName:         args.IfName,
-		CNIArgs:        args.Args,
-		StdinNetconf:   args.StdinData,
+		PodName:        pod_name,
+		PodNamespace:   pod_namespace,
+		PodUID:         pod_uid,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
+	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)
+
 	var resp wire.Response
 	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
 		return err
@@ -55,21 +63,29 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 }
 
 func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
+
 	if err := validateArgs(args); err != nil {
 		return err
 	}
 	if err := checkReadiness(opt); err != nil {
 		return fmt.Errorf("daemon not ready: %w", err)
 	}
+
+	pod_name := get_pod_name_regex(args.Args)
+	pod_namespace := get_pod_namespace_regex(args.Args)
+	pod_uid := get_pod_uid_regex(args.Args)
+
 	req := wire.Request{
 		Cmd:            wire.CmdCHECK,
 		ContainerID:    args.ContainerID,
 		NetNS:          args.Netns,
 		IfName:         args.IfName,
-		CNIArgs:        args.Args,
-		StdinNetconf:   args.StdinData,
+		PodName:        pod_name,
+		PodNamespace:   pod_namespace,
+		PodUID:         pod_uid,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
+	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)
 	var resp wire.Response
 	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
 		return err
@@ -86,19 +102,27 @@ func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
 }
 
 func Del(args *skel.CmdArgs, opt Options) error {
+
 	if err := checkReadiness(opt); err != nil {
 		fmt.Fprintln(os.Stderr, "daemon not ready for DEL:", err)
 		return nil
 	}
+
+	pod_name := get_pod_name_regex(args.Args)
+	pod_namespace := get_pod_namespace_regex(args.Args)
+	pod_uid := get_pod_uid_regex(args.Args)
+
 	req := wire.Request{
 		Cmd:            wire.CmdDEL,
 		ContainerID:    args.ContainerID,
 		NetNS:          args.Netns,
 		IfName:         args.IfName,
-		CNIArgs:        args.Args,
-		StdinNetconf:   args.StdinData,
+		PodName:        pod_name,
+		PodNamespace:   pod_namespace,
+		PodUID:         pod_uid,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
+	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)
 	var resp wire.Response
 	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
 		fmt.Fprintln(os.Stderr, "daemon DEL error:", err)
@@ -119,8 +143,6 @@ func GC(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	}
 	req := wire.Request{
 		Cmd:            wire.CmdSTATUS, // reuse status for GC if server supports; else define GC
-		CNIArgs:        args.Args,
-		StdinNetconf:   args.StdinData,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
 	var resp wire.Response
@@ -145,7 +167,6 @@ func Status(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	}
 	req := wire.Request{
 		Cmd:            wire.CmdSTATUS,
-		StdinNetconf:   args.StdinData,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
 	var resp wire.Response
