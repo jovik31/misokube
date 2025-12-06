@@ -21,7 +21,6 @@ type Options struct {
 
 func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 
-	log.Printf("Got an ADD command")
 	if err := validateArgs(args); err != nil {
 		return err
 	}
@@ -41,9 +40,9 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
 		return err
 	}
-	log.Print("This is the response:", resp.Message)
-	log.Print("This is the result:", string(resp.Result))
+	log.Print("ADD request:", resp.Message, string(resp.Result))
 	if !resp.OK {
+		log.Print("ADD request failed:", resp.Message)
 		return errors.New(nonEmpty(resp.Message, "daemon error"))
 	}
 	if len(resp.Result) == 0 {
@@ -76,11 +75,13 @@ func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
 		return err
 	}
 	if !resp.OK {
+		log.Print("CHECK request failed:", resp.Message)
 		return errors.New(nonEmpty(resp.Message, "daemon error"))
 	}
 	if len(resp.Result) > 0 {
 		_, _ = out.Write(resp.Result)
 	}
+	log.Print("Check request:", resp.Message, string(resp.Result))
 	return nil
 }
 
@@ -104,8 +105,11 @@ func Del(args *skel.CmdArgs, opt Options) error {
 		return nil
 	}
 	if !resp.OK {
+		log.Print("DEL request failed:", resp.Message)
 		fmt.Fprintln(os.Stderr, "daemon DEL not OK:", nonEmpty(resp.Message, "error"))
 	}
+
+	log.Print("DEL request:", resp.Message, string(resp.Result))
 	return nil
 }
 
@@ -124,11 +128,14 @@ func GC(args *skel.CmdArgs, out io.Writer, opt Options) error {
 		return err
 	}
 	if !resp.OK {
+		log.Print("GC request failed:", resp.Message)
 		return errors.New(nonEmpty(resp.Message, "daemon error"))
 	}
 	if len(resp.Result) > 0 {
 		_, _ = out.Write(resp.Result)
 	}
+
+	log.Print("GC request:", resp.Message, string(resp.Result))
 	return nil
 }
 
@@ -143,9 +150,11 @@ func Status(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	}
 	var resp wire.Response
 	if err := uds.NewClientJSON().Call(opt.SocketPath, opt.Timeout, &req, &resp); err != nil {
+		log.Print("Status request error:", err)
 		return err
 	}
 	if !resp.OK {
+		log.Print("Status request failed:", resp.Message)
 		return errors.New(nonEmpty(resp.Message, "daemon not OK"))
 	}
 	if len(resp.Result) > 0 {

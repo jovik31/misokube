@@ -213,7 +213,6 @@ func (m *NetworkManagerImpl) ConfigureRoutes(
 	if err := m.Route.Ensure(&route.Route{
 		Dst:    vtepHost,
 		Device: localVtepName,
-		Onlink: true,
 	}); err != nil {
 		return fmt.Errorf("ensure vtep-host route: %w", err)
 	} // :contentReference[oaicite:5]{index=5}
@@ -223,7 +222,6 @@ func (m *NetworkManagerImpl) ConfigureRoutes(
 		Dst:     remoteTenantCIDR,
 		Device:  localVtepName,
 		Gateway: remoteVtepIP,
-		Onlink:  true,
 	}); err != nil {
 		return fmt.Errorf("ensure tenant route: %w", err)
 	} // :contentReference[oaicite:6]{index=6}
