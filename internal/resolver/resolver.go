@@ -7,7 +7,10 @@ import (
 	"sync/atomic"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -18,12 +21,10 @@ type ResolverImpl struct {
 	cfg    Config
 	log    *slog.Logger
 	podInf coreinformers.PodInformer
-
-	snap       snap
 	podsSynced atomic.Bool
 }
 
-func New(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
+func NewResolver(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 	cfg.SetDefaults()
 	r := &ResolverImpl{
 		cfg:    cfg,
@@ -34,29 +35,59 @@ func New(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 	if r.log == nil {
 		r.log = slog.Default()
 	}
-	r.snap.store(Snapshot{
-		ByUID:  map[string]string{},
-		ByName: map[string]string{},
-		Synced: false,
+
+	// Add an indexer by Pod UID for fast lookups.
+	// Safe to call multiple times; will return an error if duplicate.
+	_ = r.podInf.Informer().AddIndexers(cache.Indexers{
+		"byUID": func(obj any) ([]string, error) {
+			p, _ := obj.(*corev1.Pod)
+			if p == nil {
+				return nil, nil
+			}
+			uid := string(p.UID)
+			if uid == "" {
+				return nil, nil
+			}
+			return []string{uid}, nil
+		},
 	})
+
 	return r
 }
 
-func (r *ResolverImpl) Start(ctx context.Context) error {
-	// Pod handlers
-	r.podInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    r.onPodAdd,
-		UpdateFunc: func(_, newObj any) { r.onPodAdd(newObj) },
-		DeleteFunc: r.onPodDel,
-	})
+// NewAndStartWithClient creates a resolver, owns and starts a SharedInformerFactory
+// using the provided client, and begins syncing in the background. Returns immediately.
+func NewAndStartWithClient(ctx context.Context, client kubernetes.Interface, cfg Config) *ResolverImpl {
+	// Build factory and pod informer
+	factory := informers.NewSharedInformerFactory(client, 0)
+	podInf := factory.Core().V1().Pods()
 
+	// Construct resolver bound to this informer
+	r := NewResolver(podInf, cfg)
+
+	// Start factory and resolver syncing in background
+	go factory.Start(ctx.Done())
+	_ = r.StartAsync(ctx)
+	return r
+}
+
+// NewAndStartWithRestConfig creates a client from rest config and delegates to NewAndStartWithClient.
+func NewAndStartWithRestConfig(ctx context.Context, restCfg *rest.Config, cfg Config) (*ResolverImpl, error) {
+	client, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		return nil, err
+	}
+	r := NewAndStartWithClient(ctx, client, cfg)
+	return r, nil
+}
+
+func (r *ResolverImpl) Start(ctx context.Context) error {
 	// Block until informers are synced (no timeout). Respect context cancellation.
 	okPods := cache.WaitForCacheSync(ctx.Done(), r.podInf.Informer().HasSynced)
 	if !okPods {
 		log.Print("[RESOLVER] failed to wait for informer sync")
 	}
 	r.podsSynced.Store(okPods)
-	r.updateSynced()
 	if okPods {
 		r.log.Info("resolver informers synced")
 		return nil
@@ -66,6 +97,26 @@ func (r *ResolverImpl) Start(ctx context.Context) error {
 	return context.Canceled
 }
 
+// StartAsync registers handlers and waits for informer sync in a separate goroutine.
+// It assumes the underlying SharedInformerFactory has already been started elsewhere.
+// Returns immediately; readiness flips once caches are synced.
+func (r *ResolverImpl) StartAsync(ctx context.Context) error {
+	go func() {
+		okPods := cache.WaitForCacheSync(ctx.Done(), r.podInf.Informer().HasSynced)
+		if !okPods {
+			log.Print("[RESOLVER] async: failed to wait for informer sync")
+		}
+		r.podsSynced.Store(okPods)
+		if okPods {
+			r.log.Info("resolver informers synced (async)")
+		} else {
+			r.log.Warn("resolver informers stopped before syncing (async)", "pods", okPods)
+		}
+	}()
+
+	return nil
+}
+
 func (r *ResolverImpl) Shutdown(ctx context.Context) error {
 	// Informers typically owned by a shared factory; nothing to stop here.
 	_ = ctx
@@ -73,105 +124,27 @@ func (r *ResolverImpl) Shutdown(ctx context.Context) error {
 }
 
 func (r *ResolverImpl) Ready() bool {
-	return r.snap.load().Synced
+	return r.podsSynced.Load()
 }
 
-func (r *ResolverImpl) Resolve(ns, pod, uid string) (string, bool, error) {
-	s := r.snap.load()
-	if !s.Synced {
+func (r *ResolverImpl) Resolve(puid string) (string, bool, error) {
+	if !r.podsSynced.Load() {
 		return "", true, ErrNotReady
 	}
-	// UID-first (globally unique)
-	if uid != "" {
-		if tid, ok := s.ByUID[uid]; ok && tid != "" {
-			return tid, false, nil
-		}
+	// Fallback: use informer indexer by UID
+	idx := r.podInf.Informer().GetIndexer()
+	pods, err := idx.ByIndex("byUID", puid)
+	if err != nil || len(pods) == 0 {
+		return "", true, ErrNotReady
 	}
-	// Fallback to ns/pod
-	if tid, ok := s.ByName[PodKey(ns, pod)]; ok && tid != "" {
-		return tid, false, nil
-	}
-
-	key := PodKey(ns, pod)
-	obj, exists, err := r.podInf.Informer().GetIndexer().GetByKey(key)
-	if err != nil || !exists {
-		return "", true, NotIndexedError{Namespace: ns, Pod: pod, UID: uid}
-	}
-
-	p, _ := obj.(*corev1.Pod)
-	t := tenantFromLabels(p.Labels, r.cfg.TenantLabelKey)
-	if t == "" {
-		// Fall back to default tenant when label is missing.
-		return r.cfg.DefaultTenant, false, nil
-	} else {
-		return t, false, nil
-	}
-}
-
-// --- event handlers (copy-on-write updates) ---
-
-func (r *ResolverImpl) onPodAdd(obj any) {
-	p, _ := obj.(*corev1.Pod)
+	p, _ := pods[0].(*corev1.Pod)
 	if p == nil {
-		return
+		return "", true, ErrNotReady
 	}
-	if r.cfg.NodeName != "" && p.Spec.NodeName != r.cfg.NodeName {
-		return
+	// Resolve tenant from annotations; default if missing
+	tenantID := p.GetAnnotations()[r.cfg.TenantLabelKey]
+	if tenantID == "" {
+		tenantID = r.cfg.DefaultTenant
 	}
-
-	tid := tenantFromLabels(p.Labels, r.cfg.TenantLabelKey)
-	uid := string(p.UID)
-	key := PodKey(p.Namespace, p.Name)
-
-	s := r.snap.load()
-	byName := cloneMap(s.ByName)
-	byUID := cloneMap(s.ByUID)
-
-	if tid != "" {
-		byName[key] = tid
-		if uid != "" {
-			byUID[uid] = tid
-		}
-	} else {
-		delete(byName, key)
-		if uid != "" {
-			delete(byUID, uid)
-		}
-	}
-
-	s.ByName, s.ByUID = byName, byUID
-	s.Synced = r.podsSynced.Load()
-	r.snap.store(s)
-}
-
-func (r *ResolverImpl) onPodDel(obj any) {
-	p, _ := obj.(*corev1.Pod)
-	if p == nil {
-		return
-	}
-	if r.cfg.NodeName != "" && p.Spec.NodeName != r.cfg.NodeName {
-		return
-	}
-
-	uid := string(p.UID)
-	key := PodKey(p.Namespace, p.Name)
-
-	s := r.snap.load()
-	byName := cloneMap(s.ByName)
-	byUID := cloneMap(s.ByUID)
-
-	delete(byName, key)
-	if uid != "" {
-		delete(byUID, uid)
-	}
-
-	s.ByName, s.ByUID = byName, byUID
-	s.Synced = r.podsSynced.Load()
-	r.snap.store(s)
-}
-
-func (r *ResolverImpl) updateSynced() {
-	s := r.snap.load()
-	s.Synced = r.podsSynced.Load()
-	r.snap.store(s)
+	return tenantID, false, nil
 }

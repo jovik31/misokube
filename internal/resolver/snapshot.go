@@ -12,7 +12,6 @@ func (s *snap) load() Snapshot {
 	if v == nil {
 		return Snapshot{
 			ByUID:  map[string]string{},
-			ByName: map[string]string{},
 			Synced: false,
 		}
 	}

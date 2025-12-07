@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	"github/setera/internal/resolver"
 	"github/setera/pkg/transport/uds"
 	"github/setera/pkg/wire"
 )
@@ -13,13 +14,14 @@ import (
 // CNIServer handles concurrent CNI requests and serializes work per-tenant via Router.
 type CNIServer struct {
 	socketPath string
+	resolver   resolver.Resolver
 }
 
-func NewCNIServer(socketPath string) *CNIServer {
+func NewCNIServer(socketPath string, r resolver.Resolver) *CNIServer {
 	if socketPath == "" {
 		log.Panic("cniserver: missing socket path")
 	}
-	return &CNIServer{socketPath: socketPath}
+	return &CNIServer{socketPath: socketPath, resolver: r}
 }
 
 // Run is a convenience wrapper over Start that begins serving in the background
@@ -60,7 +62,25 @@ func (s *CNIServer) handleConn(c net.Conn) {
 		if ver == "" {
 			ver = "1.1.0"
 		}
-		resp = &wire.Response{OK: true, Message: "add ok", Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
+		// If a resolver is provided and ready, attempt to resolve tenant.
+		if s.resolver != nil && s.resolver.Ready() {
+			_, pending, err := s.resolver.Resolve(req.PodUID)
+			if err != nil {
+				resp = &wire.Response{OK: false, Message: "resolve tenant: " + err.Error()}
+				break
+			}
+			if pending {
+				resp = &wire.Response{OK: false, Message: "resolve tenant: resolver pending"}
+				break
+			}
+		}
+		tenantID, _, err := s.resolver.Resolve(req.PodUID)
+		if err != nil {
+			resp = &wire.Response{OK: false, Message: "resolve tenant: " + err.Error()}
+			break
+		}
+		log.Print("THIS IS THE TENANT: ", tenantID)
+		resp = &wire.Response{OK: true, Message: "add ok for tenant:" + tenantID, Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
 
 	case wire.CmdDEL:
 		// DEL should be idempotent and not depend on resolver readiness.

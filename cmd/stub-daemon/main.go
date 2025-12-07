@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github/setera/internal/daemon"
+	rsv "github/setera/internal/resolver"
+	"github/setera/pkg/k8s"
 )
 
 // stub-daemon: minimal UDS server to exercise the CNI shim.
@@ -24,8 +26,19 @@ func main() {
 		socket = "/var/run/setera/setera.sock"
 	}
 
-	// Start the CNI server routine (resolver disabled in stub rollback)
-	srv := daemon.NewCNIServer(socket)
+	// create and start the resolver (self-contained, non-blocking). Not injected yet.
+	var res rsv.Resolver
+	if restCfg, err := k8s.InitKubeConfig(); err == nil {
+		r, _ := rsv.NewAndStartWithRestConfig(ctx, restCfg, rsv.Config{
+			TenantLabelKey: "setera.com/tenant",
+			NodeName:       os.Getenv("NODE_NAME"),
+			DefaultTenant:  "default",
+		})
+		res = r
+	}
+
+	// create and start the CNI server routine and pass the resolver to it
+	srv := daemon.NewCNIServer(socket, res)
 	if err := srv.Run(); err != nil {
 		log.Fatalf("cniserver run: %v", err)
 	}
