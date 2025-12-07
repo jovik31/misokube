@@ -67,6 +67,17 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		IPAM:    ipm,
 	}
 	nm.mu.Unlock()
+
+	// Start per-tenant actor and register it
+	nm.mu.Lock()
+	if nm.TenantActors == nil {
+		nm.TenantActors = make(map[string]TenantActor)
+	}
+	if _, ok := nm.TenantActors[tenantID]; !ok {
+		act := StartTenantActor(ctx, nm, tenantID, 128)
+		nm.TenantActors[tenantID] = act
+	}
+	nm.mu.Unlock()
 	return nil
 }
 
@@ -97,6 +108,16 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 		_ = nm.IPTables.DeleteTenantChains(tenantID)
 	}
 
+	// Stop and drop actor (best-effort)
+	nm.mu.Lock()
+	actor, ok := nm.TenantActors[tenantID]
+	nm.mu.Unlock()
+	if ok && actor != nil {
+		_ = actor.Stop(ctx)
+		nm.mu.Lock()
+		delete(nm.TenantActors, tenantID)
+		nm.mu.Unlock()
+	}
 	// Drop record
 	nm.mu.Lock()
 	delete(nm.TenantRecords, tenantID)

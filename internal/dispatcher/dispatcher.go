@@ -46,6 +46,9 @@ func New(nm nmanager.TenantOps, opts ...Option) *Dispatcher {
 	return d
 }
 
+// WithPodOps injects a PodOps handler so dispatcher can route pod operations.
+// (reverted) PodOps injection removed; dispatcher handles tenant ops only.
+
 func (d *Dispatcher) Enqueue(cmd Command) {
 	if cmd.timestamp.IsZero() {
 		cmd.timestamp = time.Now()

@@ -95,8 +95,37 @@ func (o *Operator) reconcileTenantDelete(ctx context.Context, _ op.Source, ref o
 }
 
 func (o *Operator) reconcileNodestoreDelete(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-	// No-op for now
+
+	// if a nodestore is deleted, its tenant assignments are removed so we need to remove the nodestore's nodes from the tenants' AssignedNodes lists
+
+	// Fetch tenant
+	t, err := o.tenantLister.Tenants(ref.Namespace).Get(ref.Name)
+	if err != nil {
+		return fmt.Errorf("get Tenant %s/%s: %w", ref.Namespace, ref.Name, err)
+	}
+
+	// Rebuild AssignedNodes without the deleted nodestore's node
+	newAssigned := make([]seterav1.NodeInfo, 0)
+	for _, ni := range t.Status.AssignedNodes {
+		if ni.Name != ref.Name { // ref.Name is the nodestore name
+			newAssigned = append(newAssigned, ni)
+		}
+	}
+
+	// Idempotent write
+	if equalNodeInfosByValue(t.Status.AssignedNodes, newAssigned) {
+		return nil
+	}
+
+	mod := t.DeepCopy()
+	mod.Status.AssignedNodes = newAssigned
+
+	if _, err := o.setera.SeteraV1().Tenants(mod.Namespace).UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("update Tenant status %s/%s: %w", mod.Namespace, mod.Name, err)
+	}
+
 	return nil
+
 }
 
 func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, ref op.ResourceRef) error {

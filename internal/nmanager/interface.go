@@ -44,18 +44,11 @@ type NodestoreOps interface {
 // PodOps are per-tenant, synchronous operations typically invoked by the CNI path via a Tenant Actor.
 // Provide both composite and low-level primitives. All methods must be idempotent.
 type PodOps interface {
+	// AllocatePod performs the full pod networking attach for the endpoint key.
+	AllocatePod(ctx context.Context, tenantID, epKey string) error
 
-	// AllocateNet allocates an IP for the endpoint identified by epKey and attaches it in one transaction.
-	AllocateNet(ctx context.Context, tenantID, epKey string) error
-
-	// RemoveNet detaches the endpoint (if present) and releases the IP (if allocated).
-	RemoveNet(ctx context.Context, tenantID, epKey string) error
-
-	// Low-level operations:
-	AllocateIP(ctx context.Context, tenantID, epKey string) (net.IP, error)
-	ReleaseIP(ctx context.Context, tenantID, epKey string) error
-	AttachEndpoint(ctx context.Context, tenantID, epKey string) error
-	DetachEndpoint(ctx context.Context, tenantID, epKey string) error
+	// RemovePod detaches pod networking and releases resources for the endpoint key.
+	RemovePod(ctx context.Context, tenantID, epKey string) error
 }
 
 // TenantInfraSnapshot is the local tenant network snapshot used by the NodeStore operator.

@@ -26,6 +26,9 @@ type NetworkManagerImpl struct {
 	// Records keyed by tenant ID
 	TenantRecords map[string]*TenantRecord
 
+	// Per-tenant actors keyed by tenant ID
+	TenantActors map[string]TenantActor
+
 	// Dependencies
 	Route    route.RouteManager
 	ARP      arp.ARPManager
@@ -34,6 +37,7 @@ type NetworkManagerImpl struct {
 	Subnet   subnet.SubnetManager
 
 	// No factories; backend and ipam are constructed via backend.NewBackend and ipam.NewIPAM
+	// add tenant actor here
 }
 
 // Deps allows explicit injection of manager dependencies. Nil fields fall back to package defaults.

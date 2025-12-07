@@ -2,11 +2,14 @@ package daemon
 
 import (
 	"errors"
+	"context"
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github/setera/internal/resolver"
+	"github/setera/internal/router"
 	"github/setera/pkg/transport/uds"
 	"github/setera/pkg/wire"
 )
@@ -15,6 +18,7 @@ import (
 type CNIServer struct {
 	socketPath string
 	resolver   resolver.Resolver
+	router     router.Router
 }
 
 func NewCNIServer(socketPath string, r resolver.Resolver) *CNIServer {
@@ -23,6 +27,9 @@ func NewCNIServer(socketPath string, r resolver.Resolver) *CNIServer {
 	}
 	return &CNIServer{socketPath: socketPath, resolver: r}
 }
+
+// SetRouter attaches a Router to the server. Optional.
+func (s *CNIServer) SetRouter(rt router.Router) { s.router = rt }
 
 // Run is a convenience wrapper over Start that begins serving in the background
 // and returns immediately (non-blocking). It logs the socket path on success.
@@ -79,6 +86,33 @@ func (s *CNIServer) handleConn(c net.Conn) {
 			resp = &wire.Response{OK: false, Message: "resolve tenant: " + err.Error()}
 			break
 		}
+
+		// If a router is present, delegate pod configuration.
+		if s.router != nil {
+			meta := router.Meta{
+				Namespace:   req.PodNamespace,
+				PodName:     req.PodName,
+				ContainerID: req.ContainerID,
+				NetNS:       req.NetNS,
+				IfName:      req.IfName,
+			}
+			ctx := context.Background()
+			if req.TimeoutSeconds > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(req.TimeoutSeconds)*time.Second)
+				defer cancel()
+			}
+			_, rerr := s.router.ConfigurePod(ctx, tenantID, req.PodUID, meta)
+			if rerr != nil {
+				resp = &wire.Response{OK: false, Message: "configure pod: " + rerr.Error()}
+				break
+			}
+			// Build minimal CNI JSON from router result
+			resp = &wire.Response{OK: true, Message: "add ok for tenant:" + tenantID, Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
+			break
+		}
+
+		// Fallback minimal response when no router is configured
 		log.Print("THIS IS THE TENANT: ", tenantID)
 		resp = &wire.Response{OK: true, Message: "add ok for tenant:" + tenantID, Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
 

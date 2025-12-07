@@ -64,6 +64,7 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 		RootCIDR:      rootCIDR,
 		NodeName:      nodeName,
 		TenantRecords: make(map[string]*TenantRecord),
+		TenantActors:  make(map[string]TenantActor),
 
 		// deps
 		Route:    d.Route,
@@ -101,10 +102,19 @@ func (m *NetworkManagerImpl) AllocateTenant(ctx context.Context, id string) (*ne
 }
 
 // AllocatePod – left as a TODO (depends on your CNI plumbing/veth helper).
-func (m *NetworkManagerImpl) AllocatePod(tenant, containerID, ifName string) error {
+// AllocatePodLegacy – placeholder for older CNI plumbing signature. Use PodOps.AllocatePod instead.
+func (m *NetworkManagerImpl) AllocatePodLegacy(tenant, containerID, ifName string) error {
 	// 1) tenant record -> IPAM allocate
 	// 2) create veth, move peer to pod ns, connect host end to bridge
 	// 3) add default route inside pod via bridge IP using Route manager (ns variant)
+	return nil
+}
+
+// RemovePodLegacy – placeholder for older CNI plumbing signature. Use PodOps.RemovePod instead.
+func (m *NetworkManagerImpl) RemovePodLegacy(tenant, epKey string) error {
+	// 1) detach endpoint if present
+	// 2) release IP from IPAM
+	// 3) cleanup any per-pod routes
 	return nil
 }
 

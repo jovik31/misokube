@@ -6,14 +6,14 @@ These guidelines make AI agents immediately productive in this repo. Focus on th
 - **Goal:** Multi-node tenant networking for Kubernetes with strict isolation. Components: `orchestrator` (global), `daemon` (per-node), `CNI` (pod attach), `webhook` (validation), and CRDs `Tenant` and `NodeStore`.
 - **Primary flows:**
   - Tenant placement and lifecycle via `internal/orchestrator` and `pkg/operator`.
-  - Node-local networking setup via `internal/doperator` + `pkg/network/*` and `pkg/cni`.
+  - Node-local networking setup via `internal/daemon/*` + `pkg/network/*` and `pkg/cni`.
   - State exchange through CRDs in `pkg/generated/*` and `pkg/k8s` helpers.
 - **Networking model:** Expandable subnet (IP trie + bitmap IPAM), optional dual-IP bridge and VTEP migration to preserve active connections. See `docs/*.md` and `pkg/network/*`.
 
 ## Key Code Areas
 - `cmd/*`: Binary entrypoints for `orchestrator`, `daemon`, `cni`, `webhook`.
 - `internal/orchestrator/*`: Controllers and handlers for Tenants, NodeStore events, reconciliation loops.
-- `internal/doperator/*`: Node-local operator wiring; reacts to Tenants and updates NodeStore.
+- `internal/daemon/*`: Node-local operator wiring; reacts to Tenants and updates NodeStore.
 - `pkg/network/*`: Netlink abstractions for vxlan, bridge, fdb, routes, arp, etc.
 - `pkg/cni/*`: CNI command handlers and utilities for pod attach/detach.
 - `pkg/k8s/*` and `pkg/generated/*`: Clientsets, listers, informers, and CRD apply configurations.
