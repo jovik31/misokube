@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -11,6 +12,12 @@ import (
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/k8s"
+
+	// daemon operator
+	doper "github/setera/internal/daemon"
+	seterainformers "github/setera/pkg/generated/informers/externalversions"
+	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
+	op "github/setera/pkg/operator"
 )
 
 /*
@@ -65,6 +72,8 @@ func parseFlags() daemonConfig {
 	flag.StringVar(&cfg.route, "route", "netlink", "Route manager to use (default: netlink)")
 	flag.StringVar(&cfg.iptables, "iptables", "iptables", "IPTables manager to use (default: iptables)")
 	flag.StringVar(&cfg.subnet, "subnet", "trie", "Subnet manager to use (default: trie)")
+	// optional: root CIDR for local NM (fallback to env ROOT_CIDR)
+	// flag.StringVar(&cfg.rootCIDR, "root-cidr", "10.244.0.0/16", "Root CIDR for tenant IPAM trie")
 
 	flag.Parse()
 	return cfg
@@ -111,7 +120,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	kubeclient, seteraclient, err := k8s.InitClients(config)
+	kubeclient, seteraClient, err := k8s.InitClients(config)
 	if err != nil {
 		logger.Error(err, "failed to initialize Kubernetes clients")
 		os.Exit(1)
@@ -131,7 +140,7 @@ func main() {
 	// create nodestore object for the node
 
 	nd := initNodestore(&cfg)
-	_, err = seteraclient.SeteraV1().NodeStores("default").Create(ctx, nd, metav1.CreateOptions{})
+	_, err = seteraClient.SeteraV1().NodeStores("default").Create(ctx, nd, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			logger.Info("NodeStore already exists, skipping creation", "node", cfg.nodeName)
@@ -154,4 +163,25 @@ func main() {
 	}
 	cfg.nodeCIDR = node.Spec.PodCIDR
 
+	// Start daemon operator (informers + reconciler)
+	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
+	v1 := seterav1informers.New(factory, "default", nil)
+	tenantInf := v1.Tenants().Informer()
+	tenantLister := v1.Tenants().Lister()
+	nodeStoreInf := v1.NodeStores().Informer()
+	nodeStoreLister := v1.NodeStores().Lister()
+
+	base := op.NewBaseOperator("daemon", logger, nil)
+	daemonOp := doper.New(base, logger, nil, seteraClient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, nil)
+	if daemonOp == nil {
+		logger.Error(nil, "failed to construct daemon operator")
+		os.Exit(1)
+	}
+
+	// Dispatcher is intentionally not wired here; use stub-daemon for iterative testing.
+	factory.Start(ctx.Done())
+	if err := daemonOp.Run(ctx); err != nil {
+		logger.Error(err, "daemon operator failed")
+		os.Exit(1)
+	}
 }

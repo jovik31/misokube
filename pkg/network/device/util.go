@@ -58,13 +58,25 @@ func GenerateDeviceName(prefix string, name string) (string, error) {
 		return "", fmt.Errorf("prefix %s exceeds max length %d", prefix, config.MaxDeviceNameLength)
 	}
 
-	hashLen := config.MaxDeviceNameLength - len(prefix)
+	// Ensure a consistent suffix length across device types.
+	// Assume the longest known prefix length is 6 (e.g., "vxlan-")
+	const longestPrefixLen = 6
+	suffixLen := config.MaxDeviceNameLength - longestPrefixLen
+	if suffixLen <= 0 {
+		return "", fmt.Errorf("invalid suffix length computed: %d", suffixLen)
+	}
+	// If current prefix is longer than the longest known, shrink suffix to not exceed max
+	if len(prefix)+suffixLen > config.MaxDeviceNameLength {
+		suffixLen = config.MaxDeviceNameLength - len(prefix)
+		if suffixLen <= 0 {
+			return "", fmt.Errorf("no room for suffix with prefix %q", prefix)
+		}
+	}
 
 	hash := sha1.New()
 	hash.Write([]byte(name))
-
 	hashedName := hex.EncodeToString(hash.Sum(nil))
 
-	return prefix + hashedName[:hashLen], nil
+	return prefix + hashedName[:suffixLen], nil
 
 }

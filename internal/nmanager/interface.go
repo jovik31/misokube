@@ -31,6 +31,9 @@ type NodestoreOps interface {
 	// SnapshotTenantInfra returns a read-only view of local tenant infra.
 	SnapshotTenantInfra(tenantID string) (TenantInfraSnapshot, error)
 
+	// SnapshotAllTenantInfra returns a read-only view of all local tenants' infra keyed by tenantID.
+	SnapshotAllTenantInfra() (map[string]TenantInfraSnapshot, error)
+
 	// EnsurePeer programs ARP, FDB, and route entries on the local VTEP towards a remote node.
 	EnsurePeer(ctx context.Context, tenantID string, remote RemoteTenantInfra) error
 

@@ -190,3 +190,75 @@ spec:
         - name: tenantcni-cfg
           configMap:
             name: tenantcni-config      
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchestrator-service-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orchestrator-cluster-role
+rules:
+- apiGroups:
+  - setera.com
+  resources:
+  - tenants
+  - nodestores
+  - tenants/status
+  - nodestores/status
+  verbs:
+  - list
+  - watch
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orchestrator-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orchestrator-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: orchestrator-service-account
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: default
+  labels:
+    app: orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      serviceAccountName: orchestrator-service-account
+      containers:
+      - name: orchestrator
+        image: setera-orchestrator:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - /orchestrator

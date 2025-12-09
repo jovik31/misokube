@@ -174,6 +174,10 @@ kind-cluster-load-stub: ## Load stub-daemon image into the kind cluster
 	kind load docker-image $(STUB_DAEMON_IMG) --name=setera-cluster-orch-dev
 	kind load docker-image $(CNI_IMG) --name=setera-cluster-orch-dev
 
+.PHONY: kind-cluster-load-orchestrator-image
+kind-cluster-load-orchestrator-image: ## Load orchestrator image into the kind cluster
+	kind load docker-image $(ORCHESTRATOR_IMG) --name=setera-cluster-orch-dev
+
 .PHONY: create-node-image
 create-node-image: ## Create custom kind node image
 
@@ -183,6 +187,10 @@ create-node-image: ## Create custom kind node image
 .PHONY: daemon
 daemon: generate-code crd install build-daemon kind-cluster-load-daemon-image ## Install the daemon component
 	kubectl delete -f config/cluster/local_daemon.yaml
+	kubectl apply -f config/cluster/local_daemon.yaml
+
+.PHONY: orchestrator
+orchestrator: build-orchestrator kind-cluster-load-orchestrator-image ## Deploy orchestrator using local_daemon.yaml (combined manifest)
 	kubectl apply -f config/cluster/local_daemon.yaml
 
 

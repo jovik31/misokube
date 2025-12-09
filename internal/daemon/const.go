@@ -1,18 +1,24 @@
 package daemon
 
 import (
-    op "github/setera/pkg/operator"
+	op "github/setera/pkg/operator"
 )
 
 // event sources for daemon-side operators
 const (
-    SourceTenantCRD    op.Source = "k8s:tenant"
-    SourceNodeStoreCRD op.Source = "k8s:nodestore"
+	SourceTenantCRD      op.Source = "k8s:tenant"
+	SourceNodeStoreCRD   op.Source = "k8s:nodestore"
+	SourceNetworkManager op.Source = "nm:network-manager"
 )
 
 // k8s informer events
 const (
-    EventAdd    op.Event = "add"
-    EventUpdate op.Event = "update"
-    EventDelete op.Event = "delete"
+	EventAdd    op.Event = "add"
+	EventUpdate op.Event = "update"
+	EventDelete op.Event = "delete"
+)
+
+// finalizers
+const (
+	nodestoreFinalizer string = "setera.com/nodestore-finalizer"
 )

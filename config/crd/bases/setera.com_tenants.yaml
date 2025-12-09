@@ -142,7 +142,7 @@ spec:
         type: object
         x-kubernetes-validations:
         - message: spec.name is immutable; only spec.zones may change
-          rule: '!has(oldSelf) || self.spec.name == oldSelf.spec.name'
+          rule: oldSelf == null || self.spec.name == oldSelf.spec.name
     served: true
     storage: true
     subresources:

@@ -6,6 +6,7 @@ import (
 
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
+	op "github/setera/pkg/operator"
 )
 
 var _ TenantOps = (*NetworkManagerImpl)(nil)
@@ -78,6 +79,11 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		nm.TenantActors[tenantID] = act
 	}
 	nm.mu.Unlock()
+
+	// Emit update event to local operator (non-blocking) for the local NodeStore
+	if nm.emitter != nil {
+		nm.emitter.EnqueueWith("nm:network-manager", "update", op.ResourceRef{Kind: "NodeStore", Namespace: "default", Name: nm.NodeName})
+	}
 	return nil
 }
 
@@ -122,5 +128,10 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 	nm.mu.Lock()
 	delete(nm.TenantRecords, tenantID)
 	nm.mu.Unlock()
+
+	// Emit delete event to local operator for the local NodeStore
+	if nm.emitter != nil {
+		nm.emitter.EnqueueWith("nm:network-manager", "delete", op.ResourceRef{Kind: "NodeStore", Namespace: "default", Name: nm.NodeName})
+	}
 	return nil
 }

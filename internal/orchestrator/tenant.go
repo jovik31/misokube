@@ -53,7 +53,8 @@ func (o *Operator) selectInitialAwaitingNodes(t *seterav1.Tenant) ([]string, err
 		return nil, fmt.Errorf("list NodeStores: %w", err)
 	}
 	if len(stores) == 0 {
-		return nil, nil
+		o.logger.Info("no NodeStores available to select initial Tenant nodes", "tenant", fmt.Sprintf("%s/%s", t.Namespace, t.Name))
+		return nil, fmt.Errorf("no NodeStores available")
 	}
 
 	out := make([]string, 0, t.Spec.Zones)

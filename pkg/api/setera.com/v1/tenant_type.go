@@ -13,7 +13,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=tn
 // +kubebuilder:subresource:status
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf) || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
+// +kubebuilder:validation:XValidation:rule="oldSelf == null || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
 // Tenant is a specification for a Tenant resource
 type Tenant struct {
 	metav1.TypeMeta   `json:",inline"`

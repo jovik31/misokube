@@ -13,6 +13,7 @@ import (
 	"github/setera/pkg/network/fdb"
 	"github/setera/pkg/network/iptable"
 	"github/setera/pkg/network/route"
+	op "github/setera/pkg/operator"
 )
 
 // NetworkManagerImpl is the concrete implementation used internally.
@@ -38,6 +39,9 @@ type NetworkManagerImpl struct {
 
 	// No factories; backend and ipam are constructed via backend.NewBackend and ipam.NewIPAM
 	// add tenant actor here
+
+	// emitter allows NM to enqueue events into the daemon operator
+	emitter op.Emitter
 }
 
 // Deps allows explicit injection of manager dependencies. Nil fields fall back to package defaults.
@@ -54,4 +58,9 @@ type TenantRecord struct {
 	Subnet  *net.IPNet
 	Backend backend.Backend
 	IPAM    ipam.IPAM
+}
+
+// SetEmitter attaches an operator emitter for NM → operator communication.
+func (nm *NetworkManagerImpl) SetEmitter(e op.Emitter) {
+	nm.emitter = e
 }

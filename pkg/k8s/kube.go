@@ -1,16 +1,23 @@
 package k8s
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"github/setera/pkg/generated/clientset/versioned"
 	"log"
+	"os"
 	"path/filepath"
 
 	// k8s client-go
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // [ ]: Implement kubeconfig intialization
@@ -66,4 +73,82 @@ func InitClients(config *rest.Config) (*kubernetes.Clientset, versioned.Interfac
 	}
 
 	return kubeClientset, seteraClientset, nil
+}
+
+func GetNodeName(clientset *kubernetes.Clientset) (string, error) {
+
+	// check the NODE_NAME env var
+	nodename := os.Getenv("NODE_NAME")
+
+	if nodename == "" {
+		// If NODE_NAME is not set, try to get it from the pod's spec
+		podName := os.Getenv("POD_NAME")
+		podNamespace := os.Getenv("POD_NAMESPACE")
+
+		if podName == "" || podNamespace == "" {
+			return "", fmt.Errorf("POD_NAME and POD_NAMESPACE environment variables must be set if NODE_NAME is not provided")
+		}
+		pod, err := clientset.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
+		if err != nil {
+			return "", fmt.Errorf("failed to get pod %s in namespace %s: %v", podName, podNamespace, err)
+		}
+		nodename = pod.Spec.NodeName
+		if nodename == "" {
+			return "", fmt.Errorf("node name is empty in pod spec for pod %s in namespace %s", podName, podNamespace)
+		}
+	}
+	return nodename, nil
+}
+
+func GetNodeCIDR(clientset *kubernetes.Clientset, nodeName string) (string, error) {
+	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get node %s: %v", nodeName, err)
+	}
+	if node.Spec.PodCIDR == "" {
+		return "", fmt.Errorf("node %s has empty PodCIDR", nodeName)
+	}
+	return node.Spec.PodCIDR, nil
+}
+
+func GetNodes(clientset *kubernetes.Clientset) ([]*v1.NodeList, error) {
+
+	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %v", err)
+	}
+	var nodeList []*v1.NodeList
+	nodeList = append(nodeList, nodes)
+	return nodeList, nil
+}
+
+func GetNodeIP(clientset *kubernetes.Clientset, nodeName string) (string, error) {
+
+	// get from env var
+	if ip := os.Getenv("NODE_IP"); ip != "" {
+		return ip, nil
+	}
+
+	// fetch from k8s API
+	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get node %s: %v", nodeName, err)
+	}
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == v1.NodeInternalIP {
+			return addr.Address, nil
+		}
+	}
+	return "", fmt.Errorf("node %s has no InternalIP address", nodeName)
+}
+
+func StoreTenantLabel(clientset *kubernetes.Clientset, nodeName, tenant string) error {
+
+	patch := fmt.Sprintf(`{"metadata": {"labels": {"setera.com/tenant": "%s"}}}`, tenant)
+
+	_, err := clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to patch node %s with tenant annotation: %v", nodeName, err)
+	}
+	return nil
 }

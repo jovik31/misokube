@@ -31,7 +31,7 @@ type Operator struct {
 	nodeStoreInf    cache.SharedIndexInformer
 	nodeStoreLister seteralisters.NodeStoreLister
 
-	router *op.Router
+	router op.EventReconciler
 }
 
 func New(
@@ -72,10 +72,10 @@ func New(
 	}
 
 	// Add informer indexes BEFORE registering handlers / starting informers
-	if err := o.addNodeStoreIndexes(); err != nil {
+	/*if err := o.addNodeStoreIndexes(); err != nil {
 		o.logger.Error(err, "failed to add nodestore informer indexes")
 		return nil
-	}
+	}*/
 
 	// Register handlers and track cache sync with the base operator
 	o.base.AddInformerWithHandlers(o.tenantInf, cache.ResourceEventHandlerFuncs{

@@ -12,7 +12,28 @@ import (
 var _ NodestoreOps = (*NetworkManagerImpl)(nil)
 
 func (nm *NetworkManagerImpl) SnapshotTenantInfra(tenantId string) (TenantInfraSnapshot, error) {
-	return TenantInfraSnapshot{}, nil
+	rec := nm.TenantRecords[tenantId]
+	if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+		return TenantInfraSnapshot{}, fmt.Errorf("snapshot: unknown tenant %s", tenantId)
+	}
+	snap := TenantInfraSnapshot{
+		Subnet: rec.Subnet,
+		MTU:    1500,
+	}
+	if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
+		snap.VTEPDev = vtepDev.GetName()
+		if ip := vtepDev.GetIP(); ip != nil {
+			snap.VTEPIP = ip.IP
+		}
+		snap.VTEPMAC = vtepDev.GetMAC()
+		if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
+			snap.VNI = uint32(vd.GetVNI())
+		}
+	}
+	if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+		snap.Bridge = brDev.GetName()
+	}
+	return snap, nil
 }
 
 /*
@@ -157,4 +178,34 @@ func (nm *NetworkManagerImpl) FlushTenant(ctx context.Context, tenantID string) 
 	// delete all routes on the local VTEP device
 
 	return nil
+}
+// SnapshotAllTenantInfra returns snapshots for all local tenants keyed by tenantID.
+func (nm *NetworkManagerImpl) SnapshotAllTenantInfra() (map[string]TenantInfraSnapshot, error) {
+    out := make(map[string]TenantInfraSnapshot)
+    nm.mu.RLock()
+    defer nm.mu.RUnlock()
+    for tid, rec := range nm.TenantRecords {
+        if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+            continue
+        }
+        snap := TenantInfraSnapshot{
+            Subnet: rec.Subnet,
+            MTU:    1500,
+        }
+        if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
+            snap.VTEPDev = vtepDev.GetName()
+            if ip := vtepDev.GetIP(); ip != nil {
+                snap.VTEPIP = ip.IP
+            }
+            snap.VTEPMAC = vtepDev.GetMAC()
+            if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
+                snap.VNI = uint32(vd.GetVNI())
+            }
+        }
+        if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+            snap.Bridge = brDev.GetName()
+        }
+        out[tid] = snap
+    }
+    return out, nil
 }

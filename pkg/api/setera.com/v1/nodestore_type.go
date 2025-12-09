@@ -10,6 +10,9 @@ import (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=nstore
+// +kubebuilder:subresource:status
 // NodeStore is a specification for a NodeStore resource
 type NodeStore struct {
 	metav1.TypeMeta   `json:",inline"`

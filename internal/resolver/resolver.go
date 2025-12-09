@@ -18,13 +18,13 @@ var _ Resolver = (*ResolverImpl)(nil)
 
 // ResolverImpl is the concrete resolver implementation.
 type ResolverImpl struct {
-	cfg    Config
-	log    *slog.Logger
-	podInf coreinformers.PodInformer
+	cfg        Config
+	log        *slog.Logger
+	podInf     coreinformers.PodInformer
 	podsSynced atomic.Bool
 }
 
-func NewResolver(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
+func NewResolver(pods coreinformers.PodInformer, cfg Config) (*ResolverImpl, error) {
 	cfg.SetDefaults()
 	r := &ResolverImpl{
 		cfg:    cfg,
@@ -38,7 +38,7 @@ func NewResolver(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 
 	// Add an indexer by Pod UID for fast lookups.
 	// Safe to call multiple times; will return an error if duplicate.
-	_ = r.podInf.Informer().AddIndexers(cache.Indexers{
+	err := r.podInf.Informer().AddIndexers(cache.Indexers{
 		"byUID": func(obj any) ([]string, error) {
 			p, _ := obj.(*corev1.Pod)
 			if p == nil {
@@ -51,24 +51,31 @@ func NewResolver(pods coreinformers.PodInformer, cfg Config) *ResolverImpl {
 			return []string{uid}, nil
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return r
+	return r, nil
 }
 
 // NewAndStartWithClient creates a resolver, owns and starts a SharedInformerFactory
 // using the provided client, and begins syncing in the background. Returns immediately.
-func NewAndStartWithClient(ctx context.Context, client kubernetes.Interface, cfg Config) *ResolverImpl {
+func NewAndStartWithClient(ctx context.Context, client kubernetes.Interface, cfg Config) (*ResolverImpl, error) {
 	// Build factory and pod informer
 	factory := informers.NewSharedInformerFactory(client, 0)
 	podInf := factory.Core().V1().Pods()
 
 	// Construct resolver bound to this informer
-	r := NewResolver(podInf, cfg)
+	r, err := NewResolver(podInf, cfg)
+	if err != nil {
+		return nil, err
+
+	}
 
 	// Start factory and resolver syncing in background
 	go factory.Start(ctx.Done())
 	_ = r.StartAsync(ctx)
-	return r
+	return r, nil
 }
 
 // NewAndStartWithRestConfig creates a client from rest config and delegates to NewAndStartWithClient.
@@ -77,7 +84,10 @@ func NewAndStartWithRestConfig(ctx context.Context, restCfg *rest.Config, cfg Co
 	if err != nil {
 		return nil, err
 	}
-	r := NewAndStartWithClient(ctx, client, cfg)
+	r, err := NewAndStartWithClient(ctx, client, cfg)
+	if err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 

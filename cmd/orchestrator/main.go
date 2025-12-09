@@ -1,13 +1,20 @@
 package main
 
 import (
-	"github/setera/internal/orchestrator"
 	"os"
 
+	// internal
+	orch "github/setera/internal/orchestrator"
+	op "github/setera/pkg/operator"
+
+	// clients/informers
+	"github/setera/pkg/k8s"
+	seterainformers "github/setera/pkg/generated/informers/externalversions"
+	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
+
+	// logging + signals
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-
-	"github/setera/pkg/k8s"
 )
 
 func main() {
@@ -31,17 +38,42 @@ func main() {
 		logger.Info("INIT KUBECONFIG SUCCESSFUL")
 	}
 
-	kubeClient, seteraClient, err := k8s.InitClients(config)
+	_, seteraClient, err := k8s.InitClients(config)
 	if err != nil {
 		logger.Error(err, "failed to initialize clients")
 		os.Exit(1)
 	}
 
-	// Build the orchestrator operator (with base operator inside)
-	orch := orchestrator.New()
+	// Shared informer factory for Setera CRDs
+	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
+	v1 := seterav1informers.New(factory, "default", nil)
+	tenantInf := v1.Tenants().Informer()
+	tenantLister := v1.Tenants().Lister()
+	nodeStoreInf := v1.NodeStores().Informer()
+	nodeStoreLister := v1.NodeStores().Lister()
 
-	// Run it
-	if err := tenantOperator.Base.Run(ctx, tenantOperator); err != nil {
+	// Base operator
+	base := op.NewBaseOperator("orchestrator", logger, nil)
+
+	// Construct orchestrator operator
+	orchOp := orch.New(
+		base,
+		logger,
+		nil, // recorder (optional)
+		seteraClient,
+		tenantInf,
+		tenantLister,
+		nodeStoreInf,
+		nodeStoreLister,
+	)
+	if orchOp == nil {
+		logger.Error(nil, "failed to construct orchestrator operator")
+		os.Exit(1)
+	}
+
+	// Start informers then run the operator
+	factory.Start(ctx.Done())
+	if err := orchOp.Run(ctx); err != nil {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}
