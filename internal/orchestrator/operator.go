@@ -72,10 +72,12 @@ func New(
 	}
 
 	// Add informer indexes BEFORE registering handlers / starting informers
-	/*if err := o.addNodeStoreIndexes(); err != nil {
+	if err := o.nodeStoreInf.AddIndexers(cache.Indexers{
+		indexNodeStoreByTenant: indexNodestoreByTenant,
+	}); err != nil {
 		o.logger.Error(err, "failed to add nodestore informer indexes")
 		return nil
-	}*/
+	}
 
 	// Register handlers and track cache sync with the base operator
 	o.base.AddInformerWithHandlers(o.tenantInf, cache.ResourceEventHandlerFuncs{
@@ -84,6 +86,8 @@ func New(
 		DeleteFunc: o.deleteEventTenantHandler,
 	})
 	o.base.AddInformerWithHandlers(o.nodeStoreInf, cache.ResourceEventHandlerFuncs{
+
+		AddFunc:    o.addEventNodestoreHandler,
 		UpdateFunc: o.updateEventNodestoreHandler,
 		DeleteFunc: o.deleteEventNodestoreHandler,
 	})

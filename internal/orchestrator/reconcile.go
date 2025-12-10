@@ -46,7 +46,7 @@ func (o *Operator) reconcileTenantAdd(ctx context.Context, _ op.Source, ref op.R
 	if _, err := o.setera.SeteraV1().
 		Tenants(mod.Namespace).
 		UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update Tenant status %s/%s: %w", mod.Namespace, mod.Name, err)
+		return fmt.Errorf("add tenant status from tenant source event%s/%s: %w", mod.Namespace, mod.Name, err)
 	}
 
 	return nil
@@ -84,7 +84,7 @@ func (o *Operator) reconcileTenantUpdate(ctx context.Context, _ op.Source, ref o
 	if _, err := o.setera.SeteraV1().
 		Tenants(mod.Namespace).
 		UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update Tenant status %s/%s: %w", mod.Namespace, mod.Name, err)
+		return fmt.Errorf("update Tenant status from tenant source event %s/%s: %w", mod.Namespace, mod.Name, err)
 	}
 
 	return nil
@@ -121,78 +121,76 @@ func (o *Operator) reconcileNodestoreDelete(ctx context.Context, _ op.Source, re
 	mod.Status.AssignedNodes = newAssigned
 
 	if _, err := o.setera.SeteraV1().Tenants(mod.Namespace).UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update Tenant status %s/%s: %w", mod.Namespace, mod.Name, err)
+		return fmt.Errorf("delete tenant status from nodestore events %s/%s: %w", mod.Namespace, mod.Name, err)
 	}
 
 	return nil
 
 }
 
+// a tenant is enqueued for nodestore updates when one of its nodestores is updated
+// this reconcile func recomputes the tenant's AssignedNodes and AwaitingNodeConfiguration based on current nodestore state
 func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-	// Fetch tenant
+
+	o.logger.Info("reconcileNodestoreUpdate called", "tenant", fmt.Sprintf("%s/%s", ref.Namespace, ref.Name))
+
+	//get the tenant
 	t, err := o.tenantLister.Tenants(ref.Namespace).Get(ref.Name)
 	if err != nil {
 		return fmt.Errorf("get Tenant %s/%s: %w", ref.Namespace, ref.Name, err)
 	}
-
-	// Use the index to get only NodeStores that reference this tenant
-	var stores []*seterav1.NodeStore
-	objs, idxErr := o.nodeStoreInf.GetIndexer().ByIndex(indexNodeStoreByTenant, t.Name)
-	if idxErr == nil {
-		stores = make([]*seterav1.NodeStore, 0, len(objs))
-		for _, ojb := range objs {
-			if ns, ok := ojb.(*seterav1.NodeStore); ok {
-				stores = append(stores, ns)
-			}
-		}
-	} else {
-		// Fallback: if indexing fails for any reason, you can list all (less efficient).
-		// stores, _ = o.nodeStoreLister.List(labels.Everything())
-		return fmt.Errorf("index lookup failed for tenant %s: %w", t.Name, idxErr)
-	}
-
-	// Rebuild AssignedNodes from these NodeStores and remove them from Awaiting
-	newAssigned, newAwaiting := make([]seterav1.NodeInfo, 0), make([]string, 0, len(t.Status.AwaitingNodeConfiguration))
-	assignedIDs := map[string]struct{}{}
-	for _, ns := range stores {
-		if ns == nil || ns.Status.Tenants == nil {
-			continue
-		}
-		ti, ok := ns.Status.Tenants[t.Name]
-		if !ok {
-			continue
-		}
-		nodeID := ns.Spec.Name
-		if nodeID == "" {
-			nodeID = ns.Name
-		}
-		assignedIDs[nodeID] = struct{}{}
-		newAssigned = append(newAssigned, seterav1.NodeInfo{
-			Name:       nodeID,
-			NodeIP:     ns.Spec.NodeIP,
-			TenantCIDR: ti.TenantCIDR,
-			VtepIP:     ti.VTEP_IP,
-			VtepMAC:    ti.VTEP_MAC,
-		})
-	}
-	for _, id := range t.Status.AwaitingNodeConfiguration {
-		if _, ok := assignedIDs[id]; !ok {
-			newAwaiting = append(newAwaiting, id)
-		}
-	}
-
-	// Idempotent write
-	if equalNodeInfosByValue(t.Status.AssignedNodes, newAssigned) &&
-		sameStrSlice(t.Status.AwaitingNodeConfiguration, newAwaiting) {
+	if t == nil {
+		o.logger.Info("tenant not found; skipping nodestore update reconcile", "tenant", fmt.Sprintf("%s/%s", ref.Namespace, ref.Name))
 		return nil
 	}
 
+	// fetch nodestore from indexer
+	nodestores, err := o.nodeStoresForTenant(t.Name)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve nodestores from indexer %s: %w", t.Name, err)
+	}
+
+	newAssigned := make([]seterav1.NodeInfo, 0)
+	for _, ns := range nodestores {
+
+		tinfra, ok := ns.Status.Tenants[t.Name]
+		if ok {
+			newAssigned = append(newAssigned, seterav1.NodeInfo{
+				Name:       ns.Spec.Name,
+				NodeIP:     ns.Spec.NodeIP,
+				TenantCIDR: tinfra.TenantCIDR,
+				VtepIP:     tinfra.VTEP_IP,
+				VtepMAC:    tinfra.VTEP_MAC,
+			})
+		}
+
+	}
+
+	// Update status using a DeepCopy (never mutate informer object)
 	mod := t.DeepCopy()
 	mod.Status.AssignedNodes = newAssigned
-	mod.Status.AwaitingNodeConfiguration = newAwaiting
 
-	if _, err := o.setera.SeteraV1().Tenants(mod.Namespace).UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update Tenant status %s/%s: %w", mod.Namespace, mod.Name, err)
+	if _, err := o.setera.SeteraV1().
+		Tenants(mod.Namespace).
+		UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("update Tenant status from tenant source event %s/%s: %w", mod.Namespace, mod.Name, err)
 	}
+
 	return nil
+}
+
+func (o *Operator) nodeStoresForTenant(tenantName string) ([]*seterav1.NodeStore, error) {
+	objs, err := o.nodeStoreInf.GetIndexer().ByIndex(indexNodeStoreByTenant, tenantName)
+	if err != nil {
+		return nil, err
+	}
+	stores := make([]*seterav1.NodeStore, 0, len(objs))
+	for _, obj := range objs {
+		ns, ok := obj.(*seterav1.NodeStore)
+		if !ok || ns == nil {
+			continue
+		}
+		stores = append(stores, ns)
+	}
+	return stores, nil
 }

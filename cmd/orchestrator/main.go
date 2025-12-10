@@ -8,9 +8,9 @@ import (
 	op "github/setera/pkg/operator"
 
 	// clients/informers
-	"github/setera/pkg/k8s"
 	seterainformers "github/setera/pkg/generated/informers/externalversions"
 	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
+	"github/setera/pkg/k8s"
 
 	// logging + signals
 	"k8s.io/klog/v2"

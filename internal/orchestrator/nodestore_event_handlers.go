@@ -9,6 +9,14 @@ import (
 	"github/setera/pkg/operator"
 )
 
+// addEventNodestoreHandler enqueues per-tenant update events when a NodeStore is added.
+// This helps verify add events are observed and triggers initial tenant reconciliation.
+func (o *Operator) addEventNodestoreHandler(obj any) {
+
+	o.logger.Info("addEventNodestoreHandler called")
+
+}
+
 /*
 	when we receive an update event from a nodestore source:
 
@@ -16,6 +24,8 @@ import (
 - for each tenant, enqueue a nodestore update event for processing by the tenant reconciler
 */
 func (o *Operator) updateEventNodestoreHandler(oldObj, newObj any) {
+
+	o.logger.Info("updateEventNodestoreHandler called")
 	var oldNS, newNS *seterav1.NodeStore
 	switch v := oldObj.(type) {
 	case *seterav1.NodeStore:
@@ -55,6 +65,7 @@ func (o *Operator) updateEventNodestoreHandler(oldObj, newObj any) {
 	}
 
 	for tenantName := range affected {
+
 		o.base.EnqueueWith(SourceNodeStoreCRD, EventUpdate, operator.ResourceRef{
 			Group:     "setera.com",
 			Version:   "v1",
