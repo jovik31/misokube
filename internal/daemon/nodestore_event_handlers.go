@@ -20,6 +20,8 @@ func (o *Operator) addNodestoreEventHandler(obj interface{}) {
 }
 
 // enqueue nodestore update events only for the remote nodestore's
-func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {}
+func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {
+
+}
 
 func (o *Operator) deleteEventNodestoretHandler(obj interface{}) {}

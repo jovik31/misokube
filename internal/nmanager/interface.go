@@ -56,13 +56,15 @@ type PodOps interface {
 
 // TenantInfraSnapshot is the local tenant network snapshot used by the NodeStore operator.
 type TenantInfraSnapshot struct {
-	Subnet  *net.IPNet
-	VNI     uint32
-	VTEPDev string
-	VTEPIP  net.IP
-	VTEPMAC net.HardwareAddr
-	MTU     int
-	Bridge  string // optional: local bridge name
+	Subnet    *net.IPNet
+	VNI       uint32
+	VTEPDev   string
+	VTEPIP    net.IP
+	VTEPMAC   net.HardwareAddr
+	MTU       int
+	Bridge    string // local bridge name
+	BridgeIP  net.IP
+	BridgeMAC net.HardwareAddr
 }
 
 // RemoteTenantInfra describes the remote node’s tenant attributes needed to program ARP/FDB/routes.

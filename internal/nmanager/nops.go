@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/backend"
+	"github/setera/pkg/network/device"
 	"github/setera/pkg/network/fdb"
 	"github/setera/pkg/network/route"
 )
@@ -20,18 +21,25 @@ func (nm *NetworkManagerImpl) SnapshotTenantInfra(tenantId string) (TenantInfraS
 		Subnet: rec.Subnet,
 		MTU:    1500,
 	}
+
 	if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
 		snap.VTEPDev = vtepDev.GetName()
 		if ip := vtepDev.GetIP(); ip != nil {
 			snap.VTEPIP = ip.IP
 		}
 		snap.VTEPMAC = vtepDev.GetMAC()
-		if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
-			snap.VNI = uint32(vd.GetVNI())
+
+		vt, ok := vtepDev.(device.VTEPDevice)
+		if ok {
+			snap.VNI = uint32(vt.GetVNI())
 		}
 	}
 	if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
 		snap.Bridge = brDev.GetName()
+		if ip := brDev.GetIP(); ip != nil {
+			snap.BridgeIP = ip.IP
+		}
+		snap.BridgeMAC = brDev.GetMAC()
 	}
 	return snap, nil
 }
@@ -179,33 +187,38 @@ func (nm *NetworkManagerImpl) FlushTenant(ctx context.Context, tenantID string) 
 
 	return nil
 }
+
 // SnapshotAllTenantInfra returns snapshots for all local tenants keyed by tenantID.
 func (nm *NetworkManagerImpl) SnapshotAllTenantInfra() (map[string]TenantInfraSnapshot, error) {
-    out := make(map[string]TenantInfraSnapshot)
-    nm.mu.RLock()
-    defer nm.mu.RUnlock()
-    for tid, rec := range nm.TenantRecords {
-        if rec == nil || rec.Backend == nil || rec.Subnet == nil {
-            continue
-        }
-        snap := TenantInfraSnapshot{
-            Subnet: rec.Subnet,
-            MTU:    1500,
-        }
-        if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
-            snap.VTEPDev = vtepDev.GetName()
-            if ip := vtepDev.GetIP(); ip != nil {
-                snap.VTEPIP = ip.IP
-            }
-            snap.VTEPMAC = vtepDev.GetMAC()
-            if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
-                snap.VNI = uint32(vd.GetVNI())
-            }
-        }
-        if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
-            snap.Bridge = brDev.GetName()
-        }
-        out[tid] = snap
-    }
-    return out, nil
+	out := make(map[string]TenantInfraSnapshot)
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	for tid, rec := range nm.TenantRecords {
+		if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+			continue
+		}
+		snap := TenantInfraSnapshot{
+			Subnet: rec.Subnet,
+			MTU:    1500,
+		}
+		if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
+			snap.VTEPDev = vtepDev.GetName()
+			if ip := vtepDev.GetIP(); ip != nil {
+				snap.VTEPIP = ip.IP
+			}
+			snap.VTEPMAC = vtepDev.GetMAC()
+			if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
+				snap.VNI = uint32(vd.GetVNI())
+			}
+		}
+		if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+			snap.Bridge = brDev.GetName()
+			if ip := brDev.GetIP(); ip != nil {
+				snap.BridgeIP = ip.IP
+			}
+			snap.BridgeMAC = brDev.GetMAC()
+		}
+		out[tid] = snap
+	}
+	return out, nil
 }

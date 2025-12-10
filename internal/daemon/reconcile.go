@@ -94,6 +94,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 		if snap.Subnet != nil {
 			ti.TenantCIDR = snap.Subnet.String()
 		}
+
 		ti.VNI = int(snap.VNI)
 		ti.VTEP_NAME = snap.VTEPDev
 		if snap.VTEPIP != nil {
@@ -103,6 +104,12 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 			ti.VTEP_MAC = snap.VTEPMAC.String()
 		}
 		ti.BRIDGE_NAME = snap.Bridge
+		if snap.BridgeIP != nil {
+			ti.BRIDGE_IP = snap.BridgeIP.String()
+		}
+		if snap.BridgeMAC != nil {
+			ti.BRIDGE_MAC = snap.BridgeMAC.String()
+		}
 		// Initialize Pods to empty to satisfy CRD 'Required value'
 		ti.Pods = []seterav1.Pod_Info{}
 		newTenants[tenant] = ti
@@ -149,6 +156,12 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 			ti.VTEP_MAC = snap.VTEPMAC.String()
 		}
 		ti.BRIDGE_NAME = snap.Bridge
+		if snap.BridgeIP != nil {
+			ti.BRIDGE_IP = snap.BridgeIP.String()
+		}
+		if snap.BridgeMAC != nil {
+			ti.BRIDGE_MAC = snap.BridgeMAC.String()
+		}
 		ti.Pods = []seterav1.Pod_Info{}
 		newTenants[tenant] = ti
 	}

@@ -20,6 +20,7 @@ func (m Manager) Create(tenantID string, subnet *net.IPNet, args ...string) (dev
 		name: link.Attrs().Name,
 		ip:   ip,
 		mac:  link.Attrs().HardwareAddr,
+		vni:  link.VxlanId,
 	}, nil
 }
 
