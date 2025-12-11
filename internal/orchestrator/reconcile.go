@@ -166,8 +166,25 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 
 	}
 
+	// remove from awaiting any nodes that are now assigned
+	newAwaiting := make([]string, 0)
+	awaitingSet := make(map[string]struct{})
+	for _, n := range t.Status.AwaitingNodeConfiguration {
+		awaitingSet[n] = struct{}{}
+	}
+	for _, ni := range newAssigned {
+
+		delete(awaitingSet, ni.Name)
+	}
+	for n := range awaitingSet {
+		newAwaiting = append(newAwaiting, n)
+	}
+
+	// add idempontent rights feature.
+
 	// Update status using a DeepCopy (never mutate informer object)
 	mod := t.DeepCopy()
+	mod.Status.AwaitingNodeConfiguration = newAwaiting
 	mod.Status.AssignedNodes = newAssigned
 
 	if _, err := o.setera.SeteraV1().
