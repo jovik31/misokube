@@ -142,9 +142,9 @@ func GetNodeIP(clientset *kubernetes.Clientset, nodeName string) (string, error)
 	return "", fmt.Errorf("node %s has no InternalIP address", nodeName)
 }
 
-func StoreTenantLabel(clientset *kubernetes.Clientset, nodeName, tenant string) error {
+func StoreTenantLabel(clientset *kubernetes.Clientset, labelKey, nodeName, tenant string) error {
 
-	patch := fmt.Sprintf(`{"metadata": {"labels": {"setera.com/tenant": "%s"}}}`, tenant)
+	patch := fmt.Sprintf(`{"metadata": {"labels": {"%s": "Enabled"}}}`, labelKey+"."+tenant)
 
 	_, err := clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {

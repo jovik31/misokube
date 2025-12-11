@@ -22,3 +22,7 @@ const (
 const (
 	nodestoreFinalizer string = "setera.com/nodestore-finalizer"
 )
+
+const (
+	TenantLabelKey string = "setera.com.tenant"
+)

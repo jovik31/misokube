@@ -9,6 +9,7 @@ import (
 	op "github/setera/pkg/operator"
 
 	// k8s
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
@@ -26,7 +27,8 @@ type Operator struct {
 	logger   klog.Logger
 	recorder record.EventRecorder
 
-	setera seteraclient.Interface
+	setera     seteraclient.Interface
+	kubeclient *kubernetes.Clientset
 
 	// dispatcher for tenant-level ensure/remove operations (injected)
 	dp Dispatcher
@@ -50,6 +52,7 @@ func New(
 	logger klog.Logger,
 	recorder record.EventRecorder,
 	seteraClient seteraclient.Interface,
+	kubeclient *kubernetes.Clientset,
 	tenantInformer cache.SharedIndexInformer,
 	tenantLister seteralisters.TenantLister,
 	nodeStoreInformer cache.SharedIndexInformer,
@@ -61,6 +64,7 @@ func New(
 		logger:          logger.WithName("daemon"),
 		recorder:        recorder,
 		setera:          seteraClient,
+		kubeclient:      kubeclient,
 		tenantInf:       tenantInformer,
 		tenantLister:    tenantLister,
 		nodeStoreInf:    nodeStoreInformer,

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
+	"github/setera/pkg/k8s"
 	op "github/setera/pkg/operator"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,6 +116,13 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 		newTenants[tenant] = ti
 	}
 	ns.Status.Tenants = newTenants
+	for tenant := range newTenants {
+		err := k8s.StoreTenantLabel(o.kubeclient, TenantLabelKey, o.nodeName, tenant)
+		if err != nil {
+			o.logger.WithValues("node", o.nodeName).Info("failed to store tenant label on node", "tenant", tenant, "err", err)
+		}
+
+	}
 
 	if _, err := o.setera.SeteraV1().NodeStores(ns.Namespace).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status", "err", err)

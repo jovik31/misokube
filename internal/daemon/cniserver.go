@@ -1,8 +1,8 @@
 package daemon
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"io"
 	"log"
 	"net"

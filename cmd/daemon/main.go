@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -172,7 +171,7 @@ func main() {
 	nodeStoreLister := v1.NodeStores().Lister()
 
 	base := op.NewBaseOperator("daemon", logger, nil)
-	daemonOp := doper.New(base, logger, nil, seteraClient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, nil)
+	daemonOp := doper.New(base, logger, nil, seteraClient, kubeclient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, nil)
 	if daemonOp == nil {
 		logger.Error(nil, "failed to construct daemon operator")
 		os.Exit(1)

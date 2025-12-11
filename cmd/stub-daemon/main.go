@@ -116,7 +116,7 @@ func main() {
 	// base already initialized above
 	// Inject dispatcher into operator if started; otherwise nil uses noop
 	dispatcherAdapter := daemon.NewDispatcherAdapter(dp)
-	dOpr := daemon.New(base, klog.FromContext(ctx), nil, seteraClient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, dispatcherAdapter)
+	dOpr := daemon.New(base, klog.FromContext(ctx), nil, seteraClient, kubeclient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, dispatcherAdapter)
 
 	// Provide local node context and NM ops to operator
 	dOpr.SetNodeName(nodeName)
