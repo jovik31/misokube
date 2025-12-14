@@ -88,7 +88,8 @@ func initNodestore(cfg *daemonConfig) *seterav1.NodeStore {
 			APIVersion: seterav1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cfg.nodeName,
+			Name:      cfg.nodeName,
+			Namespace: metav1.NamespaceNone, // NodeStores are cluster-scoped; always use NamespaceNone
 		},
 		Spec: seterav1.NodeStoreSpec{
 			Name:      cfg.nodeName,
@@ -139,7 +140,7 @@ func main() {
 	// create nodestore object for the node
 
 	nd := initNodestore(&cfg)
-	_, err = seteraClient.SeteraV1().NodeStores("default").Create(ctx, nd, metav1.CreateOptions{})
+	_, err = seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Create(ctx, nd, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			logger.Info("NodeStore already exists, skipping creation", "node", cfg.nodeName)
@@ -164,7 +165,7 @@ func main() {
 
 	// Start daemon operator (informers + reconciler)
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
-	v1 := seterav1informers.New(factory, "default", nil)
+	v1 := seterav1informers.New(factory, metav1.NamespaceNone, nil)
 	tenantInf := v1.Tenants().Informer()
 	tenantLister := v1.Tenants().Lister()
 	nodeStoreInf := v1.NodeStores().Informer()

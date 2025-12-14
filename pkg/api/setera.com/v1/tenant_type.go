@@ -13,6 +13,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=tn
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 // +kubebuilder:validation:XValidation:rule="oldSelf == null || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
 // Tenant is a specification for a Tenant resource
 type Tenant struct {

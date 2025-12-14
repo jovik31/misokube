@@ -11,10 +11,8 @@ spec:
     kind: NodeStore
     listKind: NodeStoreList
     plural: nodestores
-    shortNames:
-    - nstore
     singular: nodestore
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1
     schema:

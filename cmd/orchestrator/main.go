@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	// internal
@@ -8,11 +9,15 @@ import (
 	op "github/setera/pkg/operator"
 
 	// clients/informers
+	"github/setera/pkg/generated/clientset/versioned"
 	seterainformers "github/setera/pkg/generated/informers/externalversions"
 	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
 	"github/setera/pkg/k8s"
 
+	seterav1 "github/setera/pkg/api/setera.com/v1"
 	// logging + signals
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
@@ -38,7 +43,7 @@ func main() {
 		logger.Info("INIT KUBECONFIG SUCCESSFUL")
 	}
 
-	_, seteraClient, err := k8s.InitClients(config)
+	kubeclient, seteraClient, err := k8s.InitClients(config)
 	if err != nil {
 		logger.Error(err, "failed to initialize clients")
 		os.Exit(1)
@@ -46,11 +51,19 @@ func main() {
 
 	// Shared informer factory for Setera CRDs
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
-	v1 := seterav1informers.New(factory, "default", nil)
+	// Use NamespaceAll to cover cluster-scoped and namespaced resources
+	v1 := seterav1informers.New(factory, metav1.NamespaceNone, nil)
 	tenantInf := v1.Tenants().Informer()
 	tenantLister := v1.Tenants().Lister()
 	nodeStoreInf := v1.NodeStores().Informer()
 	nodeStoreLister := v1.NodeStores().Lister()
+
+	// deploy default tenant
+	err = ensureDefaultTenant(ctx, seteraClient, kubeclient, logger)
+	if err != nil {
+		logger.Error(err, "failed to ensure default tenant")
+		os.Exit(1)
+	}
 
 	// Base operator
 	base := op.NewBaseOperator("orchestrator", logger, nil)
@@ -77,4 +90,47 @@ func main() {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}
+}
+
+func ensureDefaultTenant(ctx context.Context, seteraclient versioned.Interface, kubeclient *kubernetes.Clientset, logger klog.Logger) error {
+
+	_, err := seteraclient.SeteraV1().Tenants(metav1.NamespaceNone).Get(ctx, "default", metav1.GetOptions{})
+	if err == nil {
+		logger.Info("default tenant already exists; skipping creation")
+		return nil
+	}
+
+	//get number of nodes - zones
+	nodes, err := kubeclient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logger.Error(err, "failed to list nodes for default tenant creation")
+		return err
+	}
+
+	// create default tenant
+
+	tn := &seterav1.Tenant{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Tenant",
+			APIVersion: seterav1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: metav1.NamespaceNone,
+		},
+		Spec: seterav1.TenantSpec{
+			Name:  "default",
+			Zones: len(nodes.Items),
+		},
+	}
+
+	_, err = seteraclient.SeteraV1().Tenants(metav1.NamespaceNone).Create(ctx, tn, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error(err, "failed to create default tenant")
+		return err
+	}
+
+	logger.Info("default tenant created successfully")
+	return nil
+
 }

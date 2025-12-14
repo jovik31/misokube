@@ -27,9 +27,9 @@ func (o *Operator) ensureNodestoreFinalizer(ctx context.Context, ns *seterav1.No
 		return fmt.Errorf("marshal finalizer patch for %s/%s: %w", ns.Namespace, ns.Name, err)
 	}
 
-	if _, err := o.setera.SeteraV1().
-		Tenants(ns.Namespace).
-		Patch(ctx, ns.Name, types.MergePatchType, b, metav1.PatchOptions{}); err != nil {
+	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).Patch(ctx, ns.Name, types.MergePatchType, b, metav1.PatchOptions{}); err != nil {
+
+		o.logger.WithValues("namespace", ns.Namespace, "name", ns.Name).Error(err, "patch finalizers")
 		return fmt.Errorf("patch finalizers for %s/%s: %w", ns.Namespace, ns.Name, err)
 	}
 	return nil

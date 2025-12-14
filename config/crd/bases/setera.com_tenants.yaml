@@ -11,10 +11,8 @@ spec:
     kind: Tenant
     listKind: TenantList
     plural: tenants
-    shortNames:
-    - tn
     singular: tenant
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1
     schema:

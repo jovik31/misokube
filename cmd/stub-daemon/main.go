@@ -32,31 +32,32 @@ import (
 // It accepts framed JSON requests and returns OK with an optional minimal result.
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	logger := klog.FromContext(ctx).WithName("stub-daemon-main")
 	defer stop()
 
 	// init config
 	restCfg, err := initKube()
 	if err != nil {
-		log.Printf("kube init failed: %v", err)
+		logger.Error(err, "InitKubeConfig failed")
 		os.Exit(1)
 	}
 
 	// init clients
 	kubeclient, seteraClient, err := k8s.InitClients(restCfg)
 	if err != nil {
-		log.Printf("InitClients failed: %v", err)
+		logger.Error(err, "failed to initialize clients")
 		os.Exit(1)
 	}
 
 	// get node name and ip
 	nodeName, err := k8s.GetNodeName(kubeclient)
 	if err != nil {
-		log.Printf("failed to get node name: %v", err)
+		logger.Error(err, "failed to get node name")
 		os.Exit(1)
 	}
 	nodeIP, err := k8s.GetNodeIP(kubeclient, nodeName)
 	if err != nil {
-		log.Printf("failed to get node IP: %v", err)
+		logger.Error(err, "failed to get node IP")
 		os.Exit(1)
 	}
 
@@ -66,30 +67,30 @@ func main() {
 	// init resolver
 	res, err := initResolver(ctx, kubeclient, nodeName)
 	if err != nil {
-		log.Printf("resolver init failed: %v", err)
+		logger.Error(err, "failed to initialize resolver")
 		os.Exit(1)
 	}
 
 	// ensure NodeStore exists
 	if err := ensureNodeStore(ctx, restCfg, nodeName, nodeIP); err != nil {
-		log.Printf("ensure NodeStore failed: %v", err)
+		logger.Error(err, "failed to create nodestore")
 		os.Exit(1)
 	}
 
 	// initialize network manager
 	nodeCIDR, err := k8s.GetNodeCIDR(kubeclient, nodeName)
 	if err != nil {
-		log.Printf("failed to get node CIDR: %v", err)
+		logger.Error(err, "failed to get node CIDR")
 		os.Exit(1)
 	}
 	_, nodeCIDRParsed, err := net.ParseCIDR(nodeCIDR)
 	if err != nil {
-		log.Printf("invalid node CIDR %q: %v", nodeCIDR, err)
+		logger.Error(err, "failed to parse node CIDR")
 		os.Exit(1)
 	}
 	nm, err := nmanager.NewNetworkManager(nodeCIDRParsed, nodeName)
 	if err != nil {
-		log.Printf("network manager init failed: %v", err)
+		logger.Error(err, "failed to initialize network manager")
 		os.Exit(1)
 	}
 
@@ -101,13 +102,13 @@ func main() {
 	dp := dispatcher.New(nm)
 	go func() {
 		if err := dp.Run(ctx); err != nil {
-			log.Printf("dispatcher stopped: %v", err)
+			logger.Error(err, "dispatcher stopped running")
 		}
 	}()
 
 	// Initialize and run the daemon operator similarly to daemon main
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
-	v1 := seterav1informers.New(factory, "default", nil)
+	v1 := seterav1informers.New(factory, metav1.NamespaceNone, nil)
 	tenantInf := v1.Tenants().Informer()
 	tenantLister := v1.Tenants().Lister()
 	nodeStoreInf := v1.NodeStores().Informer()
@@ -125,7 +126,7 @@ func main() {
 		factory.Start(ctx.Done())
 		go func() {
 			if err := dOpr.Run(ctx); err != nil {
-				log.Printf("stub daemon operator stopped: %v", err)
+				logger.Error(err, "daemon operator stopped running")
 			}
 		}()
 	}
@@ -137,11 +138,11 @@ func main() {
 	}
 
 	if err := srv.Run(); err != nil {
-		log.Fatalf("cniserver run: %v", err)
+		logger.Error(err, "cniserver failed to run")
 	}
 
 	<-ctx.Done()
-	log.Printf("received shutdown signal, removing socket and exiting")
+	logger.Info("shuttind down daemon")
 	_ = os.Remove(socket)
 }
 
@@ -182,6 +183,7 @@ func initResolver(ctx context.Context, kubeclient kubernetes.Interface, nodeName
 	return r, nil
 }
 
+// ensureNodeStore creates a NodeStore resource for this node if it does not already exist. - care with the NamespaceNode
 func ensureNodeStore(ctx context.Context, cfg *rest.Config, nodeName, nodeIP string) error {
 	if cfg == nil {
 		return nil
@@ -195,11 +197,11 @@ func ensureNodeStore(ctx context.Context, cfg *rest.Config, nodeName, nodeIP str
 	}
 	nd := &seterav1.NodeStore{
 		TypeMeta:   metav1.TypeMeta{Kind: "NodeStore", APIVersion: seterav1.SchemeGroupVersion.String()},
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: metav1.NamespaceNone},
 		Spec:       seterav1.NodeStoreSpec{Name: nodeName, NodeIP: nodeIP},
 		Status:     seterav1.NodeStoreStatus{Tenants: make(map[string]seterav1.TenantInfra)},
 	}
-	if _, err := seteraClient.SeteraV1().NodeStores("default").Create(ctx, nd, metav1.CreateOptions{}); err != nil { // always created in the default namespace
+	if _, err := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Create(ctx, nd, metav1.CreateOptions{}); err != nil { // always created in the default namespace
 		if apierrors.IsAlreadyExists(err) {
 			log.Printf("NodeStore %s already exists", nodeName)
 			return nil

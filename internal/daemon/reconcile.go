@@ -76,7 +76,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 	if o.nmOps == nil || o.setera == nil || o.nodeName == "" {
 		o.logger.WithValues("node", o.nodeName).Info("NM ops or client not configured; skipping NodeStore mirror")
 	}
-	ns, err := o.setera.SeteraV1().NodeStores("default").Get(ctx, o.nodeName, metav1.GetOptions{})
+	ns, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).Get(ctx, o.nodeName, metav1.GetOptions{})
 	if err != nil || ns == nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to fetch local NodeStore; skipping", "err", err)
 		return nil
@@ -124,7 +124,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 
 	}
 
-	if _, err := o.setera.SeteraV1().NodeStores(ns.Namespace).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
+	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status", "err", err)
 		return err
 	} else {
@@ -139,7 +139,7 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 		o.logger.WithValues("node", o.nodeName).Info("NM ops or client not configured; skipping NodeStore delete mirror")
 		return nil
 	}
-	ns, err := o.setera.SeteraV1().NodeStores("default").Get(ctx, o.nodeName, metav1.GetOptions{})
+	ns, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).Get(ctx, o.nodeName, metav1.GetOptions{})
 	if err != nil || ns == nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to fetch local NodeStore; skipping delete", "err", err)
 		return nil
@@ -177,7 +177,7 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 	o.logger.Info("This is the node name :", o.nodeName)
 
 	ns.Status.Tenants = newTenants
-	if _, err := o.setera.SeteraV1().NodeStores(ns.Namespace).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
+	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status on delete", "err", err)
 	} else {
 		o.logger.WithValues("node", o.nodeName).Info("updated NodeStore tenants after delete", "count", len(newTenants))

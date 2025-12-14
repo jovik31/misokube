@@ -64,8 +64,8 @@ func (o *Operator) updateEventNodestoreHandler(oldObj, newObj any) {
 		return
 	}
 
+	// here we need to get the tenant opjects to extract their namespaces
 	for tenantName := range affected {
-
 		o.base.EnqueueWith(SourceNodeStoreCRD, EventUpdate, operator.ResourceRef{
 			Group:     "setera.com",
 			Version:   "v1",

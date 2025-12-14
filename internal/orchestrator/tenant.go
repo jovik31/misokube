@@ -34,9 +34,7 @@ func (o *Operator) ensureTenantFinalizer(ctx context.Context, t *seterav1.Tenant
 		return fmt.Errorf("marshal finalizer patch for %s/%s: %w", t.Namespace, t.Name, err)
 	}
 
-	if _, err := o.setera.SeteraV1().
-		Tenants(t.Namespace).
-		Patch(ctx, t.Name, types.MergePatchType, b, metav1.PatchOptions{}); err != nil {
+	if _, err := o.setera.SeteraV1().Tenants(t.Namespace).Patch(ctx, t.Name, types.MergePatchType, b, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("patch finalizers for %s/%s: %w", t.Namespace, t.Name, err)
 	}
 	return nil
@@ -116,6 +114,9 @@ func (o *Operator) recomputeAwaitingAndAssignedForZones(t *seterav1.Tenant, stor
 		for _, id := range awaiting {
 			used[id] = true
 		}
+		// Prefer deterministic selection order by node identity
+		// Build a stable list of candidate IDs from provided NodeStores
+		candidateIDs := make([]string, 0, len(stores))
 		for _, ns := range stores {
 			if delta == 0 {
 				break
@@ -126,6 +127,14 @@ func (o *Operator) recomputeAwaitingAndAssignedForZones(t *seterav1.Tenant, stor
 			}
 			if id == "" {
 				continue
+			}
+			candidateIDs = append(candidateIDs, id)
+		}
+		// Sort candidates for stable behavior
+		slices.Sort(candidateIDs)
+		for _, id := range candidateIDs {
+			if delta == 0 {
+				break
 			}
 			if _, seen := used[id]; seen {
 				continue

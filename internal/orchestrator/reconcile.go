@@ -166,31 +166,33 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 
 	}
 
-	// remove from awaiting any nodes that are now assigned
-	newAwaiting := make([]string, 0)
-	awaitingSet := make(map[string]struct{})
-	for _, n := range t.Status.AwaitingNodeConfiguration {
-		awaitingSet[n] = struct{}{}
+	// Backfill awaiting nodes up to zones using all available NodeStores
+	allStores, err := o.nodeStoreLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("list NodeStores: %w", err)
 	}
-	for _, ni := range newAssigned {
-
-		delete(awaitingSet, ni.Name)
+	temp := t.DeepCopy()
+	temp.Status.AssignedNodes = newAssigned
+	newAwaiting, newAssignedFinal, changed := o.recomputeAwaitingAndAssignedForZones(temp, allStores)
+	if !changed {
+		return nil
 	}
-	for n := range awaitingSet {
-		newAwaiting = append(newAwaiting, n)
-	}
-
-	// add idempontent rights feature.
 
 	// Update status using a DeepCopy (never mutate informer object)
 	mod := t.DeepCopy()
 	mod.Status.AwaitingNodeConfiguration = newAwaiting
-	mod.Status.AssignedNodes = newAssigned
+	mod.Status.AssignedNodes = newAssignedFinal
 
 	if _, err := o.setera.SeteraV1().
 		Tenants(mod.Namespace).
 		UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update Tenant status from tenant source event %s/%s: %w", mod.Namespace, mod.Name, err)
+		return fmt.Errorf("update Tenant status from nodestore source event %s/%s: %w", mod.Namespace, mod.Name, err)
+	}
+
+	// After persisting status, if enough nodes exist but not all zones are assigned, return error to re-enqueue
+	zones := t.Spec.Zones
+	if len(allStores) >= zones && len(newAssignedFinal) != zones {
+		return fmt.Errorf("awaiting full zone assignment: zones=%d assigned=%d availableStores=%d", zones, len(newAssignedFinal), len(allStores))
 	}
 
 	return nil

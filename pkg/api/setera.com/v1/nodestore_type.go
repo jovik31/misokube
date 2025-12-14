@@ -12,6 +12,7 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=nstore
+// +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
 // NodeStore is a specification for a NodeStore resource
 type NodeStore struct {
