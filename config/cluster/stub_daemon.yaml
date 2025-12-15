@@ -173,13 +173,20 @@ spec:
         - name: SOCKET
           value: /var/run/setera/setera.sock
         securityContext:
-          privileged: false
+          privileged: true
           capabilities:
             add: ["NET_ADMIN", "NET_RAW"]
         volumeMounts:
         - name: cni-socket-stub
           mountPath: /var/run/setera
+        - name: host-netns
+          mountPath: /var/run/netns
+          mountPropagation: HostToContainer
       volumes:
+        - name: host-netns
+          hostPath:
+            path: /var/run/netns
+            type: DirectoryOrCreate
         - name: cni-socket-stub
           hostPath:
             path: /var/run/setera

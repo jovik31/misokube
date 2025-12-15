@@ -33,6 +33,15 @@ This document tracks pending work items and simplifications discussed across dae
   - Optionally include bridge IP/MAC in local snapshots.
 - Idempotent netlink operations using `Ensure*` helpers.
 
+### PodOps — Optional Tweaks
+- Error surfacing: Map `ErrTenantClosing` to a retryable CNI error in the router (clear message, suggest backoff).
+- Tenant states: Add `TenantStateUpdating` to gate or prioritize `UpdatePod` during expansion/migration.
+- Backpressure: Expose per-tenant mailbox depth; return fast-fail when saturated; add metrics.
+- Timeouts/backoff: Router-level configurable timeouts with exponential backoff/retry on transient failures.
+- Observability: Emit tracing spans and metrics for `EnsurePod`/`RemovePod`/`UpdatePod` latency and error codes.
+- Router API: Add explicit `UpdatePod` method and DEL path alignment for CNI, mirroring actor methods.
+- Prioritization: Optionally prioritize `RemovePod` over `EnsurePod` when closing to speed teardown.
+
 ## Stub-Daemon Wiring
 - Ensure Tenant informer is cluster-wide if Tenants may live outside `default`.
 - Keep NodeStore scoped to `default` namespace, consistent with creation.
