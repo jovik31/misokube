@@ -3,6 +3,8 @@ package nmanager
 import (
 	"context"
 	"net"
+
+	"github/setera/internal/router"
 )
 
 // NetworkManager exposes tenant-scoped admin operations and per-tenant pod operations.
@@ -47,11 +49,11 @@ type NodestoreOps interface {
 // PodOps are per-tenant, synchronous operations typically invoked by the CNI path via a Tenant Actor.
 // Provide both composite and low-level primitives. All methods must be idempotent.
 type PodOps interface {
-	// AllocatePod performs the full pod networking attach for the endpoint key.
-	AllocatePod(ctx context.Context, tenantID, epKey string) error
+	// EnsurePod performs the full pod networking attach (create or update) using provided args.
+	EnsurePod(ctx context.Context, tenantID string, args router.PodAttachArgs) error
 
 	// RemovePod detaches pod networking and releases resources for the endpoint key.
-	RemovePod(ctx context.Context, tenantID, epKey string) error
+	RemovePod(ctx context.Context, tenantID string, args router.PodAttachArgs) error
 }
 
 // TenantInfraSnapshot is the local tenant network snapshot used by the NodeStore operator.

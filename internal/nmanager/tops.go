@@ -3,6 +3,7 @@ package nmanager
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
@@ -20,11 +21,13 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 	if tenantID == "" {
 		return fmt.Errorf("ensure tenant: empty tenantID")
 	}
+	log.Printf("nm: EnsureTenant called for tenant=%s", tenantID)
 
 	// Fast path: already exists
 	nm.mu.RLock()
 	if _, ok := nm.TenantRecords[tenantID]; ok {
 		nm.mu.RUnlock()
+		log.Printf("nm: tenant %s already ensured", tenantID)
 		return nil
 	}
 	nm.mu.RUnlock()
@@ -66,6 +69,7 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		Subnet:  subnetNet,
 		Backend: be,
 		IPAM:    ipm,
+		State:   TenantStateReady,
 	}
 	nm.mu.Unlock()
 
@@ -77,6 +81,7 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 	if _, ok := nm.TenantActors[tenantID]; !ok {
 		act := StartTenantActor(ctx, nm, tenantID, 128)
 		nm.TenantActors[tenantID] = act
+		log.Printf("nm: tenant actor registered tenant=%s", tenantID)
 	}
 	nm.mu.Unlock()
 
@@ -100,6 +105,13 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 		// idempotent
 		return nil
 	}
+
+	// Mark as closing to gate pod operations while teardown proceeds
+	nm.mu.Lock()
+	if rec2, ok := nm.TenantRecords[tenantID]; ok && rec2 != nil {
+		rec2.State = TenantStateClosing
+	}
+	nm.mu.Unlock()
 
 	// Best effort: delete backend devices first
 	if rec.Backend != nil {

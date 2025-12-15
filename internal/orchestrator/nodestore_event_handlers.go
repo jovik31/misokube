@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
@@ -13,7 +14,32 @@ import (
 // This helps verify add events are observed and triggers initial tenant reconciliation.
 func (o *Operator) addEventNodestoreHandler(obj any) {
 
-	o.logger.Info("addEventNodestoreHandler called")
+	ns, ok := obj.(*seterav1.NodeStore)
+	if !ok || ns == nil {
+		return
+	}
+
+	tenants, err := o.tenantLister.List(labels.Everything())
+	if err != nil {
+		o.logger.Error(err, "failed to list tenants on nodestore add", "nodestore", ns.Name)
+		return
+	}
+
+	for _, t := range tenants {
+		total := len(t.Status.AssignedNodes) + len(t.Status.AwaitingNodeConfiguration)
+		if total == t.Spec.Zones {
+			continue
+		}
+
+		o.logger.Info("enqueue tenant for awaiting/assign update", "tenant", t.Name, "nodestore", ns.Name)
+		o.base.EnqueueWith(SourceNodeStoreCRD, EventAdd, operator.ResourceRef{
+			Group:     "setera.com",
+			Version:   "v1",
+			Kind:      "Tenant",
+			Namespace: t.Namespace,
+			Name:      t.Name,
+		})
+	}
 
 }
 

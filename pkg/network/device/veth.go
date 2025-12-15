@@ -3,9 +3,10 @@ package device
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"syscall"
-	
+
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -32,7 +33,7 @@ const maxIfNameLen = 15
 //   - assigns podIPNet to container end, sets MTU, and default route via gateway.
 //
 // Arguments:
-//   netns      - target pod network namespace
+//   netnsPath  - path to target pod network namespace (e.g., /proc/<pid>/ns/net)
 //   bridgeName - name of an existing Linux bridge in the host namespace
 //   mtu        - MTU to set on both ends
 //   ifName     - interface name inside the pod (<=15 chars)
@@ -40,7 +41,7 @@ const maxIfNameLen = 15
 //   gateway    - default route gateway (bridge IP) inside the pod
 
 func SetupVeth(
-	netns ns.NetNS,
+	netnsPath string,
 	bridgeName string,
 	mtu int,
 	ifName string,
@@ -49,8 +50,8 @@ func SetupVeth(
 ) error {
 
 	// ------------- Validation (outside container ns) -------------
-	if netns == nil {
-		return errors.New("nil netns")
+	if netnsPath == "" {
+		return errors.New("empty netnsPath")
 	}
 	if bridgeName == "" {
 		return errors.New("empty bridgeName")
@@ -76,6 +77,7 @@ func SetupVeth(
 	if mtu <= 0 {
 		return fmt.Errorf("invalid MTU %d", mtu)
 	}
+	log.Printf("SetupVeth: netns=%s bridge=%s ifName=%s podIP=%s gateway=%s", netnsPath, bridgeName, ifName, podIPNet.String(), gateway.String())
 
 	// Lookup bridge once (host namespace).
 	brLink, err := nlLinkByName(bridgeName)
@@ -83,10 +85,17 @@ func SetupVeth(
 		return fmt.Errorf("lookup bridge %q: %w", bridgeName, err)
 	}
 
+	// Resolve the network namespace handle from path.
+	nsHandle, err := ns.GetNS(netnsPath)
+	if err != nil {
+		return fmt.Errorf("open netns %q: %w", netnsPath, err)
+	}
+	defer nsHandle.Close()
+
 	var hostIfaceName string
 
 	// ------------- Work inside the pod net namespace -------------
-	err = netns.Do(func(hostNS ns.NetNS) error {
+	err = nsHandle.Do(func(hostNS ns.NetNS) error {
 		// Create veth pair; host end moves to hostNS.
 		hostVeth, containerVeth, err := ipSetupVeth(ifName, mtu, "", hostNS)
 		if err != nil {
@@ -135,6 +144,7 @@ func SetupVeth(
 	// ------------- Host namespace adjustments -------------
 	hostVeth, err := nlLinkByName(hostIfaceName)
 	if err != nil {
+		log.Printf("SetupVeth: error host adjustments hostIface=%s err=%v", hostIfaceName, err)
 		return fmt.Errorf("lookup host veth %q: %w", hostIfaceName, err)
 	}
 
@@ -145,11 +155,13 @@ func SetupVeth(
 
 	// Attach to bridge.
 	if err := nlLinkSetMaster(hostVeth, brLink); err != nil {
+		log.Printf("SetupVeth: error attach host veth=%s bridge=%s err=%v", hostVeth.Attrs().Name, bridgeName, err)
 		return fmt.Errorf("attach %q to bridge %q: %w", hostVeth.Attrs().Name, bridgeName, err)
 	}
 
 	// Bring host side up.
 	if err := nlLinkSetUp(hostVeth); err != nil {
+		log.Printf("SetupVeth: error bring host veth up: %v", err)
 		return fmt.Errorf("bring host veth up: %w", err)
 	}
 

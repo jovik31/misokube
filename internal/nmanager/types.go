@@ -58,7 +58,17 @@ type TenantRecord struct {
 	Subnet  *net.IPNet
 	Backend backend.Backend
 	IPAM    ipam.IPAM
+	State   TenantState
 }
+
+// TenantState indicates whether a tenant is ready to process pod ops.
+type TenantState int
+
+const (
+	TenantStateReady TenantState = iota
+	// TenantStateClosing indicates RemoveTenant is in progress; pod ops should be rejected.
+	TenantStateClosing
+)
 
 // SetEmitter attaches an operator emitter for NM → operator communication.
 func (nm *NetworkManagerImpl) SetEmitter(e op.Emitter) {

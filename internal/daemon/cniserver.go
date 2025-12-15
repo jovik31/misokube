@@ -89,7 +89,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 
 		// If a router is present, delegate pod configuration.
 		if s.router != nil {
-			meta := router.Meta{
+			meta := router.PodAttachArgs{
 				Namespace:   req.PodNamespace,
 				PodName:     req.PodName,
 				ContainerID: req.ContainerID,

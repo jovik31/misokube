@@ -133,7 +133,7 @@ func main() {
 
 	// Start CNI server
 	srv := daemon.NewCNIServer(socket, res)
-	if r := initRouter(nodeName); r != nil {
+	if r := initRouter(nm); r != nil {
 		srv.SetRouter(r)
 	}
 
@@ -212,19 +212,11 @@ func ensureNodeStore(ctx context.Context, cfg *rest.Config, nodeName, nodeIP str
 	return nil
 }
 
-func initRouter(nodeName string) router.Router {
-	root := os.Getenv("ROOT_CIDR")
-	if root == "" {
-		root = "10.0.0.0/16"
-	}
-	if _, rootCIDR, err := net.ParseCIDR(root); err == nil {
-		if nm, err := nmanager.NewNetworkManager(rootCIDR, nodeName); err == nil && nm != nil {
-			lookup := func(tenantID string) (router.TenantActor, bool) { return nm.GetTenantActor(tenantID) }
-			return router.NewNManagerRouter(lookup)
-		}
-		log.Printf("network manager init failed: %v", err)
+func initRouter(nm *nmanager.NetworkManagerImpl) router.Router {
+	if nm == nil {
+		log.Printf("router init skipped: network manager is nil")
 		return nil
 	}
-	log.Printf("invalid ROOT_CIDR %q", root)
-	return nil
+	lookup := func(tenantID string) (router.TenantActor, error) { return nm.GetTenantActor(tenantID) }
+	return router.NewNManagerRouter(lookup)
 }

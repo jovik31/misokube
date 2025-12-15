@@ -100,6 +100,7 @@ func New(
 			EventDelete: o.reconcileTenantDelete,
 		},
 		SourceNodeStoreCRD: {
+			EventAdd:    o.reconcileNodestoreAdd,
 			EventUpdate: o.reconcileNodestoreUpdate,
 			EventDelete: o.reconcileNodestoreDelete,
 		},

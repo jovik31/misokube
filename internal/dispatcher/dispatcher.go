@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github/setera/internal/nmanager"
+	"log"
 	"time"
 )
 
@@ -53,6 +54,7 @@ func (d *Dispatcher) Enqueue(cmd Command) {
 	if cmd.timestamp.IsZero() {
 		cmd.timestamp = time.Now()
 	}
+	log.Printf("dispatcher: enqueue op=%s tenant=%s", cmd.Op, cmd.TenantID)
 	d.inbox <- cmd
 }
 
@@ -64,6 +66,7 @@ func (d *Dispatcher) EnqeueueCtx(ctx context.Context, cmd Command) error {
 
 	select {
 	case d.inbox <- cmd:
+		log.Printf("dispatcher: enqueue ctx op=%s tenant=%s", cmd.Op, cmd.TenantID)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -79,6 +82,7 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case cmd := <-d.inbox:
+			log.Printf("dispatcher: processing op=%s tenant=%s", cmd.Op, cmd.TenantID)
 			ev := Event{
 				TenantID:  cmd.TenantID,
 				Op:        cmd.Op,
@@ -89,6 +93,7 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			var err error
 			switch cmd.Op {
 			case OpEnsure:
+
 				err = d.nm.EnsureTenant(context.Background(), cmd.TenantID)
 			case OpRemove:
 				err = d.nm.RemoveTenant(context.Background(), cmd.TenantID)

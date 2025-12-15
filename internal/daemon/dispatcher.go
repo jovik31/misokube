@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"log"
+
 	dps "github/setera/internal/dispatcher"
 )
 
@@ -19,6 +21,7 @@ func (a dpAdapter) EnsureTenant(namespace, name string) {
 	if a.d == nil || name == "" {
 		return
 	}
+	log.Printf("daemon-dispatcher: EnsureTenant namespace=%s name=%s", namespace, name)
 	a.d.Enqueue(dps.Command{TenantID: name, Op: dps.OpEnsure})
 }
 
@@ -26,6 +29,7 @@ func (a dpAdapter) RemoveTenant(namespace, name string) {
 	if a.d == nil || name == "" {
 		return
 	}
+	log.Printf("daemon-dispatcher: RemoveTenant namespace=%s name=%s", namespace, name)
 	a.d.Enqueue(dps.Command{TenantID: name, Op: dps.OpRemove})
 }
 
