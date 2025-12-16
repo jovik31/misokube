@@ -2,11 +2,17 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"sync"
 	"time"
+
+	cnitypes "github.com/containernetworking/cni/pkg/types"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 
 	"github/setera/internal/resolver"
 	"github/setera/internal/router"
@@ -16,16 +22,86 @@ import (
 
 // CNIServer handles concurrent CNI requests and serializes work per-tenant via Router.
 type CNIServer struct {
+	// Path to the Unix domain socket to bind.
 	socketPath string
-	resolver   resolver.Resolver
-	router     router.Router
+
+	// Deps
+	resolver resolver.Resolver
+	router   router.Router
+
+	// internal state
+	cache   map[string]podCacheEntry
+	cacheMu sync.RWMutex
 }
+
+type podCacheEntry struct {
+	result  types100.Result
+	lastCmd wire.Command
+	idemKey string
+	updated time.Time
+}
+
+func (s *CNIServer) cacheStore(uid string, cmd wire.Command, idemKey string, res *types100.Result) {
+	if uid == "" {
+		return
+	}
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	var stored types100.Result
+	if res != nil {
+		stored = *res
+	}
+	s.cache[uid] = podCacheEntry{
+		result:  stored,
+		lastCmd: cmd,
+		idemKey: idemKey,
+		updated: time.Now(),
+	}
+}
+
+func (s *CNIServer) cacheGet(uid string) (podCacheEntry, error) {
+	var entry podCacheEntry
+	if uid == "" {
+		return entry, errors.New("cache disabled")
+	}
+	s.cacheMu.RLock()
+	entry, found := s.cache[uid]
+	s.cacheMu.RUnlock()
+	if !found {
+		return entry, errors.New("cache miss")
+	}
+	if time.Since(entry.updated) > 10*time.Minute {
+		s.cacheMu.Lock()
+		delete(s.cache, uid)
+		s.cacheMu.Unlock()
+		return entry, errors.New("cache expired")
+	}
+	return entry, nil
+}
+
+func (s *CNIServer) cacheTouch(uid string) {
+	if uid == "" {
+		return
+	}
+	s.cacheMu.Lock()
+	if entry, ok := s.cache[uid]; ok {
+		entry.updated = time.Now()
+		s.cache[uid] = entry
+	}
+	s.cacheMu.Unlock()
+}
+
+const defaultCNIVersion = "1.1.0"
 
 func NewCNIServer(socketPath string, r resolver.Resolver) *CNIServer {
 	if socketPath == "" {
 		log.Panic("cniserver: missing socket path")
 	}
-	return &CNIServer{socketPath: socketPath, resolver: r}
+	return &CNIServer{
+		socketPath: socketPath,
+		resolver:   r,
+		cache:      make(map[string]podCacheEntry),
+	}
 }
 
 // SetRouter attaches a Router to the server. Optional.
@@ -61,74 +137,249 @@ func (s *CNIServer) handleConn(c net.Conn) {
 		return
 	}
 
+	start := time.Now()
+	s.logRequest(&req)
+
 	// Handle per-command behavior with minimal responses.
-	var resp *wire.Response
+	var (
+		resp       *wire.Response
+		cacheEvent = "none"
+		storeEntry bool
+		storeRes   *types100.Result
+	)
 	switch req.Cmd {
-	case wire.CmdADD:
-		ver := req.CNIVersion
-		if ver == "" {
-			ver = "1.1.0"
-		}
-		// If a resolver is provided and ready, attempt to resolve tenant.
-		if s.resolver != nil && s.resolver.Ready() {
-			_, pending, err := s.resolver.Resolve(req.PodUID)
-			if err != nil {
-				resp = &wire.Response{OK: false, Message: "resolve tenant: " + err.Error()}
-				break
+	case wire.CmdSTATUS:
+		resp = s.handleStatusRequest(&req)
+		cacheEvent = "skip"
+	case wire.CmdGC:
+		resp = s.handleGCRequest(&req)
+		cacheEvent = "skip"
+	default:
+		tenantID, resolveErr := s.resolveTenantForRequest(&req)
+		if resolveErr != nil {
+			resp = &wire.Response{
+				OK:      false,
+				Message: "resolve tenant: " + resolveErr.Error(),
+				Result:  encodeCNIResult(req.CNIVersion, nil),
 			}
-			if pending {
-				resp = &wire.Response{OK: false, Message: "resolve tenant: resolver pending"}
-				break
-			}
-		}
-		tenantID, _, err := s.resolver.Resolve(req.PodUID)
-		if err != nil {
-			resp = &wire.Response{OK: false, Message: "resolve tenant: " + err.Error()}
 			break
 		}
+		var ce string
+		resp, storeRes, storeEntry, ce = s.handleTenantCommand(&req, tenantID)
+		if ce != "" {
+			cacheEvent = ce
+		}
+	}
 
-		// If a router is present, delegate pod configuration.
+	if resp != nil && resp.OK && storeEntry {
+		s.cacheStore(req.PodUID, req.Cmd, req.IdemKey, storeRes)
+	}
+
+	_ = uds.WriteResponse(c, hdr.Cmd, hdr.Flags, resp)
+	s.logResponse(&req, resp, cacheEvent, time.Since(start))
+}
+
+func (s *CNIServer) handleStatusRequest(req *wire.Request) *wire.Response {
+	return &wire.Response{
+		OK:      true,
+		Message: "ready",
+		Result:  encodeCNIResult(req.CNIVersion, nil),
+	}
+}
+
+func (s *CNIServer) handleGCRequest(req *wire.Request) *wire.Response {
+	return &wire.Response{
+		OK:      true,
+		Message: "gc ok",
+		Result:  encodeCNIResult(req.CNIVersion, nil),
+	}
+}
+
+func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wire.Response, *types100.Result, bool, string) {
+	switch req.Cmd {
+	case wire.CmdADD:
+		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.lastCmd == wire.CmdADD && entry.idemKey != "" && entry.idemKey == req.IdemKey {
+			s.cacheTouch(req.PodUID)
+			resCopy := entry.result
+			return &wire.Response{
+				OK:      true,
+				Message: "add ok (cached)",
+				Result:  encodeCNIResult(req.CNIVersion, &resCopy),
+			}, nil, false, "hit"
+		}
+		ver := req.CNIVersion
+		if ver == "" {
+			ver = defaultCNIVersion
+		}
+		var podResult *types100.Result
 		if s.router != nil {
-			meta := router.PodAttachArgs{
-				Namespace:   req.PodNamespace,
-				PodName:     req.PodName,
-				ContainerID: req.ContainerID,
-				NetNS:       req.NetNS,
-				IfName:      req.IfName,
-			}
+			pa := buildPodAttachArgs(req)
 			ctx := context.Background()
 			if req.TimeoutSeconds > 0 {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, time.Duration(req.TimeoutSeconds)*time.Second)
 				defer cancel()
 			}
-			_, rerr := s.router.ConfigurePod(ctx, tenantID, req.PodUID, meta)
-			if rerr != nil {
-				resp = &wire.Response{OK: false, Message: "configure pod: " + rerr.Error()}
-				break
+			var err error
+			podResult, err = s.router.ConfigurePod(ctx, tenantID, req.PodUID, pa)
+			if err != nil {
+				return &wire.Response{
+					OK:      false,
+					Message: "configure pod: " + err.Error(),
+					Result:  encodeCNIResult(ver, podResult),
+				}, nil, false, "error"
 			}
-			// Build minimal CNI JSON from router result
-			resp = &wire.Response{OK: true, Message: "add ok for tenant:" + tenantID, Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
-			break
 		}
-
-		// Fallback minimal response when no router is configured
-		log.Print("THIS IS THE TENANT: ", tenantID)
-		resp = &wire.Response{OK: true, Message: "add ok for tenant:" + tenantID, Result: []byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`)}
+		podResult = ensureResultStruct(ver, podResult)
+		return &wire.Response{
+			OK:      true,
+			Message: "add ok for tenant:" + tenantID,
+			Result:  encodeCNIResult(ver, podResult),
+		}, podResult, true, "store"
 
 	case wire.CmdDEL:
-		// DEL should be idempotent and not depend on resolver readiness.
-		// Proceed without resolving to avoid spurious failures during startup.
-		resp = &wire.Response{OK: true, Message: "del ok"}
+		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.lastCmd == wire.CmdDEL && entry.idemKey != "" && entry.idemKey == req.IdemKey {
+			s.cacheTouch(req.PodUID)
+			return &wire.Response{
+				OK:      true,
+				Message: "del ok (cached)",
+				Result:  encodeCNIResult(req.CNIVersion, nil),
+			}, nil, false, "hit"
+		}
+		if s.router != nil {
+			pa := buildPodAttachArgs(req)
+			ctx := context.Background()
+			if req.TimeoutSeconds > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(req.TimeoutSeconds)*time.Second)
+				defer cancel()
+			}
+			if err := s.router.RemovePod(ctx, tenantID, req.PodUID, pa); err != nil {
+				return &wire.Response{
+					OK:      false,
+					Message: "remove pod: " + err.Error(),
+					Result:  encodeCNIResult(req.CNIVersion, nil),
+				}, nil, false, "error"
+			}
+		}
+		return &wire.Response{
+			OK:      true,
+			Message: "del ok",
+			Result:  encodeCNIResult(req.CNIVersion, nil),
+		}, nil, true, "store-del"
 	case wire.CmdCHECK:
-		resp = &wire.Response{OK: true, Message: "check ok"}
-	case wire.CmdSTATUS:
-		resp = &wire.Response{OK: true, Message: "ready"}
+		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.lastCmd == wire.CmdADD {
+			s.cacheTouch(req.PodUID)
+			resCopy := entry.result
+			return &wire.Response{
+				OK:      true,
+				Message: "check ok (cached)",
+				Result:  encodeCNIResult(req.CNIVersion, &resCopy),
+			}, nil, false, "hit"
+		}
+		return &wire.Response{
+			OK:      true,
+			Message: "check ok",
+			Result:  encodeCNIResult(req.CNIVersion, nil),
+		}, nil, false, "miss"
 	default:
-		resp = &wire.Response{OK: false, Message: "unknown cmd"}
+		return &wire.Response{OK: false, Message: "unknown cmd"}, nil, false, "none"
 	}
+}
 
-	_ = uds.WriteResponse(c, hdr.Cmd, hdr.Flags, resp)
+func (s *CNIServer) resolveTenantForRequest(req *wire.Request) (string, error) {
+	switch req.Cmd {
+	case wire.CmdADD, wire.CmdCHECK, wire.CmdDEL:
+	default:
+		return "", nil
+	}
+	if s.resolver == nil {
+		return "", errors.New("resolver not configured")
+	}
+	if !s.resolver.Ready() {
+		return "", errors.New("resolver pending")
+	}
+	tenantID, pending, err := s.resolver.Resolve(req.PodUID)
+	if err != nil {
+		return "", err
+	}
+	if pending {
+		return "", errors.New("resolver pending")
+	}
+	return tenantID, nil
+}
+
+func buildPodAttachArgs(req *wire.Request) router.PodAttachArgs {
+	return router.PodAttachArgs{
+		Namespace:   req.PodNamespace,
+		PodName:     req.PodName,
+		ContainerID: req.ContainerID,
+		NetNS:       req.NetNS,
+		IfName:      req.IfName,
+	}
+}
+
+func ensureResultStruct(ver string, res *types100.Result) *types100.Result {
+	if res == nil {
+		return &types100.Result{CNIVersion: ver}
+	}
+	if res.CNIVersion == "" {
+		res.CNIVersion = ver
+	}
+	return res
+}
+
+func encodeCNIResult(ver string, res cnitypes.Result) []byte {
+	target := ver
+	if target == "" {
+		target = defaultCNIVersion
+	}
+	switch typed := res.(type) {
+	case nil:
+		res = &types100.Result{CNIVersion: target}
+	case *types100.Result:
+		if typed == nil {
+			res = &types100.Result{CNIVersion: target}
+		}
+	}
+	if res == nil {
+		res = &types100.Result{CNIVersion: target}
+	}
+	converted, err := res.GetAsVersion(target)
+	if err != nil {
+		converted = &types100.Result{CNIVersion: target}
+	}
+	data, err := json.Marshal(converted)
+	if err != nil {
+		return []byte("{}")
+	}
+	return data
+}
+
+func (s *CNIServer) logRequest(req *wire.Request) {
+	log.Printf("[CNIServer][%s] request -> pod=%s uid=%s container=%s if=%s netns=%s idem=%s",
+		req.Cmd, podRef(req), emptyDash(req.PodUID), emptyDash(req.ContainerID), emptyDash(req.IfName), emptyDash(req.NetNS), emptyDash(req.IdemKey))
+}
+
+func (s *CNIServer) logResponse(req *wire.Request, resp *wire.Response, cacheEvent string, dur time.Duration) {
+	if resp == nil {
+		log.Printf("[CNIServer][%s] response <- <nil> pod=%s uid=%s cache=%s dur=%s",
+			req.Cmd, podRef(req), emptyDash(req.PodUID), cacheEvent, dur)
+		return
+	}
+	log.Printf("[CNIServer][%s] response <- ok=%t msg=%s pod=%s uid=%s cache=%s dur=%s",
+		req.Cmd, resp.OK, resp.Message, podRef(req), emptyDash(req.PodUID), cacheEvent, dur)
+}
+
+func podRef(req *wire.Request) string {
+	return fmt.Sprintf("%s/%s", emptyDash(req.PodNamespace), emptyDash(req.PodName))
+}
+
+func emptyDash(v string) string {
+	if v == "" {
+		return "-"
+	}
+	return v
 }
 
 // No resolver integration in the stub: keep behavior minimal.

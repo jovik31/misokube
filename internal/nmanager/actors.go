@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 
+	types100 "github.com/containernetworking/cni/pkg/types/100"
+
 	"github/setera/internal/router"
 )
 
 // TenantActor defines minimal pod lifecycle operations for a tenant.
 type TenantActor interface {
-	EnsurePod(ctx context.Context, args router.PodAttachArgs) error
+	EnsurePod(ctx context.Context, args router.PodAttachArgs) (*types100.Result, error)
 	RemovePod(ctx context.Context, args router.PodAttachArgs) error
 	UpdatePod(ctx context.Context, args router.PodAttachArgs) error
 	Stop(ctx context.Context) error

@@ -3,12 +3,17 @@ package router
 import (
 	"context"
 	"errors"
+
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 )
+
+// check if router implementation satisfies router interface
+var _ Router = (*NManagerRouter)(nil)
 
 // TenantActor is the minimal interface the router needs from a tenant actor.
 // Implemented on the network manager side.
 type TenantActor interface {
-	EnsurePod(ctx context.Context, args PodAttachArgs) error
+	EnsurePod(ctx context.Context, args PodAttachArgs) (*types100.Result, error)
 	RemovePod(ctx context.Context, args PodAttachArgs) error
 }
 
@@ -28,17 +33,29 @@ func NewNManagerRouter(lookup LookupFunc) *NManagerRouter {
 
 // ConfigurePod forwards the request to the tenant actor corresponding to tenantID.
 // Currently supports ADD-style allocation; DEL should call RemovePod via a separate router method.
-func (r *NManagerRouter) ConfigurePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) (CNIResult, error) {
+func (r *NManagerRouter) ConfigurePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) (*types100.Result, error) {
 	if r.lookup == nil {
-		return CNIResult{}, errors.New("router not initialized: no lookup function")
+		return nil, errors.New("router not initialized: no lookup function")
 	}
 	actor, err := r.lookup(tenantID)
 	if err != nil || actor == nil {
-		return CNIResult{}, errors.New("tenant actor not found")
+		return nil, errors.New("tenant actor not found")
 	}
-	if err := actor.EnsurePod(ctx, args); err != nil {
-		return CNIResult{}, err
+	result, err := actor.EnsurePod(ctx, args)
+	if err != nil {
+		return nil, err
 	}
-	// TODO: Populate CNIResult from nm state (IP, routes, DNS). Placeholder minimal result for now.
-	return CNIResult{IfName: args.IfName}, nil
+	return result, nil
+}
+
+// RemovePod forwards DEL semantics to the tenant actor.
+func (r *NManagerRouter) RemovePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) error {
+	if r.lookup == nil {
+		return errors.New("router not initialized: no lookup function")
+	}
+	actor, err := r.lookup(tenantID)
+	if err != nil || actor == nil {
+		return errors.New("tenant actor not found")
+	}
+	return actor.RemovePod(ctx, args)
 }

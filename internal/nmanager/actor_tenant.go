@@ -3,7 +3,10 @@ package nmanager
 import (
 	"context"
 	"log"
+	"net"
 	"time"
+
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 
 	"github/setera/internal/router"
 )
@@ -20,7 +23,12 @@ const (
 type tenantMsg struct {
 	kind  tenantMsgKind
 	args  router.PodAttachArgs
-	reply chan error
+	reply chan tenantReply
+}
+
+type tenantReply struct {
+	result *types100.Result
+	err    error
 }
 
 // tenantActor implements TenantActor with a per-tenant mailbox and goroutine.
@@ -57,20 +65,29 @@ func (a *tenantActor) loop(ctx context.Context) {
 					state = rec.State
 				}
 				a.nm.mu.RUnlock()
-				var err error
+				var (
+					err       error
+					ipNet     net.IPNet
+					gatewayIP net.IP
+					ifName    string
+					res       *types100.Result
+				)
 				if state == TenantStateClosing {
 					err = ErrTenantClosing
 				} else {
-					err = a.nm.EnsurePod(ctx, a.tenantID, m.args)
+					ipNet, gatewayIP, ifName, err = a.nm.EnsurePod(ctx, a.tenantID, m.args)
+					if err == nil {
+						res = buildPodResult(ipNet, gatewayIP, ifName, m.args.NetNS)
+					}
 				}
 				if m.reply != nil {
-					m.reply <- err
+					m.reply <- tenantReply{result: res, err: err}
 				}
 			case msgRemove:
 				// RemovePod allowed; if already closing, removal is still safe/idempotent
 				err := a.nm.RemovePod(ctx, a.tenantID, m.args)
 				if m.reply != nil {
-					m.reply <- err
+					m.reply <- tenantReply{err: err}
 				}
 			case msgUpdate:
 				// Allow update only if not closing
@@ -88,11 +105,11 @@ func (a *tenantActor) loop(ctx context.Context) {
 					err = a.nm.UpdatePod(ctx, a.tenantID, m.args)
 				}
 				if m.reply != nil {
-					m.reply <- err
+					m.reply <- tenantReply{err: err}
 				}
 			case msgStop:
 				if m.reply != nil {
-					m.reply <- nil
+					m.reply <- tenantReply{}
 				}
 				return
 			}
@@ -101,13 +118,13 @@ func (a *tenantActor) loop(ctx context.Context) {
 }
 
 // EnsurePod enqueues an ensure message and waits for completion with a bounded timeout.
-func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) error {
-	reply := make(chan error, 1)
+func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) (*types100.Result, error) {
+	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgEnsure, args: args, reply: reply}
 	select {
 	case a.inbox <- msg:
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 	// Optional timeout to avoid indefinite waits
 	timeout := time.Second * 10
@@ -119,16 +136,16 @@ func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) 
 		}
 	}
 	select {
-	case err := <-reply:
-		return err
+	case resp := <-reply:
+		return resp.result, resp.err
 	case <-time.After(timeout):
-		return context.DeadlineExceeded
+		return nil, context.DeadlineExceeded
 	}
 }
 
 // RemovePod enqueues a remove message and waits for completion with a bounded timeout.
 func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) error {
-	reply := make(chan error, 1)
+	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgRemove, args: args, reply: reply}
 	select {
 	case a.inbox <- msg:
@@ -143,8 +160,8 @@ func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) 
 		}
 	}
 	select {
-	case err := <-reply:
-		return err
+	case resp := <-reply:
+		return resp.err
 	case <-time.After(timeout):
 		return context.DeadlineExceeded
 	}
@@ -152,7 +169,7 @@ func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) 
 
 // UpdatePod enqueues an update message and waits for completion with a bounded timeout.
 func (a *tenantActor) UpdatePod(ctx context.Context, args router.PodAttachArgs) error {
-	reply := make(chan error, 1)
+	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgUpdate, args: args, reply: reply}
 	select {
 	case a.inbox <- msg:
@@ -167,8 +184,8 @@ func (a *tenantActor) UpdatePod(ctx context.Context, args router.PodAttachArgs) 
 		}
 	}
 	select {
-	case err := <-reply:
-		return err
+	case resp := <-reply:
+		return resp.err
 	case <-time.After(timeout):
 		return context.DeadlineExceeded
 	}
@@ -176,7 +193,7 @@ func (a *tenantActor) UpdatePod(ctx context.Context, args router.PodAttachArgs) 
 
 // Stop enqueues a stop message; returns when the actor acknowledges.
 func (a *tenantActor) Stop(ctx context.Context) error {
-	reply := make(chan error, 1)
+	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgStop, reply: reply}
 	select {
 	case a.inbox <- msg:
@@ -184,9 +201,29 @@ func (a *tenantActor) Stop(ctx context.Context) error {
 		return ctx.Err()
 	}
 	select {
-	case err := <-reply:
-		return err
+	case resp := <-reply:
+		return resp.err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func buildPodResult(ipNet net.IPNet, gateway net.IP, ifName, netNS string) *types100.Result {
+	res := &types100.Result{
+		Interfaces: []*types100.Interface{
+			{
+				Name:    ifName,
+				Sandbox: netNS,
+			},
+		},
+		IPs: []*types100.IPConfig{
+			{
+				Address: ipNet,
+				Gateway: gateway,
+			},
+		},
+	}
+	idx := 0
+	res.IPs[0].Interface = &idx
+	return res
 }

@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 )
 
 // PodAttachArgs holds minimal pod-related metadata needed for configuration.
@@ -29,5 +31,6 @@ type CNIResult struct {
 // It assumes tenant actors already exist (created via cluster-driven ensureTenant),
 // and will return an error if the tenant actor is not found.
 type Router interface {
-	ConfigurePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) (CNIResult, error)
+	ConfigurePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) (*types100.Result, error)
+	RemovePod(ctx context.Context, tenantID string, podUID string, args PodAttachArgs) error
 }

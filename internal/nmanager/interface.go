@@ -50,7 +50,7 @@ type NodestoreOps interface {
 // Provide both composite and low-level primitives. All methods must be idempotent.
 type PodOps interface {
 	// EnsurePod performs the full pod networking attach (create or update) using provided args.
-	EnsurePod(ctx context.Context, tenantID string, args router.PodAttachArgs) error
+	EnsurePod(ctx context.Context, tenantID string, args router.PodAttachArgs) (net.IPNet, net.IP, string, error)
 
 	// RemovePod detaches pod networking and releases resources for the endpoint key.
 	RemovePod(ctx context.Context, tenantID string, args router.PodAttachArgs) error

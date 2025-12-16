@@ -9,6 +9,7 @@ const (
 	CmdDEL    Command = "DEL"
 	CmdCHECK  Command = "CHECK"
 	CmdSTATUS Command = "STATUS"
+	CmdGC     Command = "GC"
 )
 
 // for the UDS transport we also add the CMD to the header
