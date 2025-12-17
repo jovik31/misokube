@@ -123,29 +123,32 @@ func (manager *netlinkTenantPolicyManager) EnsureTenantIsolation(tenant, brIf, v
 }
 
 func (manager *netlinkTenantPolicyManager) EnsureDefaultTenant(brDefault, vxDefault string) error {
-	insertTop := func(spec ...string) error {
+	insertTop := func(comment string, spec ...string) error {
+		if comment != "" {
+			spec = append([]string{"-m", "comment", "--comment", comment}, spec...)
+		}
 		// position 1 == top; InsertUnique prevents duplicates
 		return manager.nl.InsertUnique("filter", "FORWARD", 1, spec...)
 	}
 
 	// Insert in reverse of desired final order
 	if vxDefault != "" {
-		if err := insertTop("-o", vxDefault, "-j", "ACCEPT"); err != nil {
+		if err := insertTop("default-tenant-egress:vxlan", "-o", vxDefault, "-j", "ACCEPT"); err != nil {
 			return err
 		}
 	}
 	if brDefault != "" {
-		if err := insertTop("-o", brDefault, "-j", "ACCEPT"); err != nil {
+		if err := insertTop("default-tenant-egress:bridge", "-o", brDefault, "-j", "ACCEPT"); err != nil {
 			return err
 		}
 	}
 	if vxDefault != "" {
-		if err := insertTop("-i", vxDefault, "-j", "ACCEPT"); err != nil {
+		if err := insertTop("default-tenant-ingress:vxlan", "-i", vxDefault, "-j", "ACCEPT"); err != nil {
 			return err
 		}
 	}
 	if brDefault != "" {
-		if err := insertTop("-i", brDefault, "-j", "ACCEPT"); err != nil {
+		if err := insertTop("default-tenant-ingress:bridge", "-i", brDefault, "-j", "ACCEPT"); err != nil {
 			return err
 		}
 	}

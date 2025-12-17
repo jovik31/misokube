@@ -14,6 +14,7 @@ import (
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/fdb"
 	"github/setera/pkg/network/policy"
+	_ "github/setera/pkg/network/policy/tenant"
 	"github/setera/pkg/network/route"
 )
 

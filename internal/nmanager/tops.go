@@ -49,6 +49,25 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		return fmt.Errorf("backend create: %w", err)
 	}
 
+	// Tenant policy setup for default tenant
+	if nm.TP != nil && tenantID == "default" {
+		brName := ""
+		if brDev, ok := backend.Bridge(be); ok && brDev != nil {
+			brName = brDev.GetName()
+			log.Printf("nm: default tenant bridge device=%s", brName)
+		}
+		vxName := ""
+		if vxDev, ok := backend.VTEP(be); ok && vxDev != nil {
+			vxName = vxDev.GetName()
+			log.Printf("nm: default tenant vtep device=%s", vxName)
+		}
+		if err := nm.TP.EnsureDefaultTenant(brName, vxName); err != nil {
+			_ = be.Delete()
+			_ = nm.Subnet.Deallocate(tenantID)
+			return fmt.Errorf("ensure default tenant policy: %w", err)
+		}
+	}
+
 	// IPAM – use package constructor
 	ipm, err := ipam.NewBitmapIPAM(subnetNet)
 	if err != nil {
