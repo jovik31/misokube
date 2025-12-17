@@ -8,6 +8,11 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 )
 
+const (
+	privateAnchorChain   = "SETERA-PRIV-FORWARD"
+	privateAnchorComment = "setera:private-anchor"
+)
+
 var _ tp.TenantPolicyManager = (*netlinkTenantPolicyManager)(nil)
 
 type netlinkTenantPolicyManager struct {
@@ -65,11 +70,18 @@ func (manager *netlinkTenantPolicyManager) EnsureTenantChains(tenant string) err
 
 }
 
-func (manager *netlinkTenantPolicyManager) DeleteTenantChains(tenant string) error {
+func (manager *netlinkTenantPolicyManager) DeleteTenantChains(tenant, brIf, vxIf string) error {
 	if tenant == "" {
 		return fmt.Errorf("tenant is empty")
 	}
 	fw := fwChain(tenant)
+	// Remove ingress jumps from the private anchor if present
+	if err := manager.removeFromPrivateAnchor(tenant, brIf, "bridge"); err != nil {
+		return err
+	}
+	if err := manager.removeFromPrivateAnchor(tenant, vxIf, "vxlan"); err != nil {
+		return err
+	}
 	if err := manager.nl.ClearChain("filter", fw); err != nil {
 		return err
 	}
@@ -82,26 +94,48 @@ func (manager *netlinkTenantPolicyManager) EnsureTenantIsolation(tenant, brIf, v
 	}
 	fw := fwChain(tenant)
 
-	// Jumps by ingress iface
-	if brIf != "" {
-		if err := manager.nl.AppendUnique("filter", "FORWARD", "-i", brIf, "-j", fw); err != nil {
-			return err
-		}
+	if err := manager.ensurePrivateAnchor(); err != nil {
+		return err
 	}
-	if vxIf != "" {
-		if err := manager.nl.AppendUnique("filter", "FORWARD", "-i", vxIf, "-j", fw); err != nil {
-			return err
+
+	insertPrivateJump := func(iface, commentSuffix string) error {
+		if iface == "" {
+			return nil
 		}
+		return manager.nl.AppendUnique(
+			"filter", privateAnchorChain,
+			"-i", iface,
+			"-m", "comment", "--comment", "tenant:"+tenant+":ingress:"+commentSuffix,
+			"-j", fw,
+		)
+	}
+
+	// Jumps by ingress iface
+	if err := insertPrivateJump(vxIf, "vxlan"); err != nil {
+		return err
+	}
+	if err := insertPrivateJump(brIf, "bridge"); err != nil {
+		return err
 	}
 
 	// Intra-tenant accepts
 	if brIf != "" {
-		if err := manager.nl.AppendUnique("filter", fw, "-o", brIf, "-j", "ACCEPT"); err != nil {
+		if err := manager.nl.AppendUnique(
+			"filter", fw,
+			"-o", brIf,
+			"-m", "comment", "--comment", "tenant:"+tenant+":egress:bridge",
+			"-j", "ACCEPT",
+		); err != nil {
 			return err
 		}
 	}
 	if vxIf != "" {
-		if err := manager.nl.AppendUnique("filter", fw, "-o", vxIf, "-j", "ACCEPT"); err != nil {
+		if err := manager.nl.AppendUnique(
+			"filter", fw,
+			"-o", vxIf,
+			"-m", "comment", "--comment", "tenant:"+tenant+":egress:vxlan",
+			"-j", "ACCEPT",
+		); err != nil {
 			return err
 		}
 	}
@@ -152,7 +186,7 @@ func (manager *netlinkTenantPolicyManager) EnsureDefaultTenant(brDefault, vxDefa
 			return err
 		}
 	}
-	return nil
+	return manager.ensurePrivateAnchor()
 }
 
 func (manager *netlinkTenantPolicyManager) DeleteRule(table, chain string, rulespec ...string) error {
@@ -160,6 +194,76 @@ func (manager *netlinkTenantPolicyManager) DeleteRule(table, chain string, rules
 		return fmt.Errorf("table/chain required")
 	}
 	return manager.nl.Delete(table, chain, rulespec...)
+}
+
+func (manager *netlinkTenantPolicyManager) ensurePrivateAnchor() error {
+	if err := manager.ensureChainExists(privateAnchorChain); err != nil {
+		return err
+	}
+	spec := []string{
+		"-m", "comment", "--comment", privateAnchorComment,
+		"-j", privateAnchorChain,
+	}
+	_ = manager.nl.Delete("filter", "FORWARD", spec...)
+	pos, err := manager.afterDefaultBlockPosition()
+	if err != nil {
+		return err
+	}
+	return manager.nl.InsertUnique("filter", "FORWARD", pos, spec...)
+}
+
+func (manager *netlinkTenantPolicyManager) removeFromPrivateAnchor(tenant, iface, kind string) error {
+	if iface == "" {
+		return nil
+	}
+	return manager.nl.Delete("filter", privateAnchorChain,
+		"-i", iface,
+		"-m", "comment", "--comment", "tenant:"+tenant+":ingress:"+kind,
+		"-j", fwChain(tenant))
+}
+
+func (manager *netlinkTenantPolicyManager) afterDefaultBlockPosition() (int, error) {
+	rules, err := manager.nl.List("filter", "FORWARD")
+	if err != nil {
+		return 1, err
+	}
+	lastDefault := 0
+	firstKube := 0
+	for idx, rule := range rules {
+		if strings.Contains(rule, "default-tenant-") {
+			lastDefault = idx + 1
+			continue
+		}
+		if firstKube == 0 && (strings.Contains(rule, "KUBE-") || strings.Contains(rule, "kubernetes ")) {
+			firstKube = idx + 1
+		}
+	}
+	if firstKube > 0 {
+		return firstKube, nil
+	}
+	if lastDefault > 0 {
+		return lastDefault + 1, nil
+	}
+	return 1, nil
+}
+
+func (manager *netlinkTenantPolicyManager) ensureChainExists(chain string) error {
+	if chain == "" {
+		return fmt.Errorf("chain name required")
+	}
+	if err := manager.nl.NewChain("filter", chain); err != nil {
+		if !isChainExistsErr(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func isChainExistsErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "Chain already exists")
 }
 
 func fwChain(tenant string) string {

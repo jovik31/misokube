@@ -11,6 +11,7 @@ type NetlinkTenantPolicyHandle interface {
 	AppendUnique(table, chain string, rulespec ...string) error
 	InsertUnique(table, chain string, pos int, rulespec ...string) error
 	Delete(table, chain string, rulespec ...string) error
+	List(table, chain string) ([]string, error)
 }
 
 type rNetlinkTenantPolicyHandle struct {
@@ -34,4 +35,8 @@ func (r rNetlinkTenantPolicyHandle) InsertUnique(table, chain string, pos int, r
 }
 func (r rNetlinkTenantPolicyHandle) Delete(table, chain string, rulespec ...string) error {
 	return r.ipt.Delete(table, chain, rulespec...)
+}
+
+func (r rNetlinkTenantPolicyHandle) List(table, chain string) ([]string, error) {
+	return r.ipt.List(table, chain)
 }

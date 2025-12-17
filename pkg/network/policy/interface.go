@@ -4,7 +4,7 @@ type TenantPolicyManager interface {
 
 	// chain lifecycle
 	EnsureTenantChains(tenant string) error
-	DeleteTenantChains(tenant string) error
+	DeleteTenantChains(tenant, brIf, vxIf string) error
 
 	// Interface-based isolation (no CIDRs; subnet expansion requires no rule updates)
 	// Creates jumps from FORWARD to FW-<tenant> by ingress iface; inside FW-<tenant>

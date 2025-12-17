@@ -49,22 +49,29 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		return fmt.Errorf("backend create: %w", err)
 	}
 
-	// Tenant policy setup for default tenant
-	if nm.TP != nil && tenantID == "default" {
+	// Tenant policy setup
+	if nm.TP != nil {
 		brName := ""
 		if brDev, ok := backend.Bridge(be); ok && brDev != nil {
 			brName = brDev.GetName()
-			log.Printf("nm: default tenant bridge device=%s", brName)
 		}
 		vxName := ""
 		if vxDev, ok := backend.VTEP(be); ok && vxDev != nil {
 			vxName = vxDev.GetName()
-			log.Printf("nm: default tenant vtep device=%s", vxName)
 		}
-		if err := nm.TP.EnsureDefaultTenant(brName, vxName); err != nil {
-			_ = be.Delete()
-			_ = nm.Subnet.Deallocate(tenantID)
-			return fmt.Errorf("ensure default tenant policy: %w", err)
+		if tenantID == "default" {
+			if err := nm.TP.EnsureDefaultTenant(brName, vxName); err != nil {
+				_ = be.Delete()
+				_ = nm.Subnet.Deallocate(tenantID)
+				return fmt.Errorf("ensure default tenant policy: %w", err)
+			}
+		} else {
+			extraIfaces := nm.defaultTenantIfaces()
+			if err := nm.TP.EnsureTenantIsolation(tenantID, brName, vxName, extraIfaces...); err != nil {
+				_ = be.Delete()
+				_ = nm.Subnet.Deallocate(tenantID)
+				return fmt.Errorf("ensure tenant isolation: %w", err)
+			}
 		}
 	}
 
@@ -111,6 +118,25 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 	return nil
 }
 
+// defaultTenantIfaces returns the bridge/vxlan interface names for the default tenant if present.
+// Used to permit private tenants to reach the default tenant network.
+func (nm *NetworkManagerImpl) defaultTenantIfaces() []string {
+	nm.mu.RLock()
+	rec, ok := nm.TenantRecords["default"]
+	nm.mu.RUnlock()
+	if !ok || rec == nil || rec.Backend == nil {
+		return nil
+	}
+	var ifaces []string
+	if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+		ifaces = append(ifaces, brDev.GetName())
+	}
+	if vxDev, ok := backend.VTEP(rec.Backend); ok && vxDev != nil {
+		ifaces = append(ifaces, vxDev.GetName())
+	}
+	return ifaces
+}
+
 func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string) error {
 	if tenantID == "" {
 		return fmt.Errorf("remove tenant: empty tenantID")
@@ -133,7 +159,14 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 	nm.mu.Unlock()
 
 	// Best effort: delete backend devices first
+	var brName, vxName string
 	if rec.Backend != nil {
+		if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+			brName = brDev.GetName()
+		}
+		if vxDev, ok := backend.VTEP(rec.Backend); ok && vxDev != nil {
+			vxName = vxDev.GetName()
+		}
 		_ = rec.Backend.Delete()
 	}
 
@@ -142,7 +175,7 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 
 	// Cleanup iptables
 	if nm.TP != nil {
-		_ = nm.TP.DeleteTenantChains(tenantID)
+		_ = nm.TP.DeleteTenantChains(tenantID, brName, vxName)
 	}
 
 	// Stop and drop actor (best-effort)
