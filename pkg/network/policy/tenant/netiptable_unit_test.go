@@ -1,26 +1,13 @@
-package netiptable
+package tenant
 
 import (
 	"reflect"
 	"testing"
 )
 
-func TestAddClusterMasquerade(t *testing.T) {
-	f := &fakeIPT{}
-	m := NewIPtableManager(f)
-
-	if err := m.AddClusterMasquerade("10.244.0.0/16"); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"nat", "POSTROUTING", "-s", "10.244.0.0/16", "!", "-d", "10.244.0.0/16", "-j", "MASQUERADE"}
-	if got := f.Args[0]; !reflect.DeepEqual(got, want) {
-		t.Fatalf("AppendUnique args = %v, want %v", got, want)
-	}
-}
-
 func TestEnsureTenantChains(t *testing.T) {
 	f := &fakeIPT{}
-	m := NewIPtableManager(f)
+	m := NewTenantPolicyManager(f)
 
 	if err := m.EnsureTenantChains("TEN"); err != nil {
 		t.Fatal(err)
@@ -35,7 +22,7 @@ func TestEnsureTenantChains(t *testing.T) {
 
 func TestDeleteTenantChains(t *testing.T) {
 	f := &fakeIPT{}
-	m := NewIPtableManager(f)
+	m := NewTenantPolicyManager(f)
 
 	if err := m.DeleteTenantChains("TEN"); err != nil {
 		t.Fatal(err)
@@ -50,9 +37,9 @@ func TestDeleteTenantChains(t *testing.T) {
 
 func TestEnsureTenantIsolationByIface(t *testing.T) {
 	f := &fakeIPT{}
-	m := NewIPtableManager(f)
+	m := NewTenantPolicyManager(f)
 
-	err := m.EnsureTenantIsolationByIface("A", "br-A", "vx-A", "eth0")
+	err := m.EnsureTenantIsolation("A", "br-A", "vx-A", "eth0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,9 +71,9 @@ func TestEnsureTenantIsolationByIface(t *testing.T) {
 
 func TestEnsureDefaultTenantPassByIface_Order(t *testing.T) {
 	f := &fakeIPT{}
-	m := NewIPtableManager(f)
+	m := NewTenantPolicyManager(f)
 
-	err := m.EnsureDefaultTenantPassByIface("br-def", "vx-def")
+	err := m.EnsureDefaultTenant("br-def", "vx-def")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -122,8 +122,8 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 	_ = nm.Subnet.Deallocate(tenantID)
 
 	// Cleanup iptables
-	if nm.IPTables != nil {
-		_ = nm.IPTables.DeleteTenantChains(tenantID)
+	if nm.TP != nil {
+		_ = nm.TP.DeleteTenantChains(tenantID)
 	}
 
 	// Stop and drop actor (best-effort)

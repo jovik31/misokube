@@ -1,21 +1,22 @@
-package netiptable
+package tenant
 
 import (
 	"fmt"
-	"github.com/coreos/go-iptables/iptables"
-	"github/setera/pkg/network/iptable"
+	tp "github/setera/pkg/network/policy"
 	"strings"
+
+	"github.com/coreos/go-iptables/iptables"
 )
 
-var _ iptable.IPtableManager = (*netlinkIPtableManager)(nil)
+var _ tp.TenantPolicyManager = (*netlinkTenantPolicyManager)(nil)
 
-type netlinkIPtableManager struct {
-	nl NetlinkIPTableHandle
+type netlinkTenantPolicyManager struct {
+	nl NetlinkTenantPolicyHandle
 }
 
-func NewIPtableManager(handle NetlinkIPTableHandle) iptable.IPtableManager {
+func NewTenantPolicyManager(handle NetlinkTenantPolicyHandle) tp.TenantPolicyManager {
 
-	return &netlinkIPtableManager{
+	return &netlinkTenantPolicyManager{
 		nl: handle,
 	}
 }
@@ -26,18 +27,18 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	iptable.RegisterIPtableManager(mgr)
+	tp.RegisterTenantPolicyManager(mgr)
 }
 
-func NewV4() (iptable.IPtableManager, error) {
+func NewV4() (tp.TenantPolicyManager, error) {
 
 	ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
 	if err != nil {
 		return nil, err
 	}
-	return NewIPtableManager(rNetlinkIPTableHandle{ipt: ipt}), nil
+	return NewTenantPolicyManager(rNetlinkTenantPolicyHandle{ipt: ipt}), nil
 }
-func (manager *netlinkIPtableManager) AddClusterMasquerade(clusterCIDR string) error {
+func (manager *netlinkTenantPolicyManager) AddClusterMasquerade(clusterCIDR string) error {
 
 	if clusterCIDR == "" {
 		return fmt.Errorf("clusterCIDR cannot be empty")
@@ -52,7 +53,7 @@ func (manager *netlinkIPtableManager) AddClusterMasquerade(clusterCIDR string) e
 
 }
 
-func (manager *netlinkIPtableManager) EnsureTenantChains(tenant string) error {
+func (manager *netlinkTenantPolicyManager) EnsureTenantChains(tenant string) error {
 
 	if tenant == "" {
 		return fmt.Errorf("tenant cannot be empty")
@@ -64,7 +65,7 @@ func (manager *netlinkIPtableManager) EnsureTenantChains(tenant string) error {
 
 }
 
-func (manager *netlinkIPtableManager) DeleteTenantChains(tenant string) error {
+func (manager *netlinkTenantPolicyManager) DeleteTenantChains(tenant string) error {
 	if tenant == "" {
 		return fmt.Errorf("tenant is empty")
 	}
@@ -75,7 +76,7 @@ func (manager *netlinkIPtableManager) DeleteTenantChains(tenant string) error {
 	return manager.nl.DeleteChain("filter", fw)
 }
 
-func (manager *netlinkIPtableManager) EnsureTenantIsolationByIface(tenant, brIf, vxIf string, extraAllowedEgressIfaces ...string) error {
+func (manager *netlinkTenantPolicyManager) EnsureTenantIsolation(tenant, brIf, vxIf string, extraAllowedEgressIfaces ...string) error {
 	if err := manager.EnsureTenantChains(tenant); err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func (manager *netlinkIPtableManager) EnsureTenantIsolationByIface(tenant, brIf,
 
 }
 
-func (manager *netlinkIPtableManager) EnsureDefaultTenantPassByIface(brDefault, vxDefault string) error {
+func (manager *netlinkTenantPolicyManager) EnsureDefaultTenant(brDefault, vxDefault string) error {
 	insertTop := func(spec ...string) error {
 		// position 1 == top; InsertUnique prevents duplicates
 		return manager.nl.InsertUnique("filter", "FORWARD", 1, spec...)
@@ -151,7 +152,7 @@ func (manager *netlinkIPtableManager) EnsureDefaultTenantPassByIface(brDefault, 
 	return nil
 }
 
-func (manager *netlinkIPtableManager) DeleteRule(table, chain string, rulespec ...string) error {
+func (manager *netlinkTenantPolicyManager) DeleteRule(table, chain string, rulespec ...string) error {
 	if table == "" || chain == "" {
 		return fmt.Errorf("table/chain required")
 	}

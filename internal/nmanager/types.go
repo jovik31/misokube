@@ -11,7 +11,7 @@ import (
 	// managers
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/fdb"
-	"github/setera/pkg/network/iptable"
+	"github/setera/pkg/network/policy"
 	"github/setera/pkg/network/route"
 	op "github/setera/pkg/operator"
 )
@@ -31,11 +31,11 @@ type NetworkManagerImpl struct {
 	TenantActors map[string]TenantActor
 
 	// Dependencies
-	Route    route.RouteManager
-	ARP      arp.ARPManager
-	FDB      fdb.FDBManager
-	IPTables iptable.IPtableManager
-	Subnet   subnet.SubnetManager
+	Route  route.RouteManager
+	ARP    arp.ARPManager
+	FDB    fdb.FDBManager
+	TP     policy.TenantPolicyManager
+	Subnet subnet.SubnetManager
 
 	// No factories; backend and ipam are constructed via backend.NewBackend and ipam.NewIPAM
 	// add tenant actor here
@@ -46,11 +46,11 @@ type NetworkManagerImpl struct {
 
 // Deps allows explicit injection of manager dependencies. Nil fields fall back to package defaults.
 type Deps struct {
-	Route    route.RouteManager
-	ARP      arp.ARPManager
-	FDB      fdb.FDBManager
-	IPTables iptable.IPtableManager
-	Subnet   subnet.SubnetManager
+	Route  route.RouteManager
+	ARP    arp.ARPManager
+	FDB    fdb.FDBManager
+	TP     policy.TenantPolicyManager
+	Subnet subnet.SubnetManager
 }
 
 // TenantRecord holds per-tenant runtime components.

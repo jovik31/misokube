@@ -1,4 +1,4 @@
-package netiptable
+package tenant
 
 import (
 	"fmt"

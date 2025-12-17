@@ -1,10 +1,10 @@
-package netiptable
+package tenant
 
 import (
 	"github.com/coreos/go-iptables/iptables"
 )
 
-type NetlinkIPTableHandle interface {
+type NetlinkTenantPolicyHandle interface {
 	NewChain(table, chain string) error
 	ClearChain(table, chain string) error
 	DeleteChain(table, chain string) error
@@ -13,25 +13,25 @@ type NetlinkIPTableHandle interface {
 	Delete(table, chain string, rulespec ...string) error
 }
 
-type rNetlinkIPTableHandle struct {
+type rNetlinkTenantPolicyHandle struct {
 	ipt *iptables.IPTables
 }
 
-func (r rNetlinkIPTableHandle) NewChain(table, chain string) error {
+func (r rNetlinkTenantPolicyHandle) NewChain(table, chain string) error {
 	return r.ipt.NewChain(table, chain)
 }
-func (r rNetlinkIPTableHandle) ClearChain(table, chain string) error {
+func (r rNetlinkTenantPolicyHandle) ClearChain(table, chain string) error {
 	return r.ipt.ClearChain(table, chain)
 }
-func (r rNetlinkIPTableHandle) DeleteChain(table, chain string) error {
+func (r rNetlinkTenantPolicyHandle) DeleteChain(table, chain string) error {
 	return r.ipt.DeleteChain(table, chain)
 }
-func (r rNetlinkIPTableHandle) AppendUnique(table, chain string, rulespec ...string) error {
+func (r rNetlinkTenantPolicyHandle) AppendUnique(table, chain string, rulespec ...string) error {
 	return r.ipt.AppendUnique(table, chain, rulespec...)
 }
-func (r rNetlinkIPTableHandle) InsertUnique(table, chain string, pos int, rulespec ...string) error {
+func (r rNetlinkTenantPolicyHandle) InsertUnique(table, chain string, pos int, rulespec ...string) error {
 	return r.ipt.InsertUnique(table, chain, pos, rulespec...)
 }
-func (r rNetlinkIPTableHandle) Delete(table, chain string, rulespec ...string) error {
+func (r rNetlinkTenantPolicyHandle) Delete(table, chain string, rulespec ...string) error {
 	return r.ipt.Delete(table, chain, rulespec...)
 }

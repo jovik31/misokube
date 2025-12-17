@@ -17,12 +17,15 @@ import (
 	seterainformers "github/setera/pkg/generated/informers/externalversions"
 	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
 	"github/setera/pkg/k8s"
+	policynode "github/setera/pkg/network/policy"
+	_ "github/setera/pkg/network/policy/node"
 	op "github/setera/pkg/operator"
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -91,6 +94,11 @@ func main() {
 	nm, err := nmanager.NewNetworkManager(nodeCIDRParsed, nodeName)
 	if err != nil {
 		logger.Error(err, "failed to initialize network manager")
+		os.Exit(1)
+	}
+
+	if err := initNodePolicies(); err != nil {
+		logger.Error(err, "failed to initialize node policies")
 		os.Exit(1)
 	}
 
@@ -219,4 +227,24 @@ func initRouter(nm *nmanager.NetworkManagerImpl) router.Router {
 	}
 	lookup := func(tenantID string) (router.TenantActor, error) { return nm.GetTenantActor(tenantID) }
 	return router.NewNManagerRouter(lookup)
+}
+
+func initNodePolicies() error {
+	mgr := policynode.NodeManager()
+	if mgr == nil {
+		return fmt.Errorf("node policy manager not registered")
+	}
+	if err := mgr.EnsureIPForwarding(); err != nil {
+		return fmt.Errorf("ensure ip forwarding: %w", err)
+	}
+	if err := mgr.EnsureBridgeNetfilter(); err != nil {
+		return fmt.Errorf("ensure bridge netfilter: %w", err)
+	}
+	if err := mgr.EnsureForwardPolicyDrop(); err != nil {
+		return fmt.Errorf("forward policy drop: %w", err)
+	}
+	if err := mgr.EnsureClusterMasquerade("10.244.0.0/16"); err != nil {
+		return fmt.Errorf("cluster masquerade: %w", err)
+	}
+	return nil
 }

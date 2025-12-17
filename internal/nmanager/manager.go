@@ -13,7 +13,7 @@ import (
 	// managers
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/fdb"
-	"github/setera/pkg/network/iptable"
+	"github/setera/pkg/network/policy"
 	"github/setera/pkg/network/route"
 )
 
@@ -37,8 +37,8 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 	if d.FDB == nil {
 		d.FDB = fdb.Manager()
 	}
-	if d.IPTables == nil {
-		d.IPTables = iptable.Manager()
+	if d.TP == nil {
+		d.TP = policy.Manager()
 	}
 	if d.Subnet == nil {
 		if sm := subnet.Manager(); sm != nil {
@@ -67,11 +67,11 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 		TenantActors:  make(map[string]TenantActor),
 
 		// deps
-		Route:    d.Route,
-		ARP:      d.ARP,
-		FDB:      d.FDB,
-		IPTables: d.IPTables,
-		Subnet:   d.Subnet,
+		Route:  d.Route,
+		ARP:    d.ARP,
+		FDB:    d.FDB,
+		TP:     d.TP,
+		Subnet: d.Subnet,
 	}
 	return nm, nil
 }

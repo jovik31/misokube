@@ -67,3 +67,9 @@ This document tracks pending work items and simplifications discussed across dae
 - Optional periodic repair reconcile.
 
 > Note: Keep patches small and idempotent; patch only what changed to reduce write pressure, and never write to remote NodeStores from a node-local daemon.
+
+## Runtime Follow-Ups (from current iteration)
+- Tenant expansion: wire `ipam.ErrNoAvailableIPs` in `EnsurePod` to `ExpandTenant`, update backend/IPAM, and mirror the new CIDR back into NodeStore so peers learn the change.
+- Result cache: finish the CNIServer cache by tracking metrics/eviction and reusing cached results for CHECK/DEL beyond the current basic hit logic.
+- Sock/readiness hardening: ensure the default tenant is always ensured on control-plane nodes so the kubelet readiness probes can reach the daemon socket.
+- CI/tests: `go test ./...` currently fails under restricted sandboxes (go-build cache perms, iptables/netlink). Document/run the suite on a host with the required privileges.
