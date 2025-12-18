@@ -91,6 +91,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 	}
 	newTenants := make(map[string]seterav1.TenantInfra, len(snaps))
 	for tenant, snap := range snaps {
+		o.logger.WithValues("node", o.nodeName, "tenant", tenant, "pods", len(snap.Pods)).Info("mirroring tenant snapshot")
 		ti := seterav1.TenantInfra{Name: tenant}
 		if snap.Subnet != nil {
 			ti.TenantCIDR = snap.Subnet.String()
@@ -111,11 +112,18 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 		if snap.BridgeMAC != nil {
 			ti.BRIDGE_MAC = snap.BridgeMAC.String()
 		}
-		// Initialize Pods to empty to satisfy CRD 'Required value'
-		ti.Pods = []seterav1.Pod_Info{}
+
+		ti.Pods = make([]seterav1.Pod_Info, 0, len(snap.Pods))
+		for _, pod := range snap.Pods {
+			info := seterav1.Pod_Info{Name: pod.Name}
+			if pod.IP != nil {
+				info.IP = pod.IP.String()
+			}
+			ti.Pods = append(ti.Pods, info)
+		}
 		newTenants[tenant] = ti
 	}
-	ns.Status.Tenants = newTenants
+
 	for tenant := range newTenants {
 		err := k8s.StoreTenantLabel(o.kubeclient, TenantLabelKey, o.nodeName, tenant)
 		if err != nil {
@@ -124,7 +132,11 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 
 	}
 
-	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
+	// copy nodestore
+	mod := ns.DeepCopy()
+	mod.Status.Tenants = newTenants
+
+	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status", "err", err)
 		return err
 	} else {
@@ -170,7 +182,14 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 		if snap.BridgeMAC != nil {
 			ti.BRIDGE_MAC = snap.BridgeMAC.String()
 		}
-		ti.Pods = []seterav1.Pod_Info{}
+		ti.Pods = make([]seterav1.Pod_Info, 0, len(snap.Pods))
+		for _, pod := range snap.Pods {
+			info := seterav1.Pod_Info{Name: pod.Name}
+			if pod.IP != nil {
+				info.IP = pod.IP.String()
+			}
+			ti.Pods = append(ti.Pods, info)
+		}
 		newTenants[tenant] = ti
 	}
 

@@ -67,6 +67,12 @@ type TenantInfraSnapshot struct {
 	Bridge    string // local bridge name
 	BridgeIP  net.IP
 	BridgeMAC net.HardwareAddr
+	Pods      []TenantPodInfo
+}
+
+type TenantPodInfo struct {
+	Name string
+	IP   net.IP
 }
 
 // RemoteTenantInfra describes the remote node’s tenant attributes needed to program ARP/FDB/routes.

@@ -11,6 +11,7 @@ import (
 
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/device"
+	op "github/setera/pkg/operator"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -65,6 +66,8 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 
 	log.Print("pod ensured: ", tenantID, args.PodName, ci.IP.String())
 
+	nm.emitNodeStoreEvent(op.EventUpdate)
+
 	return *podIPNet, br.GetIP().IP, args.IfName, nil
 }
 
@@ -76,6 +79,7 @@ func (nm *NetworkManagerImpl) RemovePod(ctx context.Context, tenantID string, ar
 		return ErrTenantActorNotFound
 	}
 	// TODO: detach veth, release IP via rec.IPAM, cleanup routes via nm.Route.
+	nm.emitNodeStoreEvent(op.EventUpdate)
 	return nil
 }
 

@@ -13,35 +13,13 @@ import (
 var _ NodestoreOps = (*NetworkManagerImpl)(nil)
 
 func (nm *NetworkManagerImpl) SnapshotTenantInfra(tenantId string) (TenantInfraSnapshot, error) {
+	nm.mu.RLock()
 	rec := nm.TenantRecords[tenantId]
-	if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+	nm.mu.RUnlock()
+	if rec == nil {
 		return TenantInfraSnapshot{}, fmt.Errorf("snapshot: unknown tenant %s", tenantId)
 	}
-	snap := TenantInfraSnapshot{
-		Subnet: rec.Subnet,
-		MTU:    1500,
-	}
-
-	if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
-		snap.VTEPDev = vtepDev.GetName()
-		if ip := vtepDev.GetIP(); ip != nil {
-			snap.VTEPIP = ip.IP
-		}
-		snap.VTEPMAC = vtepDev.GetMAC()
-
-		vt, ok := vtepDev.(device.VTEPDevice)
-		if ok {
-			snap.VNI = uint32(vt.GetVNI())
-		}
-	}
-	if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
-		snap.Bridge = brDev.GetName()
-		if ip := brDev.GetIP(); ip != nil {
-			snap.BridgeIP = ip.IP
-		}
-		snap.BridgeMAC = brDev.GetMAC()
-	}
-	return snap, nil
+	return buildTenantSnapshot(rec)
 }
 
 /*
@@ -194,31 +172,62 @@ func (nm *NetworkManagerImpl) SnapshotAllTenantInfra() (map[string]TenantInfraSn
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
 	for tid, rec := range nm.TenantRecords {
-		if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+		snap, err := buildTenantSnapshot(rec)
+		if err != nil {
 			continue
-		}
-		snap := TenantInfraSnapshot{
-			Subnet: rec.Subnet,
-			MTU:    1500,
-		}
-		if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
-			snap.VTEPDev = vtepDev.GetName()
-			if ip := vtepDev.GetIP(); ip != nil {
-				snap.VTEPIP = ip.IP
-			}
-			snap.VTEPMAC = vtepDev.GetMAC()
-			if vd, ok := vtepDev.(interface{ GetVNI() int }); ok {
-				snap.VNI = uint32(vd.GetVNI())
-			}
-		}
-		if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
-			snap.Bridge = brDev.GetName()
-			if ip := brDev.GetIP(); ip != nil {
-				snap.BridgeIP = ip.IP
-			}
-			snap.BridgeMAC = brDev.GetMAC()
 		}
 		out[tid] = snap
 	}
 	return out, nil
+}
+
+func buildTenantSnapshot(rec *TenantRecord) (TenantInfraSnapshot, error) {
+	if rec == nil || rec.Backend == nil || rec.Subnet == nil {
+		return TenantInfraSnapshot{}, fmt.Errorf("snapshot: tenant not initialized")
+	}
+
+	snap := TenantInfraSnapshot{
+		Subnet: rec.Subnet,
+		MTU:    1500,
+	}
+
+	if vtepDev, ok := backend.VTEP(rec.Backend); ok && vtepDev != nil {
+		snap.VTEPDev = vtepDev.GetName()
+		if ip := vtepDev.GetIP(); ip != nil {
+			snap.VTEPIP = ip.IP
+		}
+		snap.VTEPMAC = vtepDev.GetMAC()
+
+		if vt, ok := vtepDev.(device.VTEPDevice); ok {
+			snap.VNI = uint32(vt.GetVNI())
+		}
+	}
+
+	if brDev, ok := backend.Bridge(rec.Backend); ok && brDev != nil {
+		snap.Bridge = brDev.GetName()
+		if ip := brDev.GetIP(); ip != nil {
+			snap.BridgeIP = ip.IP
+		}
+		snap.BridgeMAC = brDev.GetMAC()
+	}
+
+	if rec.IPAM != nil {
+		allocs := rec.IPAM.ListAllocations()
+		snap.Pods = make([]TenantPodInfo, 0, len(allocs))
+		for key, info := range allocs {
+			if info == nil || info.IP == nil {
+				continue
+			}
+			ns, name := splitPodKey(key)
+			if ns != "" {
+				name = ns + "/" + name
+			}
+			snap.Pods = append(snap.Pods, TenantPodInfo{
+				Name: name,
+				IP:   info.IP,
+			})
+		}
+	}
+
+	return snap, nil
 }

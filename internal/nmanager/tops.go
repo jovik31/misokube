@@ -112,9 +112,7 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 	nm.mu.Unlock()
 
 	// Emit update event to local operator (non-blocking) for the local NodeStore
-	if nm.emitter != nil {
-		nm.emitter.EnqueueWith("nm:network-manager", "update", op.ResourceRef{Kind: "NodeStore", Namespace: "default", Name: nm.NodeName})
-	}
+	nm.emitNodeStoreEvent(op.EventUpdate)
 	return nil
 }
 
@@ -194,8 +192,6 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 	nm.mu.Unlock()
 
 	// Emit delete event to local operator for the local NodeStore
-	if nm.emitter != nil {
-		nm.emitter.EnqueueWith("nm:network-manager", "delete", op.ResourceRef{Kind: "NodeStore", Namespace: "default", Name: nm.NodeName})
-	}
+	nm.emitNodeStoreEvent(op.EventDelete)
 	return nil
 }

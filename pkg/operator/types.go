@@ -6,6 +6,12 @@ type Source string
 // Event is a user-defined label for an event (e.g., "add", "update", "delete", "ensure").
 type Event string
 
+const (
+	EventAdd    Event = "add"
+	EventUpdate Event = "update"
+	EventDelete Event = "delete"
+)
+
 // ResourceRef identifies the affected resource (K8s or domain-specific).
 // Leave Namespace empty for cluster-scoped resources.
 type ResourceRef struct {

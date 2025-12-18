@@ -79,3 +79,17 @@ const (
 func (nm *NetworkManagerImpl) SetEmitter(e op.Emitter) {
 	nm.emitter = e
 }
+
+func (nm *NetworkManagerImpl) emitNodeStoreEvent(ev op.Event) {
+	if nm == nil || nm.emitter == nil || nm.NodeName == "" {
+		return
+	}
+	if ev == "" {
+		ev = op.EventUpdate
+	}
+	nm.emitter.EnqueueWith("nm:network-manager", ev, op.ResourceRef{
+		Kind:      "NodeStore",
+		Namespace: "default",
+		Name:      nm.NodeName,
+	})
+}

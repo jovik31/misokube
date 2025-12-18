@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	// k8s
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -99,8 +100,11 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 	}
 	temp := t.DeepCopy()
 	temp.Status.AssignedNodes = newAssigned
-	newAwaiting, newAssignedFinal, changed := o.recomputeAwaitingAndAssignedForZones(temp, allStores)
-	if !changed {
+	newAwaiting, newAssignedFinal, changedStructural := o.recomputeAwaitingAndAssignedForZones(temp, allStores)
+	// detect pure value changes (e.g., TenantCIDR) even when counts stay the same
+	awaitingChanged := !slices.Equal(t.Status.AwaitingNodeConfiguration, newAwaiting)
+	assignedChanged := !equalNodeInfosByValue(t.Status.AssignedNodes, newAssignedFinal)
+	if !changedStructural && !awaitingChanged && !assignedChanged {
 		return nil
 	}
 
