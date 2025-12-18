@@ -24,6 +24,7 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	if err := validateArgs(args); err != nil {
 		return err
 	}
+	ver := detectCNIVersion(args.StdinData)
 	if err := checkReadiness(opt); err != nil {
 		return fmt.Errorf("daemon not ready: %w", err)
 	}
@@ -40,6 +41,7 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 		PodName:        pod_name,
 		PodNamespace:   pod_namespace,
 		PodUID:         pod_uid,
+		CNIVersion:     ver,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
 	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)
@@ -56,7 +58,6 @@ func Add(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	}
 
 	if len(resp.Result) == 0 {
-		ver := detectCNIVersion(args.StdinData)
 		_, _ = out.Write([]byte(`{"cniVersion":"` + ver + `","interfaces":[],"ips":[],"routes":[]}`))
 		return nil
 	}
@@ -69,6 +70,7 @@ func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
 	if err := validateArgs(args); err != nil {
 		return err
 	}
+	ver := detectCNIVersion(args.StdinData)
 	if err := checkReadiness(opt); err != nil {
 		return fmt.Errorf("daemon not ready: %w", err)
 	}
@@ -85,6 +87,7 @@ func Check(args *skel.CmdArgs, out io.Writer, opt Options) error {
 		PodName:        pod_name,
 		PodNamespace:   pod_namespace,
 		PodUID:         pod_uid,
+		CNIVersion:     ver,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
 	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)
@@ -110,6 +113,7 @@ func Del(args *skel.CmdArgs, opt Options) error {
 		fmt.Fprintln(os.Stderr, "daemon not ready for DEL:", err)
 		return nil
 	}
+	ver := detectCNIVersion(args.StdinData)
 
 	pod_name := get_pod_name_regex(args.Args)
 	pod_namespace := get_pod_namespace_regex(args.Args)
@@ -123,6 +127,7 @@ func Del(args *skel.CmdArgs, opt Options) error {
 		PodName:        pod_name,
 		PodNamespace:   pod_namespace,
 		PodUID:         pod_uid,
+		CNIVersion:     ver,
 		TimeoutSeconds: int(opt.Timeout.Seconds()),
 	}
 	req.IdemKey = computeIdemKey(req.Cmd, req.ContainerID, req.NetNS, req.IfName, req.PodNamespace, req.PodName, req.PodUID)

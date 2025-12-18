@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -28,6 +27,8 @@ type CNIServer struct {
 	// Deps
 	resolver resolver.Resolver
 	router   router.Router
+	// Default CNI version used when requests don't specify one.
+	defaultCNIVersion string
 
 	// internal state
 	cache   map[string]podCacheEntry
@@ -91,16 +92,20 @@ func (s *CNIServer) cacheTouch(uid string) {
 	s.cacheMu.Unlock()
 }
 
-const defaultCNIVersion = "1.1.0"
+const fallbackCNIVersion = "1.1.0"
 
-func NewCNIServer(socketPath string, r resolver.Resolver) *CNIServer {
+func NewCNIServer(socketPath string, r resolver.Resolver, defaultVersion string) *CNIServer {
 	if socketPath == "" {
 		log.Panic("cniserver: missing socket path")
 	}
+	if defaultVersion == "" {
+		defaultVersion = fallbackCNIVersion
+	}
 	return &CNIServer{
-		socketPath: socketPath,
-		resolver:   r,
-		cache:      make(map[string]podCacheEntry),
+		socketPath:        socketPath,
+		resolver:          r,
+		defaultCNIVersion: defaultVersion,
+		cache:             make(map[string]podCacheEntry),
 	}
 }
 
@@ -160,7 +165,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 			resp = &wire.Response{
 				OK:      false,
 				Message: "resolve tenant: " + resolveErr.Error(),
-				Result:  encodeCNIResult(req.CNIVersion, nil),
+				Result:  s.encodeResult(req.CNIVersion, nil),
 			}
 			break
 		}
@@ -183,7 +188,7 @@ func (s *CNIServer) handleStatusRequest(req *wire.Request) *wire.Response {
 	return &wire.Response{
 		OK:      true,
 		Message: "ready",
-		Result:  encodeCNIResult(req.CNIVersion, nil),
+		Result:  s.encodeResult(req.CNIVersion, nil),
 	}
 }
 
@@ -191,7 +196,7 @@ func (s *CNIServer) handleGCRequest(req *wire.Request) *wire.Response {
 	return &wire.Response{
 		OK:      true,
 		Message: "gc ok",
-		Result:  encodeCNIResult(req.CNIVersion, nil),
+		Result:  s.encodeResult(req.CNIVersion, nil),
 	}
 }
 
@@ -204,12 +209,12 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 			return &wire.Response{
 				OK:      true,
 				Message: "add ok (cached)",
-				Result:  encodeCNIResult(req.CNIVersion, &resCopy),
+				Result:  s.encodeResult(req.CNIVersion, &resCopy),
 			}, nil, false, "hit"
 		}
 		ver := req.CNIVersion
 		if ver == "" {
-			ver = defaultCNIVersion
+			ver = s.defaultCNIVersion
 		}
 		var podResult *types100.Result
 		if s.router != nil {
@@ -226,7 +231,7 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 				return &wire.Response{
 					OK:      false,
 					Message: "configure pod: " + err.Error(),
-					Result:  encodeCNIResult(ver, podResult),
+					Result:  s.encodeResult(ver, podResult),
 				}, nil, false, "error"
 			}
 		}
@@ -234,7 +239,7 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 		return &wire.Response{
 			OK:      true,
 			Message: "add ok for tenant:" + tenantID,
-			Result:  encodeCNIResult(ver, podResult),
+			Result:  s.encodeResult(ver, podResult),
 		}, podResult, true, "store"
 
 	case wire.CmdDEL:
@@ -243,7 +248,7 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 			return &wire.Response{
 				OK:      true,
 				Message: "del ok (cached)",
-				Result:  encodeCNIResult(req.CNIVersion, nil),
+				Result:  s.encodeResult(req.CNIVersion, nil),
 			}, nil, false, "hit"
 		}
 		if s.router != nil {
@@ -258,14 +263,14 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 				return &wire.Response{
 					OK:      false,
 					Message: "remove pod: " + err.Error(),
-					Result:  encodeCNIResult(req.CNIVersion, nil),
+					Result:  s.encodeResult(req.CNIVersion, nil),
 				}, nil, false, "error"
 			}
 		}
 		return &wire.Response{
 			OK:      true,
 			Message: "del ok",
-			Result:  encodeCNIResult(req.CNIVersion, nil),
+			Result:  s.encodeResult(req.CNIVersion, nil),
 		}, nil, true, "store-del"
 	case wire.CmdCHECK:
 		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.lastCmd == wire.CmdADD {
@@ -274,13 +279,13 @@ func (s *CNIServer) handleTenantCommand(req *wire.Request, tenantID string) (*wi
 			return &wire.Response{
 				OK:      true,
 				Message: "check ok (cached)",
-				Result:  encodeCNIResult(req.CNIVersion, &resCopy),
+				Result:  s.encodeResult(req.CNIVersion, &resCopy),
 			}, nil, false, "hit"
 		}
 		return &wire.Response{
 			OK:      true,
 			Message: "check ok",
-			Result:  encodeCNIResult(req.CNIVersion, nil),
+			Result:  s.encodeResult(req.CNIVersion, nil),
 		}, nil, false, "miss"
 	default:
 		return &wire.Response{OK: false, Message: "unknown cmd"}, nil, false, "none"
@@ -329,10 +334,10 @@ func ensureResultStruct(ver string, res *types100.Result) *types100.Result {
 	return res
 }
 
-func encodeCNIResult(ver string, res cnitypes.Result) []byte {
+func (s *CNIServer) encodeResult(ver string, res cnitypes.Result) []byte {
 	target := ver
 	if target == "" {
-		target = defaultCNIVersion
+		target = s.defaultCNIVersion
 	}
 	switch typed := res.(type) {
 	case nil:
@@ -354,32 +359,6 @@ func encodeCNIResult(ver string, res cnitypes.Result) []byte {
 		return []byte("{}")
 	}
 	return data
-}
-
-func (s *CNIServer) logRequest(req *wire.Request) {
-	log.Printf("[CNIServer][%s] request -> pod=%s uid=%s container=%s if=%s netns=%s idem=%s",
-		req.Cmd, podRef(req), emptyDash(req.PodUID), emptyDash(req.ContainerID), emptyDash(req.IfName), emptyDash(req.NetNS), emptyDash(req.IdemKey))
-}
-
-func (s *CNIServer) logResponse(req *wire.Request, resp *wire.Response, cacheEvent string, dur time.Duration) {
-	if resp == nil {
-		log.Printf("[CNIServer][%s] response <- <nil> pod=%s uid=%s cache=%s dur=%s",
-			req.Cmd, podRef(req), emptyDash(req.PodUID), cacheEvent, dur)
-		return
-	}
-	log.Printf("[CNIServer][%s] response <- ok=%t msg=%s pod=%s uid=%s cache=%s dur=%s",
-		req.Cmd, resp.OK, resp.Message, podRef(req), emptyDash(req.PodUID), cacheEvent, dur)
-}
-
-func podRef(req *wire.Request) string {
-	return fmt.Sprintf("%s/%s", emptyDash(req.PodNamespace), emptyDash(req.PodName))
-}
-
-func emptyDash(v string) string {
-	if v == "" {
-		return "-"
-	}
-	return v
 }
 
 // No resolver integration in the stub: keep behavior minimal.

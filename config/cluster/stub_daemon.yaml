@@ -182,6 +182,9 @@ spec:
         - name: host-netns
           mountPath: /var/run/netns
           mountPropagation: HostToContainer
+        - name: tenantcni-cfg
+          mountPath: /etc/tenantcni
+          readOnly: true
       volumes:
         - name: host-netns
           hostPath:
