@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/bits"
 	"net"
+	"sync"
 )
 
 var _ IPAM = (*BitmapIPAM)(nil) // ensure BitmapIPAM implements IPAM interface
@@ -11,6 +12,7 @@ var _ IPAM = (*BitmapIPAM)(nil) // ensure BitmapIPAM implements IPAM interface
 // tenant subnet record
 // SubnetRecord stores information about a tenant's subnet
 type BitmapIPAM struct {
+	mu      sync.Mutex
 	Network *net.IPNet                   // the allocated subnet for this tenant
 	bitmap  []uint64                     // bitmap for allocated IPs in the subnet
 	IPs     map[string]*ContainerNetInfo // IPs : pod name --> ContainerNetInfo
@@ -60,7 +62,12 @@ func NewBitmapIPAM(subnet *net.IPNet) (IPAM, error) {
 
 // capacity returns total ip slots
 func (ipam *BitmapIPAM) Capacity() (int, error) {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+	return ipam.capacityLocked()
+}
 
+func (ipam *BitmapIPAM) capacityLocked() (int, error) {
 	if ipam.Network == nil {
 		return 0, ErrNilSubnet{}
 	}
@@ -76,8 +83,13 @@ func (ipam *BitmapIPAM) Capacity() (int, error) {
 
 // remaining returns free ip slots
 func (ipam *BitmapIPAM) Remaining() (int, error) {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+	return ipam.remainingLocked()
+}
 
-	cap, err := ipam.Capacity()
+func (ipam *BitmapIPAM) remainingLocked() (int, error) {
+	cap, err := ipam.capacityLocked()
 	if err != nil {
 		return 0, nil // if capacity fails, return 0 remaining
 	}
@@ -94,9 +106,12 @@ func (ipam *BitmapIPAM) Remaining() (int, error) {
 }
 
 // assigns the first free ip in the bitmap to the pod and container information
-func (ipam *BitmapIPAM) Allocate(podname string, id string, ifName string, netns string) (*ContainerNetInfo, error) {
+func (ipam *BitmapIPAM) Allocate(podKey string, containerID string, ifName string, netns string) (*ContainerNetInfo, error) {
 
-	capacity, err := ipam.Capacity()
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+
+	capacity, err := ipam.capacityLocked()
 	if err != nil {
 		return nil, err
 	}
@@ -124,12 +139,12 @@ func (ipam *BitmapIPAM) Allocate(podname string, id string, ifName string, netns
 		ip := ipam.indexToIP(pos)            // convert position to IP
 
 		res := &ContainerNetInfo{
-			ID:     id,
+			ID:     containerID,
 			IFname: ifName,
 			NetNS:  netns,
 			IP:     ip,
 		}
-		ipam.IPs[podname] = res
+		ipam.IPs[podKey] = res
 
 		return res, nil
 
@@ -140,6 +155,9 @@ func (ipam *BitmapIPAM) Allocate(podname string, id string, ifName string, netns
 
 // Free releases the given pod IP.
 func (ipam *BitmapIPAM) Free(ip net.IP) error {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+
 	idx := ipam.ipToIndex(ip)
 	if idx < 0 {
 		return ErrIPNotInRange{IP: ip, Subn: ipam.Network}
@@ -159,7 +177,77 @@ func (ipam *BitmapIPAM) Free(ip net.IP) error {
 	return nil
 }
 
-func (ipam *BitmapIPAM) Expand() {}
+func (ipam *BitmapIPAM) Expand(newSubnet *net.IPNet) error {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+
+	if newSubnet == nil {
+		return ErrNilSubnet{}
+	}
+	if ipam.Network != nil && !cidrContains(newSubnet, ipam.Network) {
+		return fmt.Errorf("ipam: new subnet %s does not include previous %s", newSubnet.String(), ipam.Network.String())
+	}
+
+	oldNet := ipam.Network
+	ipam.Network = newSubnet
+
+	capacity, err := ipam.capacityLocked()
+	if err != nil {
+		ipam.Network = oldNet
+		return err
+	}
+	words := 0
+	if capacity > 0 {
+		words = (capacity + 63) / 64
+	}
+	newBitmap := make([]uint64, words)
+
+	for podName, info := range ipam.IPs {
+		if info == nil || info.IP == nil {
+			delete(ipam.IPs, podName)
+			continue
+		}
+		idx := ipam.ipToIndex(info.IP)
+		if idx < 0 {
+			ipam.Network = oldNet
+			return fmt.Errorf("ipam: existing IP %s not in expanded subnet %s", info.IP.String(), newSubnet.String())
+		}
+		wi, off := idx/64, uint(idx%64)
+		if wi >= len(newBitmap) {
+			ipam.Network = oldNet
+			return fmt.Errorf("ipam: bitmap index overflow for IP %s", info.IP.String())
+		}
+		newBitmap[wi] |= 1 << off
+	}
+
+	ipam.bitmap = newBitmap
+	return nil
+}
+
+func (ipam *BitmapIPAM) ListAllocations() map[string]*ContainerNetInfo {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+	snap := make(map[string]*ContainerNetInfo, len(ipam.IPs))
+	for k, v := range ipam.IPs {
+		if v == nil {
+			continue
+		}
+		copyInfo := *v
+		snap[k] = &copyInfo
+	}
+	return snap
+}
+
+func (ipam *BitmapIPAM) GetAllocation(podName string) (*ContainerNetInfo, bool) {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+	info, ok := ipam.IPs[podName]
+	if !ok || info == nil {
+		return nil, false
+	}
+	copyInfo := *info
+	return &copyInfo, true
+}
 
 // indexToIP maps bitmap index (0 = network+2) -> IP.
 func (ipam *BitmapIPAM) indexToIP(idx int) net.IP {
@@ -186,4 +274,30 @@ func (ipam *BitmapIPAM) ipToIndex(ip net.IP) int {
 		return -1
 	}
 	return offset - 2
+}
+
+func cidrContains(outer, inner *net.IPNet) bool {
+	if outer == nil || inner == nil {
+		return false
+	}
+	return outer.Contains(inner.IP) && outer.Contains(lastIP(inner))
+}
+
+func lastIP(subnet *net.IPNet) net.IP {
+	if subnet == nil {
+		return nil
+	}
+	ip := subnet.IP.To4()
+	if ip == nil {
+		ip = subnet.IP.To16()
+	}
+	if ip == nil {
+		return nil
+	}
+	end := make(net.IP, len(ip))
+	copy(end, ip)
+	for i := range end {
+		end[i] |= ^subnet.Mask[i]
+	}
+	return end
 }

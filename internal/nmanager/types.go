@@ -3,6 +3,7 @@ package nmanager
 import (
 	"net"
 	"sync"
+	"time"
 
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
@@ -59,6 +60,10 @@ type TenantRecord struct {
 	Backend backend.Backend
 	IPAM    ipam.IPAM
 	State   TenantState
+
+	expandCh      chan struct{}
+	lastExpandErr error
+	lastExpandAt  time.Time
 }
 
 // TenantState indicates whether a tenant is ready to process pod ops.

@@ -137,23 +137,23 @@ func (s *CNIServer) handleConn(c net.Conn) {
 		return
 	}
 
-	start := time.Now()
-	s.logRequest(&req)
+	//start := time.Now()
+	//s.logRequest(&req)
 
 	// Handle per-command behavior with minimal responses.
 	var (
-		resp       *wire.Response
-		cacheEvent = "none"
+		resp *wire.Response
+		//cacheEvent = "none"
 		storeEntry bool
 		storeRes   *types100.Result
 	)
 	switch req.Cmd {
 	case wire.CmdSTATUS:
 		resp = s.handleStatusRequest(&req)
-		cacheEvent = "skip"
+		//cacheEvent = "skip"
 	case wire.CmdGC:
 		resp = s.handleGCRequest(&req)
-		cacheEvent = "skip"
+		//cacheEvent = "skip"
 	default:
 		tenantID, resolveErr := s.resolveTenantForRequest(&req)
 		if resolveErr != nil {
@@ -167,7 +167,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 		var ce string
 		resp, storeRes, storeEntry, ce = s.handleTenantCommand(&req, tenantID)
 		if ce != "" {
-			cacheEvent = ce
+			//cacheEvent = ce
 		}
 	}
 
@@ -176,7 +176,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 	}
 
 	_ = uds.WriteResponse(c, hdr.Cmd, hdr.Flags, resp)
-	s.logResponse(&req, resp, cacheEvent, time.Since(start))
+	//s.logResponse(&req, resp, cacheEvent, time.Since(start))
 }
 
 func (s *CNIServer) handleStatusRequest(req *wire.Request) *wire.Response {

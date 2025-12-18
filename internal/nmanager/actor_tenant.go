@@ -2,6 +2,8 @@ package nmanager
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -9,6 +11,7 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 
 	"github/setera/internal/router"
+	"github/setera/pkg/network/ipam"
 )
 
 type tenantMsgKind int
@@ -75,10 +78,7 @@ func (a *tenantActor) loop(ctx context.Context) {
 				if state == TenantStateClosing {
 					err = ErrTenantClosing
 				} else {
-					ipNet, gatewayIP, ifName, err = a.nm.EnsurePod(ctx, a.tenantID, m.args)
-					if err == nil {
-						res = buildPodResult(ipNet, gatewayIP, ifName, m.args.NetNS)
-					}
+					err = a.ensurePodWithExpansion(ctx, m.args, &ipNet, &gatewayIP, &ifName, &res)
 				}
 				if m.reply != nil {
 					m.reply <- tenantReply{result: res, err: err}
@@ -115,6 +115,70 @@ func (a *tenantActor) loop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (a *tenantActor) ensurePodWithExpansion(ctx context.Context, args router.PodAttachArgs, ipNet *net.IPNet, gatewayIP *net.IP, ifName *string, res **types100.Result) error {
+	const maxRetries = 2
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		netRes, gw, iface, err := a.nm.EnsurePod(ctx, a.tenantID, args)
+		if err == nil {
+			*ipNet = netRes
+			*gatewayIP = gw
+			*ifName = iface
+			*res = buildPodResult(netRes, gw, iface, args.NetNS)
+			return nil
+		}
+		var noIPs ipam.ErrNoAvailableIPs
+		if errors.As(err, &noIPs) {
+			if attempt == maxRetries {
+				return err
+			}
+			log.Printf("tenant=%s pod=%s exhausted IPAM (attempt=%d): %v", a.tenantID, args.PodName, attempt, err)
+			expandDone := time.Now()
+			if expErr := a.nm.requestTenantExpansion(ctx, a.tenantID); expErr != nil {
+				return fmt.Errorf("expand tenant: %w", expErr)
+			}
+			if err := a.reconcileExistingPods(ctx, args); err != nil {
+				return fmt.Errorf("reconcile pods post-expand: %w", err)
+			}
+			log.Printf("tenant=%s expansion completed in %s", a.tenantID, time.Since(expandDone))
+			continue
+		}
+		return err
+	}
+	return fmt.Errorf("ensure pod failed after retries")
+}
+
+func (a *tenantActor) reconcileExistingPods(ctx context.Context, trigger router.PodAttachArgs) error {
+	a.nm.mu.RLock()
+	rec := a.nm.TenantRecords[a.tenantID]
+	a.nm.mu.RUnlock()
+	if rec == nil || rec.IPAM == nil {
+		return fmt.Errorf("tenant record/ipam missing for %s", a.tenantID)
+	}
+
+	allocs := rec.IPAM.ListAllocations()
+	log.Printf("tenant=%s reconciliation start pods=%d trigger=%s/%s", a.tenantID, len(allocs), trigger.Namespace, trigger.PodName)
+	for allocationKey, info := range allocs {
+		if info == nil {
+			continue
+		}
+		nsName, podName := splitPodKey(allocationKey)
+		args := router.PodAttachArgs{
+			PodName:     podName,
+			NetNS:       info.NetNS,
+			IfName:      info.IFname,
+			ContainerID: info.ID,
+			Namespace:   nsName,
+		}
+		if err := a.nm.UpdatePod(ctx, a.tenantID, args); err != nil {
+			log.Printf("tenant=%s pod=%s update failed after expansion: %v", a.tenantID, allocationKey, err)
+		} else {
+			log.Printf("tenant=%s pod=%s reconciled", a.tenantID, allocationKey)
+		}
+	}
+	log.Printf("tenant=%s reconciliation complete", a.tenantID)
+	return nil
 }
 
 // EnsurePod enqueues an ensure message and waits for completion with a bounded timeout.

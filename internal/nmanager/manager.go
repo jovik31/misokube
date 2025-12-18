@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"net"
 
 	"github/setera/pkg/network/subnet"
@@ -126,22 +127,29 @@ func (m *NetworkManagerImpl) ExpandTenant(ctx context.Context, id string) (*Tena
 	if !ok {
 		return nil, fmt.Errorf("no tenant record for %s", id)
 	}
+	log.Printf("tenant=%s expand: current subnet=%s", id, rec.Subnet.String())
 	newNet, err := m.Subnet.Expand(id)
 	if err != nil {
 		return nil, fmt.Errorf("subnet expand: %w", err)
 	}
+	log.Printf("tenant=%s expand: subnet manager returned %s", id, newNet.String())
 	if rec.Backend != nil {
+		log.Printf("tenant=%s expand: updating backend devices", id)
 		if err := rec.Backend.Update(newNet, m.NodeName); err != nil {
 			return nil, fmt.Errorf("backend update: %w", err)
 		}
 	}
 	if rec.IPAM != nil {
-		rec.IPAM.Expand()
+		log.Printf("tenant=%s expand: updating IPAM bitmap", id)
+		if err := rec.IPAM.Expand(newNet); err != nil {
+			return nil, fmt.Errorf("ipam expand: %w", err)
+		}
 	}
 	m.mu.Lock()
 	rec.Subnet = newNet
 	m.TenantRecords[id] = rec
 	m.mu.Unlock()
+	log.Printf("tenant=%s expand: completed new subnet=%s", id, newNet.String())
 	return rec, nil
 }
 

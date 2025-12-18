@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github/setera/pkg/data/trie"
 	"github/setera/pkg/network/subnet"
+	"log"
 	"net"
 	"sync"
 )
@@ -69,12 +70,14 @@ func (t *TrieManager) Expand(id string) (*net.IPNet, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	log.Printf("subnet-trie: expand request id=%s", id)
 	if id == "" {
 		return nil, fmt.Errorf("id is empty")
 	}
 
 	n := t.t.GetNodeByID(id)
 	if n == nil {
+		log.Printf("subnet-trie: expand id=%s not found", id)
 		return nil, fmt.Errorf("tenant %q not found", id)
 	}
 
@@ -83,13 +86,14 @@ func (t *TrieManager) Expand(id string) (*net.IPNet, error) {
 		return nil, fmt.Errorf("tenant %q not found", id)
 	}
 
-	rt := t.Root()
+	rt := t.t.RootCIDR
 	// n is root
 	if n.Prefix == rt {
 		return nil, fmt.Errorf("tenant %q has the same prefix has root %v", id, rt)
 	}
-
+	log.Printf("subnet-trie: expand id=%s prefix=%s parent=%v", id, n.Prefix.String(), n.Parent.Prefix)
 	if err := t.t.Merge(id); err != nil {
+		log.Printf("subnet-trie: expand merge failed id=%s err=%v", id, err)
 		return nil, err
 	}
 
@@ -97,7 +101,7 @@ func (t *TrieManager) Expand(id string) (*net.IPNet, error) {
 	if nM == nil {
 		return nil, fmt.Errorf("expand: internal error, missing node after merge. tenant %q", id)
 	}
-
+	log.Printf("subnet-trie: expand id=%s new-prefix=%s", id, nM.Prefix.String())
 	return nM.Prefix, nil
 
 }

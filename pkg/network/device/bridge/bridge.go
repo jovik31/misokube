@@ -18,6 +18,8 @@ var (
 	nlLinkByName  = netlink.LinkByName
 	nlLinkAdd     = netlink.LinkAdd
 	nlAddrReplace = netlink.AddrReplace
+	nlAddrList    = netlink.AddrList
+	nlAddrDel     = netlink.AddrDel
 	nlLinkSetUp   = netlink.LinkSetUp
 	nlLinkDel     = netlink.LinkDel
 )
@@ -63,6 +65,10 @@ func UpdateBridgeIP(d device.Device, subnet *net.IPNet) error {
 	link, err := nlLinkByName(d.GetName())
 	if err != nil {
 		return fmt.Errorf("get link by name %q: %w", d.GetName(), err)
+	}
+
+	if err := flushIPv4Addrs(link); err != nil {
+		return fmt.Errorf("flush bridge addresses: %w", err)
 	}
 
 	if err := nlAddrReplace(link, &netlink.Addr{IPNet: ipNet}); err != nil {
@@ -129,6 +135,29 @@ func ensureBridge(name string, subnet *net.IPNet) (netlink.Link, *net.IPNet, err
 		return nil, nil, fmt.Errorf("link up: %w", err)
 	}
 	return l, ipn, nil
+}
+
+func flushIPv4Addrs(link netlink.Link) error {
+	addrs, err := nlAddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		addrCopy := addr
+		if err := nlAddrDel(link, &addrCopy); err != nil && !isAddrNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func isAddrNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "not found") ||
+		strings.Contains(s, "cannot assign requested address")
 }
 
 // isLinkNotFound normalizes common "not found" errors from netlink.

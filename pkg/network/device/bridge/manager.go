@@ -1,17 +1,17 @@
 package bridge
 
 import (
-	"github/setera/pkg/network/device"
+	devpkg "github/setera/pkg/network/device"
 	"net"
 )
 
-var _ device.DeviceManager = (*Manager)(nil)
+var _ devpkg.DeviceManager = (*Manager)(nil)
 
 type Manager struct{}
 
 func NewDeviceManager() *Manager { return &Manager{} }
 
-func (m *Manager) Create(tenantID string, subnet *net.IPNet, args ...string) (device.Device, error) {
+func (m *Manager) Create(tenantID string, subnet *net.IPNet, args ...string) (devpkg.Device, error) {
 
 	link, ip, err := SetupBridge(tenantID, subnet)
 	if err != nil {
@@ -25,19 +25,22 @@ func (m *Manager) Create(tenantID string, subnet *net.IPNet, args ...string) (de
 
 }
 
-func (m *Manager) Update(device device.Device, subnet *net.IPNet) error {
+func (m *Manager) Update(dev devpkg.Device, subnet *net.IPNet) error {
 
-	err := UpdateBridgeIP(device, subnet)
-	if err != nil {
-
+	if err := UpdateBridgeIP(dev, subnet); err != nil {
 		return err
+	}
+	if br, ok := dev.(*Bridge); ok {
+		if ipNet, err := devpkg.FirstIP(subnet); err == nil {
+			br.ip = ipNet
+		}
 	}
 	return nil
 }
 
-func (m *Manager) Delete(device device.Device) error {
+func (m *Manager) Delete(dev devpkg.Device) error {
 
-	err := DeleteBridge(device)
+	err := DeleteBridge(dev)
 	if err != nil {
 		return err
 	}

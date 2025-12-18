@@ -5,7 +5,7 @@ import "net"
 type IPAM interface {
 
 	// allocate ip
-	Allocate(containerID, ifName, netNs, podName string) (*ContainerNetInfo, error)
+	Allocate(podKey, containerID, ifName, netNs string) (*ContainerNetInfo, error)
 
 	// free ip
 	Free(ip net.IP) error
@@ -16,6 +16,8 @@ type IPAM interface {
 	// get the number of free IPs available in the subnet.
 	Remaining() (int, error)
 
-	// expand the subnet
-	Expand()
+	// expand the subnet to the provided CIDR
+	Expand(newSubnet *net.IPNet) error
+	ListAllocations() map[string]*ContainerNetInfo
+	GetAllocation(podName string) (*ContainerNetInfo, bool)
 }

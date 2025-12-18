@@ -3,8 +3,6 @@ kind: Pod
 metadata:
   name: busybox2
   namespace: default
-  annotations: 
-    setera.com/tenant: test1
 spec:
   containers:
   - name: busybox

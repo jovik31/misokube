@@ -177,7 +177,7 @@ func test_allocate(t *testing.T, a IPAM) {
 	}
 
 	for i := 0; i < cap; i++ {
-		_, err := a.Allocate("pod", "ctr", "eth0", "netns")
+		_, err := a.Allocate("namespace/pod", "ctr", "eth0", "netns")
 		if err != nil {
 			t.Fatalf("AllocateIP #%d failed: %v", i, err)
 		}
