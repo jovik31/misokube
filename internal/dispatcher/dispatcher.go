@@ -26,9 +26,10 @@ func WithSinkSize(n int) Option {
 	}
 }
 
-func New(nm nmanager.TenantOps, opts ...Option) *Dispatcher {
+func New(nmt nmanager.TenantOps, nmn nmanager.NodestoreOps, opts ...Option) *Dispatcher {
 	d := &Dispatcher{
-		nm:    nm,
+		nmt:   nmt,
+		nmn:   nmn,
 		inbox: make(chan Command, 128),
 		sink:  make(chan Event, 128),
 	}
@@ -93,10 +94,13 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			var err error
 			switch cmd.Op {
 			case OpEnsure:
-
-				err = d.nm.EnsureTenant(context.Background(), cmd.TenantID)
+				err = d.nmt.EnsureTenant(context.Background(), cmd.TenantID)
 			case OpRemove:
-				err = d.nm.RemoveTenant(context.Background(), cmd.TenantID)
+				err = d.nmt.RemoveTenant(context.Background(), cmd.TenantID)
+			case OpEnsurePeer:
+				err = d.nmn.EnsurePeer(context.Background(), cmd.TenantID, cmd.Remote)
+			case OpRemovePeer:
+				err = d.nmn.RemovePeer(context.Background(), cmd.TenantID, cmd.Remote)
 			default:
 				err = fmt.Errorf("unknown op %q", cmd.Op)
 			}

@@ -13,10 +13,13 @@ import (
 
 	// managers
 	"github/setera/pkg/network/arp"
+	_ "github/setera/pkg/network/arp/netlinkarp"
 	"github/setera/pkg/network/fdb"
+	_ "github/setera/pkg/network/fdb/netlinkfdb"
 	"github/setera/pkg/network/policy"
 	_ "github/setera/pkg/network/policy/tenant"
 	"github/setera/pkg/network/route"
+	_ "github/setera/pkg/network/route/netlinkroute"
 )
 
 // NewNetworkManager wires the default registered managers.

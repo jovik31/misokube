@@ -1,8 +1,11 @@
 package nmanager
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"net"
+
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/device"
@@ -29,139 +32,89 @@ involves: ARP, FDB, and route entries on the local VTEP towards the remote node.
 */
 func (nm *NetworkManagerImpl) EnsurePeer(ctx context.Context, tenantID string, remote RemoteTenantInfra) error {
 
-	ltr := nm.TenantRecords[tenantID]
-	if ltr == nil || ltr.Backend == nil {
-		return fmt.Errorf("ensure peer: unknown tenant %s", tenantID)
+	if remote.NodeName == "" {
+		return fmt.Errorf("ensure peer: remote node name empty")
+	}
+	ltr, err := nm.getTenantRecord(tenantID)
+	if err != nil {
+		return fmt.Errorf("ensure peer: %w", err)
+	}
+	if err := nm.requireManagers(); err != nil {
+		return fmt.Errorf("ensure peer: %w", err)
 	}
 
-	/*ARP
-	- local vtep
-	- remote vtep ip
-	- remote vtep mac
-	*/
-	lvtep, ok := backend.VTEP(ltr.Backend)
-	if !ok {
-		return fmt.Errorf("ensure peer: tenant %s backend is not VTEP", tenantID)
-	}
-	if remote.VTEPIP == nil || remote.VTEPMAC == nil {
-		return fmt.Errorf("ensure peer: remote VTEP is nil")
+	prev, hadPrev, skip := nm.lookupPeerState(tenantID, remote.NodeName, remote)
+	if skip {
+		return nil
 	}
 
-	ae := arp.ARPEntry{
-		Device: lvtep.GetName(),
-		IP:     remote.VTEPIP,
-		MAC:    remote.VTEPMAC,
+	if hadPrev {
+		if err := nm.removePeerEntries(ltr, prev); err != nil {
+			return fmt.Errorf("ensure peer: cleanup previous peer: %w", err)
+		}
+		nm.deletePeerState(tenantID, prev.NodeName)
 	}
 
-	if err := nm.ARP.Add(ae); err != nil {
-		return fmt.Errorf("ensure peer: add arp entry: %w", err)
+	if err := nm.ensurePeerEntries(ltr, remote); err != nil {
+		return err
 	}
 
-	/*FDB
-	- local vtep
-	- remote node IP
-	- remote vtep mac
-	*/
-
-	fe := fdb.FDBEntry{
-		Device: lvtep.GetName(),
-		Mac:    remote.VTEPMAC,
-		IP:     remote.NodeIP,
-	}
-
-	if err := nm.FDB.Add(fe); err != nil {
-		return fmt.Errorf("ensure peer: add fdb entry: %w", err)
-	}
-
-	/*ROUTE
-	- local vtep
-	- remote tenant subnet
-	- remote vtep ip (next hop)
-
-	*/
-	re := &route.Route{
-		Device:  lvtep.GetName(),
-		Dst:     remote.Subnet,
-		Gateway: remote.VTEPIP,
-	}
-
-	if err := nm.Route.Ensure(re); err != nil {
-		return fmt.Errorf("ensure peer: add route entry: %w", err)
-	}
+	nm.storePeerState(tenantID, remote)
 	return nil
 }
 
 /* RemovePeer removes ARP, FDB, and route entries towards a specific remote node. */
 func (nm *NetworkManagerImpl) RemovePeer(ctx context.Context, tenantID string, remote RemoteTenantInfra) error {
 
-	ltr := nm.TenantRecords[tenantID]
-	if ltr == nil || ltr.Backend == nil {
-		return fmt.Errorf("remove peer: unknown tenant %s", tenantID)
+	if remote.NodeName == "" {
+		return fmt.Errorf("remove peer: remote node name empty")
 	}
 
-	lvtep, ok := backend.VTEP(ltr.Backend)
+	ltr, err := nm.getTenantRecord(tenantID)
+	if err != nil {
+		// tenant already gone locally
+		return nil
+	}
+	if err := nm.requireManagers(); err != nil {
+		return fmt.Errorf("remove peer: %w", err)
+	}
+
+	stored, ok := nm.getStoredPeer(tenantID, remote.NodeName)
 	if !ok {
-		return fmt.Errorf("remove peer: tenant %s backend is not VTEP", tenantID)
-	}
-	if remote.VTEPIP == nil || remote.VTEPMAC == nil {
-		return fmt.Errorf("remove peer: remote VTEP is nil")
+		return nil
 	}
 
-	ae := arp.ARPEntry{
-		Device: lvtep.GetName(),
-		IP:     remote.VTEPIP,
-		MAC:    remote.VTEPMAC,
+	if err := nm.removePeerEntries(ltr, stored); err != nil {
+		return err
 	}
-
-	if err := nm.ARP.Delete(ae); err != nil {
-		return fmt.Errorf("remove peer: delete arp entry: %w", err)
-	}
-
-	fe := fdb.FDBEntry{
-		Device: lvtep.GetName(),
-		Mac:    remote.VTEPMAC,
-		IP:     remote.NodeIP,
-	}
-
-	if err := nm.FDB.Delete(fe); err != nil {
-		return fmt.Errorf("remove peer: delete fdb entry: %w", err)
-	}
-
-	re := &route.Route{
-		Device:  lvtep.GetName(),
-		Dst:     remote.Subnet,
-		Gateway: remote.VTEPIP,
-	}
-
-	if err := nm.Route.Delete(re); err != nil {
-		return fmt.Errorf("remove peer: delete route entry: %w", err)
-	}
-
+	nm.deletePeerState(tenantID, stored.NodeName)
 	return nil
 }
 
 /* FlushTenant flushes ARP/FDB/routes for the tenant on local devices (used on teardown). */
 func (nm *NetworkManagerImpl) FlushTenant(ctx context.Context, tenantID string) error {
 
-	// fetch tenant record
-	ltr := nm.TenantRecords[tenantID]
-	if ltr == nil || ltr.Backend == nil {
-		return fmt.Errorf("flush tenant: unknown tenant %s", tenantID)
+	ltr, err := nm.getTenantRecord(tenantID)
+	if err != nil {
+		return nil
+	}
+	if err := nm.requireManagers(); err != nil {
+		return fmt.Errorf("flush tenant: %w", err)
 	}
 
-	lvtep, ok := backend.VTEP(ltr.Backend)
-	if !ok {
-		return fmt.Errorf("flush tenant: tenant %s backend is not VTEP", tenantID)
+	nm.mu.Lock()
+	peers := make([]RemoteTenantInfra, 0, len(ltr.Peers))
+	for _, peer := range ltr.Peers {
+		peers = append(peers, peer)
 	}
-	if lvtep == nil {
-		return fmt.Errorf("flush tenant: local VTEP is nil")
+	ltr.Peers = make(map[string]RemoteTenantInfra)
+	nm.mu.Unlock()
+
+	for _, peer := range peers {
+		if err := nm.removePeerEntries(ltr, peer); err != nil {
+			return err
+		}
 	}
-
-	// delete all ARP entries on the local VTEP device
-
-	// delete all FDB entries on the local VTEP device
-
-	// delete all routes on the local VTEP device
 
 	return nil
 }
@@ -230,4 +183,179 @@ func buildTenantSnapshot(rec *TenantRecord) (TenantInfraSnapshot, error) {
 	}
 
 	return snap, nil
+}
+
+func (nm *NetworkManagerImpl) ensurePeerEntries(ltr *TenantRecord, remote RemoteTenantInfra) error {
+	lvtep, ok := backend.VTEP(ltr.Backend)
+	if !ok {
+		return fmt.Errorf("tenant backend is not VTEP")
+	}
+	if remote.VTEPIP == nil || remote.VTEPMAC == nil || remote.Subnet == nil {
+		return fmt.Errorf("remote VTEP info missing")
+	}
+
+	ae := arp.ARPEntry{
+		Device: lvtep.GetName(),
+		IP:     remote.VTEPIP,
+		MAC:    remote.VTEPMAC,
+	}
+	if err := nm.ARP.Add(ae); err != nil {
+		return fmt.Errorf("add arp entry: %w", err)
+	}
+
+	fe := fdb.FDBEntry{
+		Device: lvtep.GetName(),
+		Mac:    remote.VTEPMAC,
+		IP:     remote.NodeIP,
+	}
+	if err := nm.FDB.Add(fe); err != nil {
+		return fmt.Errorf("add fdb entry: %w", err)
+	}
+
+	re := &route.Route{
+		Device:  lvtep.GetName(),
+		Dst:     remote.Subnet,
+		Gateway: remote.VTEPIP,
+	}
+	if err := nm.Route.Update(re); err != nil {
+		return fmt.Errorf("add route entry: %w", err)
+	}
+	return nil
+}
+
+func (nm *NetworkManagerImpl) removePeerEntries(ltr *TenantRecord, remote RemoteTenantInfra) error {
+	lvtep, ok := backend.VTEP(ltr.Backend)
+	if !ok {
+		return fmt.Errorf("tenant backend is not VTEP")
+	}
+	if remote.VTEPIP == nil || remote.VTEPMAC == nil || remote.Subnet == nil {
+		return fmt.Errorf("remote VTEP info missing")
+	}
+
+	ae := arp.ARPEntry{
+		Device: lvtep.GetName(),
+		IP:     remote.VTEPIP,
+		MAC:    remote.VTEPMAC,
+	}
+	if err := nm.ARP.Delete(ae); err != nil {
+		return fmt.Errorf("delete arp entry: %w", err)
+	}
+
+	fe := fdb.FDBEntry{
+		Device: lvtep.GetName(),
+		Mac:    remote.VTEPMAC,
+		IP:     remote.NodeIP,
+	}
+	if err := nm.FDB.Delete(fe); err != nil {
+		return fmt.Errorf("delete fdb entry: %w", err)
+	}
+
+	re := &route.Route{
+		Device:  lvtep.GetName(),
+		Dst:     remote.Subnet,
+		Gateway: remote.VTEPIP,
+	}
+	if err := nm.Route.Delete(re); err != nil {
+		return fmt.Errorf("delete route entry: %w", err)
+	}
+	return nil
+}
+
+func (nm *NetworkManagerImpl) getTenantRecord(tenantID string) (*TenantRecord, error) {
+	nm.mu.RLock()
+	rec := nm.TenantRecords[tenantID]
+	nm.mu.RUnlock()
+	if rec == nil || rec.Backend == nil {
+		return nil, fmt.Errorf("tenant %s not found", tenantID)
+	}
+	return rec, nil
+}
+
+func (nm *NetworkManagerImpl) requireManagers() error {
+	if nm.ARP == nil || nm.FDB == nil || nm.Route == nil {
+		return fmt.Errorf("managers not initialized")
+	}
+	return nil
+}
+
+func (nm *NetworkManagerImpl) lookupPeerState(tenantID, remoteNode string, desired RemoteTenantInfra) (RemoteTenantInfra, bool, bool) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+
+	rec := nm.TenantRecords[tenantID]
+	if rec == nil {
+		return RemoteTenantInfra{}, false, false
+	}
+	if rec.Peers == nil {
+		rec.Peers = make(map[string]RemoteTenantInfra)
+	}
+	prev, ok := rec.Peers[remoteNode]
+	if ok && remotePeersEqual(prev, desired) {
+		return prev, ok, true
+	}
+	return prev, ok, false
+}
+
+func (nm *NetworkManagerImpl) storePeerState(tenantID string, remote RemoteTenantInfra) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	rec := nm.TenantRecords[tenantID]
+	if rec == nil {
+		return
+	}
+	if rec.Peers == nil {
+		rec.Peers = make(map[string]RemoteTenantInfra)
+	}
+	rec.Peers[remote.NodeName] = remote
+}
+
+func (nm *NetworkManagerImpl) deletePeerState(tenantID, remoteNode string) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	rec := nm.TenantRecords[tenantID]
+	if rec == nil || rec.Peers == nil {
+		return
+	}
+	delete(rec.Peers, remoteNode)
+}
+
+func (nm *NetworkManagerImpl) getStoredPeer(tenantID, remoteNode string) (RemoteTenantInfra, bool) {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	rec := nm.TenantRecords[tenantID]
+	if rec == nil || rec.Peers == nil {
+		return RemoteTenantInfra{}, false
+	}
+	peer, ok := rec.Peers[remoteNode]
+	return peer, ok
+}
+
+func remotePeersEqual(a, b RemoteTenantInfra) bool {
+	if a.NodeName != b.NodeName || a.VNI != b.VNI {
+		return false
+	}
+	if !cidrEqual(a.Subnet, b.Subnet) {
+		return false
+	}
+	if !ipEqual(a.NodeIP, b.NodeIP) || !ipEqual(a.VTEPIP, b.VTEPIP) {
+		return false
+	}
+	if !macEqual(a.VTEPMAC, b.VTEPMAC) {
+		return false
+	}
+	return true
+}
+
+func ipEqual(a, b net.IP) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == 0 && len(b) == 0
+	}
+	return a.Equal(b)
+}
+
+func macEqual(a, b net.HardwareAddr) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == 0 && len(b) == 0
+	}
+	return bytes.Equal(a, b)
 }

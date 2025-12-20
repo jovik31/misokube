@@ -125,3 +125,33 @@ func (o *Operator) Run(ctx context.Context) error {
 	defer o.logger.Info("daemon operator stopped")
 	return o.base.Run(ctx, o.router)
 }
+
+func (o *Operator) ensurePeer(ctx context.Context, tenantID string, remote nmanager.RemoteTenantInfra) {
+	if tenantID == "" {
+		return
+	}
+	if o.dp != nil {
+		o.dp.EnsurePeer(remote, tenantID)
+		return
+	}
+	if o.nmOps != nil {
+		if err := o.nmOps.EnsurePeer(ctx, tenantID, remote); err != nil {
+			o.logger.WithValues("tenant", tenantID, "remote", remote.NodeName).Info("ensure peer direct call failed", "err", err)
+		}
+	}
+}
+
+func (o *Operator) removePeer(ctx context.Context, tenantID string, remote nmanager.RemoteTenantInfra) {
+	if tenantID == "" {
+		return
+	}
+	if o.dp != nil {
+		o.dp.RemovePeer(remote, tenantID)
+		return
+	}
+	if o.nmOps != nil {
+		if err := o.nmOps.RemovePeer(ctx, tenantID, remote); err != nil {
+			o.logger.WithValues("tenant", tenantID, "remote", remote.NodeName).Info("remove peer direct call failed", "err", err)
+		}
+	}
+}

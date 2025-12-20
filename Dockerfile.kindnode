@@ -1,0 +1,18 @@
+From kindest/node:v1.33.1@sha256:050072256b9a903bd914c0b2866828150cb229cea0efe5892e2b644d5dd3b34f
+
+# Install debugging tools
+RUN apt-get update && \
+    apt-get install -y \
+        tcpdump \
+        iputils-ping \
+        traceroute \
+        iproute2 \
+        iptables \
+        ethtool \
+        conntrack \
+        dnsutils \
+        netcat-openbsd \
+        curl \
+        vim \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*

@@ -34,10 +34,7 @@ import (
 
 // stub-daemon: minimal UDS server to exercise the CNI shim.
 // It accepts framed JSON requests and returns OK with an optional minimal result.
-const (
-	defaultCNIConfPath = "/etc/tenantcni/cni-conf.json"
-	defaultNetConfPath = "/etc/tenantcni/net-conf.json"
-)
+const defaultCNIConfPath = "/etc/tenantcni/cni-conf.json"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -86,31 +83,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// load cluster networking config from mounted CNI files
+	// load cluster networking config from mounted CNI files (only CNI version)
 	cniConfPath := envOrDefault("CNI_CONF_PATH", defaultCNIConfPath)
-	netConfPath := envOrDefault("NET_CONF_PATH", defaultNetConfPath)
-
 	cniVersion, err := loadCNIVersion(cniConfPath)
 	if err != nil {
 		logger.Error(err, "failed to load CNI config; falling back to default version")
 		cniVersion = ""
 	}
 
-	var nodeCIDRParsed *net.IPNet
-	if parsed, err := loadPodCIDR(netConfPath); err == nil {
-		nodeCIDRParsed = parsed
-	} else {
-		logger.Error(err, "failed to load PodCIDR from net config, falling back to node CIDR")
-		nodeCIDR, err := k8s.GetNodeCIDR(kubeclient, nodeName)
-		if err != nil {
-			logger.Error(err, "failed to get node CIDR")
-			os.Exit(1)
-		}
-		_, nodeCIDRParsed, err = net.ParseCIDR(nodeCIDR)
-		if err != nil {
-			logger.Error(err, "failed to parse node CIDR")
-			os.Exit(1)
-		}
+	nodeCIDR, err := k8s.GetNodeCIDR(kubeclient, nodeName)
+	if err != nil || nodeCIDR == "" {
+		logger.Error(err, "node CIDR not available; cannot continue")
+		os.Exit(1)
+	}
+	_, nodeCIDRParsed, err := net.ParseCIDR(nodeCIDR)
+	if err != nil {
+		logger.Error(err, "failed to parse node CIDR")
+		os.Exit(1)
 	}
 
 	// initialize network manager
@@ -130,7 +119,7 @@ func main() {
 	nm.SetEmitter(base)
 
 	// init dispatcher
-	dp := dispatcher.New(nm)
+	dp := dispatcher.New(nm, nm) // nm implements both TenantOps and NodestoreOps
 	go func() {
 		if err := dp.Run(ctx); err != nil {
 			logger.Error(err, "dispatcher stopped running")
@@ -258,27 +247,6 @@ func loadCNIVersion(path string) (string, error) {
 		return "", fmt.Errorf("cniVersion missing in %s", path)
 	}
 	return cfg.CNIVersion, nil
-}
-
-func loadPodCIDR(path string) (*net.IPNet, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var cfg struct {
-		PodCIDR string `json:"PodCIDR"`
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	if cfg.PodCIDR == "" {
-		return nil, fmt.Errorf("PodCIDR missing in %s", path)
-	}
-	_, cidr, err := net.ParseCIDR(cfg.PodCIDR)
-	if err != nil {
-		return nil, err
-	}
-	return cidr, nil
 }
 
 func envOrDefault(key, def string) string {

@@ -114,7 +114,10 @@ func (n *netlinkRouteManager) Delete(route *route.Route, ns ...ns.NetNS) error {
 		}
 		rt := buildRoute(route, link.Attrs().Index)
 
-		return n.nl.RouteDel(rt)
+		if err := n.nl.RouteDel(rt); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return err
+		}
+		return nil
 	})
 }
 

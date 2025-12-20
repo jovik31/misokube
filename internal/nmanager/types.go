@@ -64,6 +64,7 @@ type TenantRecord struct {
 	expandCh      chan struct{}
 	lastExpandErr error
 	lastExpandAt  time.Time
+	Peers         map[string]RemoteTenantInfra
 }
 
 // TenantState indicates whether a tenant is ready to process pod ops.

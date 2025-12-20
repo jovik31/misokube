@@ -2,67 +2,14 @@ package daemon
 
 import (
 	"context"
+	"github/setera/pkg/k8s"
+
+	op "github/setera/pkg/operator"
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
-	"github/setera/pkg/k8s"
-	op "github/setera/pkg/operator"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// ----- these reconcile funcs handle Tenant CRD events -----
-func (o *Operator) reconcileTenantAddUpdate(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-
-	// call the dispatcher to handle nm changes
-	o.logger.Info("Ensuring tenant")
-	if o.dp != nil {
-		o.dp.EnsureTenant(ref.Namespace, ref.Name)
-	} else {
-		o.logger.Info("No dispatcher configured; skipping EnsureTenant")
-	}
-	return nil
-}
-
-func (o *Operator) reconcileTenantDelete(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-	// forward deletion to dispatcher (idempotent)
-	if o.dp != nil {
-		o.dp.RemoveTenant(ref.Namespace, ref.Name)
-	}
-	return nil
-}
-
-// ----- these reconcile funcs handle NodeStore CRD events -----
-func (o *Operator) reconcileNodeStoreAdd(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-
-	nstore, err := o.nodeStoreLister.NodeStores(ref.Namespace).Get(ref.Name)
-	if err != nil {
-		return err
-	}
-
-	//ensure finalizer
-	if err := o.ensureNodestoreFinalizer(ctx, nstore); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (o *Operator) reconcileNodeStoreUpdate(ctx context.Context, _ op.Source, res op.ResourceRef) error {
-
-	// used to handle remote nodestore updates:
-	// we need to ensure peers, for that we do the following:
-	// 1. check what tenants are assigned to the remote nodestore
-	// 2. If the tenant is also assigned to the local nodestore, send an ensurePeer request to the dispatcher
-	return nil
-}
-
-func (o *Operator) reconcileNodeStoreDelete(ctx context.Context, _ op.Source, res op.ResourceRef) error {
-
-	// on deletion - only cleans up local nodestore
-	// call removeTenants for all tenants assigned to this nodestore
-	// remove finalizer
-	// delete handled by k8s garbage collection
-	return nil
-}
 
 // ----- these reconcile funcs handle Network Manager events related to Tenant node assignments -----
 // ----- update the local nodestore with network manager changes -----
