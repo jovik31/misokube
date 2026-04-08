@@ -26,14 +26,14 @@ func NewTenantPolicyManager(handle NetlinkTenantPolicyHandle) tp.TenantPolicyMan
 	}
 }
 
+/*
 func init() {
-
 	mgr, err := NewV4()
 	if err != nil {
 		panic(err)
 	}
 	tp.RegisterTenantPolicyManager(mgr)
-}
+}*/
 
 func NewV4() (tp.TenantPolicyManager, error) {
 

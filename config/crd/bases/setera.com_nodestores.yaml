@@ -52,6 +52,10 @@ spec:
             type: object
           status:
             properties:
+              freeSubnets:
+                type: integer
+              totalSubnets:
+                type: integer
               tenants:
                 additionalProperties:
                   properties:

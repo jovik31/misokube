@@ -47,12 +47,12 @@ func (o *Operator) reconcileNodeStoreUpdate(ctx context.Context, _ op.Source, re
 	}
 	if len(localSnaps) == 0 {
 		o.logger.Info("peer sync deferred: local tenant snapshot empty")
-		return fmt.Errorf("local tenant snapshot empty")
+		return nil
 	}
 
 	if len(ns.Status.Tenants) == 0 {
 		o.logger.WithValues("remoteNode", ns.Spec.Name).Info("peer sync deferred: remote NodeStore has no tenant status yet")
-		return fmt.Errorf("remote nodestore %s has empty tenant status", ns.Spec.Name)
+		return nil
 	}
 
 	var ensured, removed int

@@ -15,6 +15,8 @@ type SubnetManager interface {
 	// introspection
 	Get(id string) (*net.IPNet, error)
 	List() map[string]*net.IPNet
+	FreeCount() int
+	TotalCount() int
 }
 
 var DefaultSubnetManager SubnetManager

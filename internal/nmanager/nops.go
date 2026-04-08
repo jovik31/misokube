@@ -15,6 +15,20 @@ import (
 
 var _ NodestoreOps = (*NetworkManagerImpl)(nil)
 
+func (nm *NetworkManagerImpl) SubnetFreeCount() int {
+	if nm.Subnet == nil {
+		return 0
+	}
+	return nm.Subnet.FreeCount()
+}
+
+func (nm *NetworkManagerImpl) SubnetTotalCount() int {
+	if nm.Subnet == nil {
+		return 0
+	}
+	return nm.Subnet.TotalCount()
+}
+
 func (nm *NetworkManagerImpl) SnapshotTenantInfra(tenantId string) (TenantInfraSnapshot, error) {
 	nm.mu.RLock()
 	rec := nm.TenantRecords[tenantId]

@@ -142,6 +142,22 @@ func main() {
 	// Provide local node context and NM ops to operator
 	dOpr.SetNodeName(nodeName)
 	dOpr.SetNMOps(nm)
+
+	// Sync initial subnet counts so the orchestrator can score nodes
+	// before any tenant event triggers a full NodeStore update.
+	if existing, getErr := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Get(ctx, nodeName, metav1.GetOptions{}); getErr == nil {
+		existing.Status.TotalSubnets = nm.SubnetTotalCount()
+		existing.Status.FreeSubnets = nm.SubnetFreeCount()
+		if _, updErr := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, existing, metav1.UpdateOptions{}); updErr != nil {
+			logger.Error(updErr, "failed to sync initial subnet counts to NodeStore", "node", nodeName)
+		} else {
+			logger.Info("synced initial subnet counts to NodeStore", "node", nodeName,
+				"total", existing.Status.TotalSubnets, "free", existing.Status.FreeSubnets)
+		}
+	} else {
+		logger.Error(getErr, "failed to get NodeStore for initial subnet sync", "node", nodeName)
+	}
+
 	if dOpr != nil {
 		factory.Start(ctx.Done())
 		go func() {

@@ -35,6 +35,8 @@ type NodeStoreStatus struct {
 
 	// +kubebuilder:validation:Optional
 	Tenants map[string]TenantInfra `json:"tenants"` // Tenants that are deployed on this node
+	FreeSubnets int                    `json:"freeSubnets"` // Number of free subnets available on this node
+	TotalSubnets int                   `json:"totalSubnets"` // Total number of subnets available on this node
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

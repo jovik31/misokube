@@ -11,6 +11,8 @@ import (
 	// client-go
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/kubernetes"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	// logging
 	"k8s.io/klog/v2"
@@ -22,6 +24,8 @@ type Operator struct {
 	recorder record.EventRecorder
 
 	setera seteraclient.Interface
+	kubeclient kubernetes.Interface
+	metricsClient *metricsclient.Clientset
 
 	// tenant lister and informer
 	tenantInf    cache.SharedIndexInformer
@@ -47,6 +51,8 @@ func New(
 
 	// setera client
 	seteraClient seteraclient.Interface,
+	kubeClient kubernetes.Interface,
+	metricsClient *metricsclient.Clientset,
 
 	// crd informers and listers
 
@@ -65,6 +71,8 @@ func New(
 		logger:          logger.WithName("orchestrator"),
 		recorder:        recorder,
 		setera:          seteraClient,
+		kubeclient:      kubeClient,
+		metricsClient:   metricsClient,
 		tenantInf:       tenantInformer,
 		tenantLister:    tenantLister,
 		nodeStoreInf:    nodeStoreInformer,

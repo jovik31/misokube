@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"math"
+	"net"
 	"os"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -137,20 +139,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// create nodestore object for the node
-
-	nd := initNodestore(&cfg)
-	_, err = seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Create(ctx, nd, metav1.CreateOptions{})
-	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			logger.Info("NodeStore already exists, skipping creation", "node", cfg.nodeName)
-		} else {
-			logger.Error(err, "failed to create NodeStore for node", "node", cfg.nodeName)
-			os.Exit(1)
-		}
-	}
-
-	// get node_cidr
+	// get node_cidr (needed before NodeStore creation to compute subnet counts)
 	node, err := kubeclient.CoreV1().Nodes().Get(ctx, cfg.nodeName, metav1.GetOptions{})
 	if err != nil {
 		logger.Error(err, "failed to get node", "node", cfg.nodeName)
@@ -162,6 +151,47 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.nodeCIDR = node.Spec.PodCIDR
+
+	// Compute total leaf subnets from PodCIDR.
+	// The trie subdivides the node CIDR down to /30 leaves,
+	// so totalLeaves = 2^(30 - prefixLen).
+	_, nodeCIDRNet, err := net.ParseCIDR(cfg.nodeCIDR)
+	if err != nil {
+		logger.Error(err, "failed to parse node CIDR", "cidr", cfg.nodeCIDR)
+		os.Exit(1)
+	}
+	prefixLen, _ := nodeCIDRNet.Mask.Size()
+	const leafMask = 30
+	totalLeaves := int(math.Pow(2, float64(leafMask-prefixLen)))
+	logger.Info("Computed total leaf subnets for node", "node", cfg.nodeName, "podCIDR", cfg.nodeCIDR, "totalLeafSubnets", totalLeaves)
+
+	// create nodestore object for the node
+	nd := initNodestore(&cfg)
+	nd.Status.TotalSubnets = totalLeaves
+	nd.Status.FreeSubnets = totalLeaves // all subnets free at startup
+
+	_, err = seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Create(ctx, nd, metav1.CreateOptions{})
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.Info("NodeStore already exists, updating subnet counts", "node", cfg.nodeName)
+			// Fetch existing NodeStore and patch its status with the computed counts
+			existing, getErr := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Get(ctx, cfg.nodeName, metav1.GetOptions{})
+			if getErr != nil {
+				logger.Error(getErr, "failed to get existing NodeStore", "node", cfg.nodeName)
+				os.Exit(1)
+			}
+			existing.Status.TotalSubnets = totalLeaves
+			existing.Status.FreeSubnets = totalLeaves
+			if _, updErr := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, existing, metav1.UpdateOptions{}); updErr != nil {
+				logger.Error(updErr, "failed to update NodeStore status", "node", cfg.nodeName)
+				os.Exit(1)
+			}
+		} else {
+			logger.Error(err, "failed to create NodeStore for node", "node", cfg.nodeName)
+			os.Exit(1)
+		}
+	}
+	logger.Info("NodeStore subnet counts initialized", "node", cfg.nodeName, "total", totalLeaves, "free", totalLeaves)
 
 	// Start daemon operator (informers + reconciler)
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)

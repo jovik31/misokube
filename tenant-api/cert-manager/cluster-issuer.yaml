@@ -1,0 +1,19 @@
+# File name is `cluster-issuer.yaml`
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  # The name should be the same with `defaultIssuerName` above
+  name: letsencrypt-prod
+  namespace: cert-manager
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # Replace with your domain email.
+    email: joao.r.ribeiro@tecnico.ulisboa.pt
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            # The ingress class name of nginx.
+            class: nginx

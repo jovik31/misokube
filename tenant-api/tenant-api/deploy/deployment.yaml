@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-api
+  namespace: default
+  labels:
+    app: tenant-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tenant-api
+  template:
+    metadata:
+      labels:
+        app: tenant-api
+    spec:
+      serviceAccountName: tenant-api
+      containers:
+        - name: tenant-api
+          image: tenant-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30

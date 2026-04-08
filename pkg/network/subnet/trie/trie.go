@@ -202,3 +202,17 @@ func (t *TrieManager) Root() *net.IPNet {
 	defer t.mu.Unlock()
 	return t.t.RootCIDR
 }
+
+func (t *TrieManager) FreeCount() int {
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.t.FreeCount()
+}
+
+func (t *TrieManager) TotalCount() int {
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.t.TotalCount()
+}

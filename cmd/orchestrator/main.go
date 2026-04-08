@@ -18,8 +18,11 @@ import (
 	// logging + signals
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 func main() {
@@ -49,6 +52,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	metricsClient, err := initMetricsClient(config)
+	if err != nil {
+		logger.Error(err, "failed to initialize metrics client")
+		os.Exit(1)
+	}
+
 	// Shared informer factory for Setera CRDs
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
 	// Use NamespaceAll to cover cluster-scoped and namespaced resources
@@ -74,6 +83,8 @@ func main() {
 		logger,
 		nil, // recorder (optional)
 		seteraClient,
+		kubeclient,
+		metricsClient,
 		tenantInf,
 		tenantLister,
 		nodeStoreInf,
@@ -90,6 +101,14 @@ func main() {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}
+}
+
+func initMetricsClient(config interface{}) (*metricsclient.Clientset, error) {
+	metricsClient, err := metricsclient.NewForConfig(config.(*rest.Config))
+	if err != nil {
+		return nil, err
+	}
+	return metricsClient, nil
 }
 
 func ensureDefaultTenant(ctx context.Context, seteraclient versioned.Interface, kubeclient *kubernetes.Clientset, logger klog.Logger) error {

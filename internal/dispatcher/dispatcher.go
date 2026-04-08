@@ -104,6 +104,9 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			default:
 				err = fmt.Errorf("unknown op %q", cmd.Op)
 			}
+			if err != nil {
+				log.Printf("dispatcher: op=%s tenant=%s failed: %v", cmd.Op, cmd.TenantID, err)
+			}
 			ev.err = err
 			ev.timestamp = time.Now()
 

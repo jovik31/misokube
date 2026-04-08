@@ -82,6 +82,10 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 	// copy nodestore
 	mod := ns.DeepCopy()
 	mod.Status.Tenants = newTenants
+	mod.Status.FreeSubnets = o.nmOps.SubnetFreeCount()
+	// TotalSubnets is set once at startup from the node CIDR and must not
+	// be overwritten here because trie expansions merge leaves, reducing
+	// TotalCount() even though the actual node capacity hasn't changed.
 
 	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status", "err", err)
@@ -89,6 +93,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 	} else {
 		o.logger.WithValues("node", o.nodeName).Info("updated NodeStore tenants from NM snapshot", "count", len(newTenants))
 	}
+
 	return nil
 }
 
@@ -143,6 +148,7 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 	o.logger.Info("This is the node name :", o.nodeName)
 
 	ns.Status.Tenants = newTenants
+	ns.Status.FreeSubnets = o.nmOps.SubnetFreeCount()
 	if _, err := o.setera.SeteraV1().NodeStores(metav1.NamespaceNone).UpdateStatus(ctx, ns, metav1.UpdateOptions{}); err != nil {
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status on delete", "err", err)
 	} else {

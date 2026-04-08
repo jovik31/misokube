@@ -84,6 +84,18 @@ func SplitSubnet(network *net.IPNet, maskMaxSize int) ([]*net.IPNet, error) {
 	}, nil
 }
 
+func countLeavesRecursive(node *TrieNode, count *int) {
+	if node == nil {
+		return
+	}
+	if node.Children[0] == nil && node.Children[1] == nil {
+		*count++
+		return
+	}
+	countLeavesRecursive(node.Children[0], count)
+	countLeavesRecursive(node.Children[1], count)
+}
+
 func getSibling(n *TrieNode) *TrieNode {
 	if n == nil || n.Parent == nil {
 		return nil

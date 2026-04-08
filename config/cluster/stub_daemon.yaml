@@ -185,6 +185,9 @@ spec:
         - name: tenantcni-cfg
           mountPath: /etc/tenantcni
           readOnly: true
+        - name: bpffs
+          mountPath: /sys/fs/bpf
+          mountPropagation: Bidirectional
       volumes:
         - name: host-netns
           hostPath:
@@ -208,7 +211,11 @@ spec:
             name: tenantcni-config
         - name: tenantcni-cfg
           configMap:
-            name: tenantcni-config      
+            name: tenantcni-config
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -263,6 +270,13 @@ rules:
   - patch
   - update
   - delete
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

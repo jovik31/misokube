@@ -1,3 +1,6 @@
+//go:build iptables
+// +build iptables
+
 package node
 
 import (
@@ -29,13 +32,14 @@ func NewNodeNetworkManager() (tp.NodeNetworkManager, error) {
 	return NewNodeNetworkManagerWithHandle(ipt), nil
 }
 
+/*
 func init() {
 	mgr, err := NewNodeNetworkManager()
 	if err != nil {
 		panic(err)
 	}
 	tp.RegisterNodeNetworkManager(mgr)
-}
+}*/
 
 func (n *nodePolicyManager) EnsureIPForwarding() error {
 	if err := writeSysctl("net.ipv4.ip_forward", "1", false); err != nil {

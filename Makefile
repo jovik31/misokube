@@ -82,6 +82,10 @@ rbac-all: rbac-daemon rbac-orchestrator ## Generate RBAC for all the components
 install: ## Install CRDs, RBAC and webhook configuration onto the cluster - make sure the kubeconfig file is pointing to the correct cluster
 	kubectl apply -f config/crd/bases
 	kubectl apply -f $(RBAC_ORCHESTRATOR_DIR)
+	kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+	kubectl -n kube-system patch deployment metrics-server \
+  --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 ##	kubectl apply -f $(RBAC_DAEMON_DIR)
 
 
@@ -110,6 +114,10 @@ webhook-ssl: ## Generate new webhook certificates
 
 ##@ Build
 
+.PHONY: bpf-generate
+bpf-generate: ## Generate Go bindings for TC/XDP eBPF programs
+	go generate ./pkg/network/policy/loader
+
 .PHONY: build-orchestrator
 build-orchestrator: ## Build orchestrator docker image
 	docker build \
@@ -120,8 +128,9 @@ build-orchestrator: ## Build orchestrator docker image
 docker-build-orchestrator: ## Build orchestrator docker image
 	docker build -t setera.com/orchestrator:latest --build-arg CMD_PATH=./cmd/orchestrator/main.go -f Dockerfile .
 
+
 .PHONY: build-daemon
-build-daemon: # Build daemon docker image
+build-daemon: bpf-generate # Build daemon docker image (ensures eBPF objects are generated)
 	docker build \
 	--build-arg BINARY=$(DAEMON_COMPONENT) \
 	-f $(DOCKERFILE) \
@@ -180,6 +189,25 @@ kind-cluster-load-orchestrator-image: ## Load orchestrator image into the kind c
 
 .PHONY: create-node-image
 create-node-image: ## Create custom kind node image
+
+
+##@ eBPF Testing
+
+.PHONY: ebpf-cluster
+ebpf-cluster: ## Create the eBPF test Kind cluster (separate from main cluster)
+	$(MAKE) -C eBPF_test cluster
+
+.PHONY: ebpf-cluster-delete
+ebpf-cluster-delete: ## Delete the eBPF test Kind cluster
+	$(MAKE) -C eBPF_test cluster-delete
+
+.PHONY: ebpf-deploy
+ebpf-deploy: ## Build and deploy eBPF firewall to the test cluster
+	$(MAKE) -C eBPF_test deploy
+
+.PHONY: ebpf-clean
+ebpf-clean: ## Clean eBPF test environment
+	$(MAKE) -C eBPF_test nuke
 
 
 ##@ Installation

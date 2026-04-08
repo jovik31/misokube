@@ -167,6 +167,18 @@ func (trie *IPTrie) Merge(id string) error {
 
 }
 
+// FreeCount returns the number of unallocated leaf subnets.
+func (trie *IPTrie) FreeCount() int {
+	return len(trie.FindAllFree())
+}
+
+// TotalCount returns the total number of leaf subnets (allocated + free).
+func (trie *IPTrie) TotalCount() int {
+	var count int
+	countLeavesRecursive(trie.Root, &count)
+	return count
+}
+
 func (trie *IPTrie) PrintTree() {
 	if trie.Root != nil {
 		trie.Root.printTree("", true)

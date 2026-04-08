@@ -55,14 +55,59 @@ func (o *Operator) selectInitialAwaitingNodes(t *seterav1.Tenant) ([]string, err
 		return nil, fmt.Errorf("no NodeStores available")
 	}
 
+	scoreList := make([]struct {
+		Name  string
+		Score int
+	}, len(stores))
+
+	for i, ns := range stores {
+		scoreList[i].Name = ns.Spec.Name
+		subnetScore, err := o.getNodeScoreFreeSubnets(*ns)
+		metricsScore, err2 := o.getNodeScoreMetrics(context.Background(), *ns, t.Name)
+
+		if err != nil || err2 != nil {
+			o.logger.Error(err, "failed to get node subnet score", "nodestore", fmt.Sprintf("%s/%s", ns.Namespace, ns.Name))
+			o.logger.Error(err2, "failed to get node metrics score", "nodestore", fmt.Sprintf("%s/%s", ns.Namespace, ns.Name))
+			continue
+		}
+
+		// Both scores are 0-100. Use whichever is available; average if both are.
+		var nodeScore float64
+		switch {
+		case err != nil:
+			// Only metrics available
+			o.logger.Info("subnet score unavailable, using metrics only", "node", ns.Spec.Name, "err", err)
+			nodeScore = metricsScore
+		case err2 != nil:
+			// Only subnet score available
+			o.logger.Info("metrics score unavailable, using subnet score only", "node", ns.Spec.Name, "err", err2)
+			nodeScore = subnetScore
+		default:
+			nodeScore = (subnetScore * 0.5) + (metricsScore * 0.5)
+		}
+		scoreList[i].Score = int(nodeScore)
+	}
+
+	// Sort by score in descending order
+	slices.SortFunc(scoreList, func(a, b struct {
+		Name  string
+		Score int
+	}) int {
+		return b.Score - a.Score
+	})
+
+	o.logger.Info("scored NodeStores for initial Tenant node selection", "tenant", fmt.Sprintf("%s/%s", t.Namespace, t.Name), "scores", scoreList)
+
 	out := make([]string, 0, t.Spec.Zones)
-	for _, ns := range stores {
+	//Gets the nodestores in a random order and then pulls them one by one until we have as many nodes as zones.
+	for _, node := range scoreList {
+		//Already have enough nodes
 		if len(out) >= t.Spec.Zones {
 			break
 		}
-		id := ns.Spec.Name
+		id := node.Name
 		if id == "" {
-			id = ns.Name // fallback to object name if spec name not set
+			id = node.Name // use the name from scoreList
 		}
 		out = append(out, id)
 	}
@@ -176,3 +221,73 @@ func equalNodeInfos(a, b []seterav1.NodeInfo) bool {
 	}
 	return true
 }
+
+// getNodeScore retrieves a node's resource Allocatble capacity and computes a weighted score.
+func (o *Operator) getNodeAllocatable(ctx context.Context, ns seterav1.NodeStore) (float64, float64, error) {
+	// Get the node in the nodestore
+	node, err := o.kubeclient.CoreV1().Nodes().Get(ctx, ns.Spec.Name, metav1.GetOptions{})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get node %s: %v", ns.Spec.Name, err)
+	}
+
+	// Get the CPU and memory capacity of the node
+	cpu := node.Status.Allocatable.Cpu().MilliValue()
+	mem := node.Status.Allocatable.Memory().Value()
+
+	o.logger.Info("got node capacity for scoring", "node", node.Name, "cpu(millicores)", cpu, "memory(bytes)", mem)
+
+	//Convert from cores to milicores on the CPU and from ki to Mi on memory
+	return float64(cpu), float64(mem), nil
+}
+
+func (o *Operator) getNodeMetrics(ctx context.Context, ns seterav1.NodeStore, tenantName string) (float64, float64, error) {
+	// Get the node in the nodestore
+	m, err := o.metricsClient.MetricsV1beta1().NodeMetricses().Get(ctx, ns.Spec.Name, metav1.GetOptions{})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get node metrics for node %s on tenant %s: %v", ns.Spec.Name, tenantName, err)
+	}
+
+	cpu := m.Usage.Cpu().MilliValue()
+	mem := m.Usage.Memory().Value()
+
+	o.logger.Info("got node metrics for scoring", "node", ns.Spec.Name, "cpu(millicores)", cpu, "memory(bytes)", mem)
+
+	return float64(cpu), float64(mem), nil
+}
+
+func (o *Operator) getNodeScoreMetrics(ctx context.Context, ns seterav1.NodeStore, tenantName string) (float64, error) {
+	cpuUsage, memUsage, err := o.getNodeMetrics(ctx, ns, tenantName)
+	if err != nil {
+		return 0, fmt.Errorf("get node metrics: %w", err)
+	}
+
+	cpuMax, memMax, err := o.getNodeAllocatable(ctx, ns)
+	if err != nil {
+		return 0, fmt.Errorf("get node allocatable: %w", err)
+	}
+
+	if cpuMax == 0 || memMax == 0 {
+		return 0, fmt.Errorf("node %s has zero allocatable CPU or memory", ns.Spec.Name)
+	}
+
+	cpuScore := cpuUsage / cpuMax
+	memScore := memUsage / memMax
+
+	// Simple average of CPU and memory usage ratios inverted to represent
+	// free capacity: higher score = more resources available.
+	score := (cpuScore + memScore) / 2
+
+	o.logger.Info("computed node score from metrics", "node", ns.Spec.Name, "cpuUsage", cpuUsage, "memUsage", memUsage, "cpuMax", cpuMax, "memMax", memMax, "score", score)
+	
+	return (1-score)*100, nil
+}
+
+
+func (o *Operator) getNodeScoreFreeSubnets(ns seterav1.NodeStore) (float64, error) {
+    if ns.Status.TotalSubnets == 0 {
+        return 0, fmt.Errorf("total subnets is zero, cannot compute free subnet ratio")
+    }
+	o.logger.Info("got node subnet counts for scoring", "node", ns.Spec.Name, "freeSubnets", ns.Status.FreeSubnets, "totalSubnets", ns.Status.TotalSubnets)
+    return (1-(float64(ns.Status.FreeSubnets)/float64(ns.Status.TotalSubnets)))*100, nil
+}
+

@@ -171,13 +171,18 @@ spec:
             fieldRef:
               fieldPath: status.hostIP
         securityContext:
-          privileged: false
+          privileged: true
           capabilities:
-            add: ["NET_ADMIN", "NET_RAW"]
+            add: ["NET_ADMIN", "NET_RAW", "BPF", "SYS_ADMIN"]
         volumeMounts:
         - name: tenantcni-cfg
           mountPath: /etc/tenantcni
           readOnly: true
+        - name: bpffs
+          mountPath: /sys/fs/bpf
+          mountPropagation: Bidirectional
+        - name: debugfs
+          mountPath: /sys/kernel/debug
       volumes:
         - name: var-lib-cni-tenantcni
           hostPath:
@@ -193,7 +198,15 @@ spec:
             name: tenantcni-config
         - name: tenantcni-cfg
           configMap:
-            name: tenantcni-config      
+            name: tenantcni-config
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+        - name: debugfs
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory
 
 ---
 apiVersion: v1

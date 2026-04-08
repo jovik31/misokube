@@ -44,6 +44,12 @@ type NodestoreOps interface {
 
 	// FlushTenant flushes ARP/FDB/routes for the tenant on local devices (used on teardown).
 	FlushTenant(ctx context.Context, tenantID string) error
+
+	// SubnetFreeCount returns the number of unallocated leaf subnets on this node.
+	SubnetFreeCount() int
+
+	// SubnetTotalCount returns the total number of leaf subnets on this node.
+	SubnetTotalCount() int
 }
 
 // PodOps are per-tenant, synchronous operations typically invoked by the CNI path via a Tenant Actor.

@@ -5,7 +5,7 @@ FROM golang:1.25-bookworm
 
 
 
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 
 ARG BINARY
 WORKDIR /setera
