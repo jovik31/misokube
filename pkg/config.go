@@ -33,6 +33,7 @@ const (
 
 	//vxlan confgis
 	MaxVNI        = 16777215 // max VNI for VXLAN (24 bits, 2^24 - 1 = 16777215 = 0xFFFFFF
+	DefaultVNI    = 1        // shared VNI for the node-wide VTEP
 	VxlanPort     = 8472
 	EncapOverhead = 50 // VXLAN encapsulation overhead (UDP + VXLAN + IP + Ethernet headers)
 

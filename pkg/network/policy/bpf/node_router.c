@@ -41,38 +41,6 @@ static __always_inline int is_default_tenant(char *name)
     return 1;
 }
 
-static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb, struct iphdr *iph)
-{
-    struct bpf_fib_lookup fib = {};
-
-    fib.family = 2; // AF_INET
-    fib.ifindex = skb->ifindex;
-    // Let kernel routing choose the egress source address for lookup.
-    // With direct-veth /32 pod addressing, using pod IP here can make
-    // FIB resolution fail as "network unreachable".
-    fib.ipv4_src = 0;
-    fib.ipv4_dst = iph->daddr;
-    fib.tos = iph->tos;
-    fib.l4_protocol = iph->protocol;
-    fib.tot_len = bpf_ntohs(iph->tot_len);
-
-    long rc = bpf_fib_lookup(skb, &fib, sizeof(fib), 0);
-    if (rc == BPF_FIB_LKUP_RET_SUCCESS) {
-        return bpf_redirect_neigh(fib.ifindex, NULL, 0, 0);
-    }
-
-    // Fall back to the kernel routing/bridge path when FIB lookup cannot
-    // resolve directly in BPF (e.g. bridge-based forwarding or unresolved
-    // neighbor while control-plane converges).
-    return TC_ACT_SHOT;
-}
-
-static __always_inline int redirect_local_peer(struct __sk_buff *skb, __u32 dst_ifindex)
-{
-    (void)skb;
-    return bpf_redirect_peer(dst_ifindex, 0);
-}
-
 static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 direction)
 {
     void *data     = (void *)(long)skb->data;
@@ -133,25 +101,23 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
                     break;
             }
         }
-        if (dst_info->veth_ifindex == (__u32)-1) {
-            return redirect_offnode_neigh(skb, iph);
+        if (dst_info->veth_ifindex != (__u32)-1) {
+            return bpf_redirect_peer(dst_info->veth_ifindex, 0);
         }
-        return redirect_local_peer(skb, dst_info->veth_ifindex);
+        return TC_ACT_OK;
     }
 
-    return TC_ACT_SHOT;
-
+    return TC_ACT_OK;
 }
 
-
 SEC("tc/ingress")
-int tc_firewall_ingress(struct __sk_buff *skb)
+int tc_node_ingress(struct __sk_buff *skb)
 {
     return tc_firewall_core(skb, DIR_INGRESS);
 }
 
 SEC("tc/egress")
-int tc_firewall_egress(struct __sk_buff *skb)
+int tc_node_egress(struct __sk_buff *skb)
 {
     // Routing/isolation decisions are enforced on ingress.
     // Keeping egress passive avoids veth recirculation artifacts.

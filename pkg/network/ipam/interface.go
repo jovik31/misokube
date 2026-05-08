@@ -20,4 +20,5 @@ type IPAM interface {
 	Expand(newSubnet *net.IPNet) error
 	ListAllocations() map[string]*ContainerNetInfo
 	GetAllocation(podName string) (*ContainerNetInfo, bool)
+	SetHostVethName(podName string, hostIf string) error
 }

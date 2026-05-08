@@ -11,4 +11,5 @@ package firewall
 // Add more -target flags (e.g., arm64) for cross-compilation.
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -no-strip -cc clang -target amd64 -type fw_rule_key -type lpm_v4_key -type fw_rule_val -type iface_config -type pkt_stats xdpFirewall ../../policy/bpf/xdp_firewall.c -- -I../../policy/bpf -Wall -O2 -g
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -no-strip -cc clang -target amd64 -type fw_rule_key -type lpm_v4_key -type fw_rule_val -type iface_config -type pkt_stats -type conntrack_key -type conntrack_val tcFirewall ../../policy/bpf/tc_firewall.c -- -I../../policy/bpf -Wall -O2 -g
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -no-strip -cc clang -target amd64 -type iface_config -type pkt_stats -type veth_tenant tcFirewall ../../policy/bpf/tc_router.c -- -I../../policy/bpf -Wall -O2 -g
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -no-strip -cc clang -target amd64 -type iface_config -type pkt_stats -type veth_tenant nodeRouter ../../policy/bpf/node_router.c -- -I../../policy/bpf -Wall -O2 -g

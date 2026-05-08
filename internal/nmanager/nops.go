@@ -190,8 +190,9 @@ func buildTenantSnapshot(rec *TenantRecord) (TenantInfraSnapshot, error) {
 				name = ns + "/" + name
 			}
 			snap.Pods = append(snap.Pods, TenantPodInfo{
-				Name: name,
-				IP:   info.IP,
+				Name:    name,
+				IP:      info.IP,
+				Ifindex: info.Ifindex,
 			})
 		}
 	}

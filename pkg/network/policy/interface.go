@@ -1,5 +1,7 @@
 package policy
 
+import "context"
+
 type TenantPolicyManager interface {
 
 	// chain lifecycle
@@ -60,4 +62,23 @@ func RegisterNodeNetworkManager(mgr NodeNetworkManager) {
 
 func NodeManager() NodeNetworkManager {
 	return DefaultNodeNetworkManager
+}
+
+type PodPolicyManager interface {
+	EnsurePodProgram(ctx context.Context, tenantID string, podName string, ifName string) error
+	UpdatePodProgram(ctx context.Context, tenantID string, podName string, ifName string) error
+	RemovePodProgram(ctx context.Context, tenantID string, podName string) error
+}
+
+var DefaultPodPolicyManager PodPolicyManager
+
+func RegisterPodPolicyManager(mgr PodPolicyManager) {
+	if mgr == nil {
+		panic("PodPolicyManager is nil")
+	}
+	DefaultPodPolicyManager = mgr
+}
+
+func PodManager() PodPolicyManager {
+	return DefaultPodPolicyManager
 }

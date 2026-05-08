@@ -12,6 +12,7 @@ import (
 
 	"github/setera/internal/daemon"
 	"github/setera/internal/dispatcher"
+	ebpfmanager "github/setera/internal/ebpfmanager"
 	"github/setera/internal/nmanager"
 	rsv "github/setera/internal/resolver"
 	"github/setera/internal/router"
@@ -113,13 +114,22 @@ func main() {
 		logger.Error(err, "failed to initialize node policies")
 		os.Exit(1)
 	}
+	ebpfm, err := ebpfmanager.NewEbpfManager(nodeCIDRParsed, nodeName)
+	if err != nil {
+		logger.Error(err, "failed to initialize EBPF manager")
+		os.Exit(1)
+	}
+	if err := ebpfm.EnsureNodeRouter("eth0"); err != nil {
+		logger.Error(err, "failed to attach node router to eth0")
+		os.Exit(1)
+	}
 
 	// Prepare operator base and wire NM -> operator emitter
 	base := op.NewBaseOperator("stub-daemon", klog.FromContext(ctx), nil)
 	nm.SetEmitter(base)
 
 	// init dispatcher
-	dp := dispatcher.New(nm, nm) // nm implements both TenantOps and NodestoreOps
+	dp := dispatcher.New(nm, nm, ebpfm, ebpfm) // nm implements Tenant/Nodestore ops; ebpf manager handles map/program ops
 	go func() {
 		if err := dp.Run(ctx); err != nil {
 			logger.Error(err, "dispatcher stopped running")
@@ -278,7 +288,8 @@ func initRouter(nm *nmanager.NetworkManagerImpl) router.Router {
 		return nil
 	}
 	lookup := func(tenantID string) (router.TenantActor, error) { return nm.GetTenantActor(tenantID) }
-	return router.NewNManagerRouter(lookup)
+	ensure := func(ctx context.Context, tenantID string) error { return nm.EnsureTenant(ctx, tenantID) }
+	return router.NewNManagerRouter(lookup, ensure)
 }
 
 func initNodePolicies() error {

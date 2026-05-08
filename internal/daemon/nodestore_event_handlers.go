@@ -57,6 +57,7 @@ func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {
 		return
 	}
 
+	
 	if equalTenantInfraForPeers(oldNS.Status.Tenants, newNS.Status.Tenants) {
 		return
 	}
@@ -82,11 +83,40 @@ func equalTenantInfraForPeers(a, b map[string]seterav1.TenantInfra) bool {
 			oldInfo.VTEP_MAC != newInfo.VTEP_MAC ||
 			oldInfo.BRIDGE_NAME != newInfo.BRIDGE_NAME ||
 			oldInfo.BRIDGE_IP != newInfo.BRIDGE_IP ||
-			oldInfo.BRIDGE_MAC != newInfo.BRIDGE_MAC {
+			oldInfo.BRIDGE_MAC != newInfo.BRIDGE_MAC ||
+			!comparePodLists(oldInfo.Pods, newInfo.Pods) {
 			return false
 		}
 	}
 	return true
 }
+
+//Compare pod lists nowing they might not be ordered the same
+func comparePodLists(oldList, newList []seterav1.Pod_Info) bool {
+	if len(oldList) != len(newList) {
+		return false
+	}
+	oldMap := make(map[string]seterav1.Pod_Info)
+	for _, pod := range oldList {
+		oldMap[pod.Name] = pod
+	}
+	newMap := make(map[string]seterav1.Pod_Info)
+	for _, pod := range newList {
+		newMap[pod.Name] = pod
+	}
+	for name, oldPod := range oldMap {
+		newPod, ok := newMap[name]
+		// If the pod is missing in the new list
+		if !ok {
+			return false
+		}
+		//If the IP or interface ID are not the same
+		if oldPod.IP != newPod.IP || oldPod.Ifindex != newPod.Ifindex {
+			return false
+		}
+	}
+	return true
+}
+
 
 func (o *Operator) deleteEventNodestoretHandler(obj interface{}) {}

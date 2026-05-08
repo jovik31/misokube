@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"github/setera/internal/ebpfmanager"
 	"github/setera/internal/nmanager"
 	"log"
 	"time"
@@ -26,12 +27,14 @@ func WithSinkSize(n int) Option {
 	}
 }
 
-func New(nmt nmanager.TenantOps, nmn nmanager.NodestoreOps, opts ...Option) *Dispatcher {
+func New(nmt nmanager.TenantOps, nmn nmanager.NodestoreOps, ebpfmt ebpfmanager.TenantOps, ebpfmp ebpfmanager.PodOps, opts ...Option) *Dispatcher {
 	d := &Dispatcher{
-		nmt:   nmt,
-		nmn:   nmn,
-		inbox: make(chan Command, 128),
-		sink:  make(chan Event, 128),
+		nmt:    nmt,
+		nmn:    nmn,
+		ebpfmt: ebpfmt,
+		ebpfmp: ebpfmp,
+		inbox:  make(chan Command, 128),
+		sink:   make(chan Event, 128),
 	}
 	for _, o := range opts {
 		o(d)
@@ -94,13 +97,56 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			var err error
 			switch cmd.Op {
 			case OpEnsure:
-				err = d.nmt.EnsureTenant(context.Background(), cmd.TenantID)
+				if err = d.nmt.EnsureTenant(context.Background(), cmd.TenantID); err == nil && d.ebpfmt != nil {
+					err = d.ebpfmt.EnsureTenantMaps(context.Background(), cmd.TenantID)
+				}
 			case OpRemove:
+				if d.ebpfmt != nil {
+					if err = d.ebpfmt.RemoveTenantMaps(context.Background(), cmd.TenantID); err != nil {
+						break
+					}
+				}
 				err = d.nmt.RemoveTenant(context.Background(), cmd.TenantID)
 			case OpEnsurePeer:
 				err = d.nmn.EnsurePeer(context.Background(), cmd.TenantID, cmd.Remote)
 			case OpRemovePeer:
 				err = d.nmn.RemovePeer(context.Background(), cmd.TenantID, cmd.Remote)
+			case OpEnsurePodProg:
+				if d.ebpfmp == nil {
+					err = fmt.Errorf("pod eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmp.EnsurePodEndpoint(context.Background(), cmd.TenantID, cmd.PodName, cmd.IfName)
+			case OpRemovePodProg:
+				if d.ebpfmp == nil {
+					err = fmt.Errorf("pod eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmp.RemovePodEndpoint(context.Background(), cmd.TenantID, cmd.PodName)
+			case OpEnsureMap:
+				if d.ebpfmt == nil {
+					err = fmt.Errorf("tenant eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmt.EnsureTenantMaps(context.Background(), cmd.TenantID)
+			case OpRemoveMap:
+				if d.ebpfmt == nil {
+					err = fmt.Errorf("tenant eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmt.RemoveTenantMaps(context.Background(), cmd.TenantID)
+			case OpUpsertPodMap:
+				if d.ebpfmp == nil {
+					err = fmt.Errorf("pod eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmp.UpsertPodMapEntry(context.Background(), cmd.TenantID, cmd.PodName, cmd.PodIP, cmd.Ifindex)
+			case OpDeletePodMap:
+				if d.ebpfmp == nil {
+					err = fmt.Errorf("pod eBPF ops not configured")
+					break
+				}
+				err = d.ebpfmp.DeletePodMapEntry(context.Background(), cmd.PodIP)
 			default:
 				err = fmt.Errorf("unknown op %q", cmd.Op)
 			}

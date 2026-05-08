@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-a
+  labels:
+    app: test-pod
+    role: pod-a
+spec:
+  nodeName: setera-ebpf-worker
+  containers:
+    - name: nettools
+      image: busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          # Start a simple HTTP server on port 8080
+          echo "pod-a ready" > /tmp/index.html
+          httpd -f -p 8080 -h /tmp
+      ports:
+        - containerPort: 8080
+  terminationGracePeriodSeconds: 0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-b
+  labels:
+    app: test-pod
+    role: pod-b
+spec:
+  nodeName: setera-ebpf-worker2
+  containers:
+    - name: nettools
+      image: busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "pod-b ready" > /tmp/index.html
+          httpd -f -p 8080 -h /tmp
+      ports:
+        - containerPort: 8080
+  terminationGracePeriodSeconds: 0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-c
+  labels:
+    app: test-pod
+    role: pod-c
+spec:
+  nodeName: setera-ebpf-worker
+  containers:
+    - name: nettools
+      image: busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "pod-c ready" > /tmp/index.html
+          httpd -f -p 8080 -h /tmp
+      ports:
+        - containerPort: 8080
+  terminationGracePeriodSeconds: 0

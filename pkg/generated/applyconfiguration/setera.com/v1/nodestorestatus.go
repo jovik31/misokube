@@ -20,7 +20,9 @@ package v1
 // NodeStoreStatusApplyConfiguration represents a declarative configuration of the NodeStoreStatus type for use
 // with apply.
 type NodeStoreStatusApplyConfiguration struct {
-	Tenants map[string]TenantInfraApplyConfiguration `json:"tenants,omitempty"`
+	Tenants      map[string]TenantInfraApplyConfiguration `json:"tenants,omitempty"`
+	FreeSubnets  *int                                     `json:"freeSubnets,omitempty"`
+	TotalSubnets *int                                     `json:"totalSubnets,omitempty"`
 }
 
 // NodeStoreStatusApplyConfiguration constructs a declarative configuration of the NodeStoreStatus type for use with
@@ -40,5 +42,21 @@ func (b *NodeStoreStatusApplyConfiguration) WithTenants(entries map[string]Tenan
 	for k, v := range entries {
 		b.Tenants[k] = v
 	}
+	return b
+}
+
+// WithFreeSubnets sets the FreeSubnets field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the FreeSubnets field is set to the value of the last call.
+func (b *NodeStoreStatusApplyConfiguration) WithFreeSubnets(value int) *NodeStoreStatusApplyConfiguration {
+	b.FreeSubnets = &value
+	return b
+}
+
+// WithTotalSubnets sets the TotalSubnets field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TotalSubnets field is set to the value of the last call.
+func (b *NodeStoreStatusApplyConfiguration) WithTotalSubnets(value int) *NodeStoreStatusApplyConfiguration {
+	b.TotalSubnets = &value
 	return b
 }

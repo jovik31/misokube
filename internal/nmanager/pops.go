@@ -9,8 +9,8 @@ import (
 
 	"github/setera/internal/router"
 
-	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/device"
+	"github/setera/pkg/network/ipam"
 	op "github/setera/pkg/operator"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -44,19 +44,14 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 		return net.IPNet{}, nil, "", err
 	}
 
-	// get tenant bridge name
-	br, ok := backend.Bridge(rec.Backend)
-	if !ok || br == nil {
-		return net.IPNet{}, nil, "", fmt.Errorf("bridge device not found for tenant %s", tenantID)
-	}
-
+	gateway := podHostGateway(ci.IP)
 	podIPNet := &net.IPNet{
 		IP:   ci.IP,
-		Mask: rec.Subnet.Mask,
+		Mask: net.CIDRMask(32, 32),
 	}
 
-	// Attach pod veth to tenant bridge
-	err = device.SetupVeth(args.NetNS, br.GetName(), 1500, args.IfName, podIPNet, br.GetIP().IP)
+	// Attach pod veth directly to host namespace (no bridge master).
+	hostVethName, err := device.SetupVethDirect(args.NetNS, 1500, args.IfName, podIPNet, gateway)
 	if err != nil {
 		// On failure, release IP
 		log.Print("failed to setup veth", err)
@@ -64,11 +59,47 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 		return net.IPNet{}, nil, "", fmt.Errorf("setup veth: %w", err)
 	}
 
+	// Store the created host veth name in IPAM allocation for later use by eBPF attachment
+	if setErr := rec.IPAM.SetHostVethName(key, hostVethName); setErr != nil {
+		log.Printf("WARNING: failed to set host veth name in IPAM for pod %s: %v", key, setErr)
+	}
+
+	if err := recIfindexForPod(ci, args); err != nil {
+		log.Printf("WARNING: tenant=%s pod=%s host veth ifindex lookup failed: %v; marking pod as remote (ifindex=-1)", tenantID, args.PodName, err)
+		// Leave Ifindex as -1 (already set in IPAM allocation);
+		// this pod will be routed via kernel routing instead of local peer redirect.
+	}
+
 	log.Print("pod ensured: ", tenantID, args.PodName, ci.IP.String())
 
 	nm.emitNodeStoreEvent(op.EventUpdate)
 
-	return *podIPNet, br.GetIP().IP, args.IfName, nil
+	return *podIPNet, gateway, args.IfName, nil
+}
+
+func recIfindexForPod(ci *ipam.ContainerNetInfo, args router.PodAttachArgs) error {
+	if ci == nil {
+		return fmt.Errorf("nil allocation")
+	}
+	hostIfName := ci.HostVethName
+	if hostIfName == "" {
+		return fmt.Errorf("missing host veth name for pod %s", ci.IP.String())
+	}
+
+	hostLink, err := netlink.LinkByName(hostIfName)
+	if err != nil {
+		return fmt.Errorf("lookup host veth %s: %w", hostIfName, err)
+	}
+	hostAttrs := hostLink.Attrs()
+	if hostAttrs == nil {
+		return fmt.Errorf("host veth attrs missing for %s", hostIfName)
+	}
+	if hostAttrs.Index <= 0 {
+		return fmt.Errorf("invalid host veth ifindex %d for %s", hostAttrs.Index, hostIfName)
+	}
+	log.Printf("DEBUG recIfindexForPod: host veth %s resolves to ifindex=%d for pod IP=%s", hostIfName, hostAttrs.Index, ci.IP.String())
+	ci.Ifindex = hostAttrs.Index
+	return nil
 }
 
 func (nm *NetworkManagerImpl) RemovePod(ctx context.Context, tenantID string, args router.PodAttachArgs) error {
@@ -99,15 +130,11 @@ func (nm *NetworkManagerImpl) UpdatePod(ctx context.Context, tenantID string, ar
 	if !ok || ci == nil {
 		return fmt.Errorf("ipam allocation not found for pod %s", key)
 	}
-	br, ok := backend.Bridge(rec.Backend)
-	if !ok || br == nil {
-		return fmt.Errorf("bridge device not found for tenant %s", tenantID)
-	}
 	podIPNet := &net.IPNet{
 		IP:   ci.IP,
-		Mask: rec.Subnet.Mask,
+		Mask: net.CIDRMask(32, 32),
 	}
-	gateway := br.GetIP().IP
+	gateway := podHostGateway(ci.IP)
 
 	nsHandle, err := ns.GetNS(ci.NetNS)
 	if err != nil {
@@ -183,6 +210,11 @@ func replaceDefaultRoute(link netlink.Link, gw net.IP) error {
 			}
 		}
 	}
+	gwHost := &net.IPNet{IP: gw.To4(), Mask: net.CIDRMask(32, 32)}
+	gwRt := &netlink.Route{LinkIndex: link.Attrs().Index, Dst: gwHost, Scope: netlink.SCOPE_LINK}
+	if err := netlink.RouteReplace(gwRt); err != nil {
+		return fmt.Errorf("route replace on-link gateway %s: %w", gw, err)
+	}
 	rt := &netlink.Route{LinkIndex: link.Attrs().Index, Gw: gw}
 	if err := netlink.RouteReplace(rt); err != nil {
 		return fmt.Errorf("route replace via %s: %w", gw, err)
@@ -198,4 +230,12 @@ func isNetlinkNotFound(err error) bool {
 	return strings.Contains(s, "not found") ||
 		strings.Contains(s, "no such process") ||
 		strings.Contains(s, "cannot assign requested address")
+}
+
+func podHostGateway(podIP net.IP) net.IP {
+	b := podIP.To4()
+	if b == nil {
+		return net.IPv4(169, 254, 0, 1)
+	}
+	return net.IPv4(169, 254, b[2], b[3])
 }

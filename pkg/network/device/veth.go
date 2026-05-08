@@ -17,10 +17,14 @@ var (
 
 	nlLinkByName    = netlink.LinkByName
 	nlAddrAdd       = netlink.AddrAdd
+	nlAddrReplace   = netlink.AddrReplace
 	nlAddrList      = netlink.AddrList
 	nlLinkSetMTU    = netlink.LinkSetMTU
 	nlLinkSetUp     = netlink.LinkSetUp
 	nlRouteAdd      = netlink.RouteAdd
+	nlRouteReplace  = netlink.RouteReplace
+	nlNeighSet      = netlink.NeighSet
+	nlNeighDel      = netlink.NeighDel
 	nlLinkSetMaster = netlink.LinkSetMaster
 	nlLinkDel       = netlink.LinkDel
 )
@@ -166,6 +170,144 @@ func SetupVeth(
 	}
 
 	return nil
+}
+
+// SetupVethDirect creates a veth pair for a pod without attaching host side to a bridge:
+//   - container end named ifName inside pod netns
+//   - host end stays in host namespace
+//   - host end gets hostGateway/32
+//   - container end gets podIPNet and default route via hostGateway
+func SetupVethDirect(
+	netnsPath string,
+	mtu int,
+	ifName string,
+	podIPNet *net.IPNet,
+	hostGateway net.IP,
+) (hostVethName string, err error) {
+	if netnsPath == "" {
+		return "", errors.New("empty netnsPath")
+	}
+	if ifName == "" {
+		return "", errors.New("empty ifName")
+	}
+	if len(ifName) > maxIfNameLen {
+		return "", fmt.Errorf("ifName %q longer than %d chars", ifName, maxIfNameLen)
+	}
+	if podIPNet == nil || podIPNet.IP == nil || podIPNet.Mask == nil {
+		return "", fmt.Errorf("invalid podIPNet: %v", podIPNet)
+	}
+	if podIPNet.IP.To4() == nil {
+		return "", fmt.Errorf("only IPv4 supported (pod IP %s)", podIPNet.IP)
+	}
+	if hostGateway == nil || hostGateway.To4() == nil {
+		return "", fmt.Errorf("invalid hostGateway %v", hostGateway)
+	}
+	if mtu <= 0 {
+		return "", fmt.Errorf("invalid MTU %d", mtu)
+	}
+
+	log.Printf("SetupVethDirect: netns=%s ifName=%s podIP=%s hostGateway=%s", netnsPath, ifName, podIPNet.String(), hostGateway.String())
+
+	nsHandle, err := ns.GetNS(netnsPath)
+	if err != nil {
+		return "", fmt.Errorf("open netns %q: %w", netnsPath, err)
+	}
+	defer nsHandle.Close()
+
+	var hostIfaceName string
+	err = nsHandle.Do(func(hostNS ns.NetNS) error {
+		hostVeth, containerVeth, err := ipSetupVeth(ifName, mtu, "", hostNS)
+		if err != nil {
+			return fmt.Errorf("setup veth pair: %w", err)
+		}
+		hostIfaceName = hostVeth.Name
+
+		conLink, err := nlLinkByName(containerVeth.Name)
+		if err != nil {
+			return fmt.Errorf("lookup container link %q: %w", containerVeth.Name, err)
+		}
+		if needsAddr(conLink, podIPNet) {
+			if err := nlAddrAdd(conLink, &netlink.Addr{IPNet: podIPNet}); err != nil && !isEExist(err) {
+				return fmt.Errorf("add addr %s: %w", podIPNet, err)
+			}
+		}
+		if err := nlLinkSetMTU(conLink, mtu); err != nil {
+			return fmt.Errorf("set MTU: %w", err)
+		}
+		if err := nlLinkSetUp(conLink); err != nil {
+			return fmt.Errorf("link up container veth: %w", err)
+		}
+
+		// With /32 pod addressing, gateway must be reachable via an explicit
+		// on-link host route before adding the default route.
+		gwHost := &net.IPNet{IP: hostGateway.To4(), Mask: net.CIDRMask(32, 32)}
+		gwRt := &netlink.Route{LinkIndex: conLink.Attrs().Index, Dst: gwHost, Scope: netlink.SCOPE_LINK}
+		if err := nlRouteAdd(gwRt); err != nil && !isEExist(err) {
+			return fmt.Errorf("add on-link route to gateway %s: %w", hostGateway, err)
+		}
+
+		rt := &netlink.Route{LinkIndex: conLink.Attrs().Index, Gw: hostGateway}
+		if err := nlRouteAdd(rt); err != nil && !isEExist(err) {
+			return fmt.Errorf("add default route via %s: %w", hostGateway, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	hostVeth, err := nlLinkByName(hostIfaceName)
+	if err != nil {
+		return "", fmt.Errorf("lookup host veth %q: %w", hostIfaceName, err)
+	}
+	log.Printf("DEBUG SetupVethDirect: created host veth %q with ifindex=%d for pod IP=%s", hostIfaceName, hostVeth.Attrs().Index, podIPNet.IP.String())
+	if err := nlLinkSetMTU(hostVeth, mtu); err != nil {
+		return "", fmt.Errorf("set host veth MTU: %w", err)
+	}
+	hostGWNet := &net.IPNet{IP: hostGateway.To4(), Mask: net.CIDRMask(32, 32)}
+	if err := nlAddrReplace(hostVeth, &netlink.Addr{IPNet: hostGWNet}); err != nil {
+		return "", fmt.Errorf("set host veth gateway %s: %w", hostGWNet.String(), err)
+	}
+	if err := nlLinkSetUp(hostVeth); err != nil {
+		return "", fmt.Errorf("bring host veth up: %w", err)
+	}
+	podHostRoute := &net.IPNet{IP: podIPNet.IP.To4(), Mask: net.CIDRMask(32, 32)}
+	if err := nlRouteReplace(&netlink.Route{LinkIndex: hostVeth.Attrs().Index, Dst: podHostRoute, Scope: netlink.SCOPE_LINK}); err != nil {
+		return "", fmt.Errorf("set host route to pod %s via %s: %w", podHostRoute.String(), hostIfaceName, err)
+	}
+
+	if hw := hostVeth.Attrs().HardwareAddr; len(hw) > 0 {
+		hostGatewayMAC := append(net.HardwareAddr(nil), hw...)
+		err = nsHandle.Do(func(_ ns.NetNS) error {
+			conLink, err := nlLinkByName(ifName)
+			if err != nil {
+				return fmt.Errorf("lookup container link %q for neighbor: %w", ifName, err)
+			}
+			baseNeigh := &netlink.Neigh{
+				LinkIndex: conLink.Attrs().Index,
+				IP:        hostGateway,
+			}
+			if err := nlNeighDel(baseNeigh); err != nil && !errors.Is(err, syscall.ENOENT) {
+				return fmt.Errorf("delete existing neighbor %s: %w", hostGateway, err)
+			}
+			neigh := &netlink.Neigh{
+				LinkIndex:    conLink.Attrs().Index,
+				IP:           hostGateway,
+				HardwareAddr: hostGatewayMAC,
+				State:        netlink.NUD_PERMANENT,
+			}
+			if err := nlNeighSet(neigh); err != nil {
+				return fmt.Errorf("set static neighbor %s: %w", hostGateway, err)
+			}
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// return the host side interface name created by the kernel
+	return hostIfaceName, nil
 }
 
 // needsAddr checks whether podIPNet is already present.

@@ -66,6 +66,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 			if pod.IP != nil {
 				info.IP = pod.IP.String()
 			}
+			info.Ifindex = pod.Ifindex
 			ti.Pods = append(ti.Pods, info)
 		}
 		newTenants[tenant] = ti
@@ -92,6 +93,10 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 		return err
 	} else {
 		o.logger.WithValues("node", o.nodeName).Info("updated NodeStore tenants from NM snapshot", "count", len(newTenants))
+	}
+
+	if err := o.syncPodMapForNode(mod); err != nil {
+		o.logger.WithValues("node", o.nodeName).Info("failed to sync pod tc map from mirrored NodeStore", "err", err)
 	}
 
 	return nil
@@ -140,6 +145,7 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 			if pod.IP != nil {
 				info.IP = pod.IP.String()
 			}
+			info.Ifindex = pod.Ifindex
 			ti.Pods = append(ti.Pods, info)
 		}
 		newTenants[tenant] = ti
@@ -153,6 +159,9 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 		o.logger.WithValues("node", o.nodeName).Info("failed to update NodeStore status on delete", "err", err)
 	} else {
 		o.logger.WithValues("node", o.nodeName).Info("updated NodeStore tenants after delete", "count", len(newTenants))
+		if err := o.syncPodMapForNode(ns); err != nil {
+			o.logger.WithValues("node", o.nodeName).Info("failed to sync pod tc map after delete mirror", "err", err)
+		}
 	}
 	return nil
 

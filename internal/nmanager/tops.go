@@ -38,13 +38,13 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		return fmt.Errorf("allocate subnet for %s: %w", tenantID, err)
 	}
 
-	// Backend – use package constructor
-	be := backend.NewBridgeVTEPBackend()
+	// Backend – use VTEP-only constructor (bridge-less datapath)
+	be := backend.NewVTEPBackend()
 	if be == nil {
 		_ = nm.Subnet.Deallocate(tenantID)
 		return fmt.Errorf("new backend returned nil")
 	}
-	if err := be.Create(tenantID, subnetNet, nm.NodeName); err != nil {
+	if err := be.Create(tenantID, nm.RootCIDR, nm.NodeName); err != nil {
 		_ = nm.Subnet.Deallocate(tenantID)
 		return fmt.Errorf("backend create: %w", err)
 	}

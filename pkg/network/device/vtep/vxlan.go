@@ -2,8 +2,6 @@ package vtep
 
 import (
 	"crypto/sha1"
-	"crypto/sha256"
-	"encoding/binary"
 	"github/setera/pkg/network/device"
 	"log"
 	"strings"
@@ -17,18 +15,18 @@ import (
 	// internal packages
 )
 
-func SetupVxlan(subnet *net.IPNet, id string, nodeName string) (*netlink.Vxlan, *net.IPNet, error) {
+func SetupVxlan(subnet *net.IPNet, nodeName string) (*netlink.Vxlan, *net.IPNet, error) {
 
 	// generate VTEP name
-	vtepName, err := device.GenerateDeviceName(config.VxlanPrefix, id)
+	vtepName, err := device.GenerateDeviceName(config.VxlanPrefix, nodeName)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "generate VTEP name for %s", id)
+		return nil, nil, errors.Wrapf(err, "generate VTEP name for %s", nodeName)
 	}
 
 	// generate VTEP MAC address
-	vtepMac := VtepMAC(id, nodeName).String()
+	vtepMac := VtepMAC(nodeName).String()
 	// generate VNI
-	vni := VNI(id)
+	vni := config.DefaultVNI
 
 	vxlanLink, err := newVxlanDevice(vtepName, vni, vtepMac)
 	if err != nil {
@@ -197,23 +195,11 @@ func DeleteVTEP(dv device.Device) error {
 	return nil
 }
 
-func VtepMAC(tenantID, nodeName string) net.HardwareAddr {
-	key := tenantID + "|" + nodeName
+func VtepMAC(nodeName string) net.HardwareAddr {
+	key := nodeName
 	sum := sha1.Sum([]byte(key)) // 20 bytes
 	mac := make([]byte, 6)
 	copy(mac, sum[:6])
 	mac[0] = (mac[0] & 0xFE) | 0x02 // local bit set, multicast bit cleared
 	return net.HardwareAddr(mac)
-}
-
-func VNI(tenant string) int {
-	sum := sha256.Sum256([]byte(tenant))
-	// Take first 4 bytes as big-endian uint32
-	val := binary.BigEndian.Uint32(sum[0:4]) // 32 bits
-	// Fold to 24 bits
-	vni := val & 0xFFFFFF
-	if vni == 0 {
-		vni = 1
-	}
-	return int(vni)
 }

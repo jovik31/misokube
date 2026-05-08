@@ -6,6 +6,10 @@ import (
 	"net"
 	"os"
 
+	"github/setera/internal/dispatcher"
+	ebpfmanager "github/setera/internal/ebpfmanager"
+	nmanager "github/setera/internal/nmanager"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -202,13 +206,39 @@ func main() {
 	nodeStoreLister := v1.NodeStores().Lister()
 
 	base := op.NewBaseOperator("daemon", logger, nil)
-	daemonOp := doper.New(base, logger, nil, seteraClient, kubeclient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, nil)
+	nm, err := nmanager.NewNetworkManager(nodeCIDRNet, cfg.nodeName)
+	if err != nil {
+		logger.Error(err, "failed to initialize network manager")
+		os.Exit(1)
+	}
+	nm.SetEmitter(base)
+
+	ebpfm, err := ebpfmanager.NewEbpfManager(nodeCIDRNet, cfg.nodeName)
+	if err != nil {
+		logger.Error(err, "failed to initialize EBPF manager")
+		os.Exit(1)
+	}
+	if err := ebpfm.EnsureNodeRouter("eth0"); err != nil {
+		logger.Error(err, "failed to attach node router to eth0")
+		os.Exit(1)
+	}
+
+	dp := dispatcher.New(nm, nm, ebpfm, ebpfm)
+	go func() {
+		if err := dp.Run(ctx); err != nil {
+			logger.Error(err, "dispatcher stopped running")
+		}
+	}()
+
+	dispatcherAdapter := doper.NewDispatcherAdapter(dp)
+	daemonOp := doper.New(base, logger, nil, seteraClient, kubeclient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, dispatcherAdapter)
 	if daemonOp == nil {
 		logger.Error(nil, "failed to construct daemon operator")
 		os.Exit(1)
 	}
+	daemonOp.SetNodeName(cfg.nodeName)
+	daemonOp.SetNMOps(nm)
 
-	// Dispatcher is intentionally not wired here; use stub-daemon for iterative testing.
 	factory.Start(ctx.Done())
 	if err := daemonOp.Run(ctx); err != nil {
 		logger.Error(err, "daemon operator failed")

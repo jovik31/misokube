@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"sync"
 
 	nmanager "github/setera/internal/nmanager"
 	seteraclient "github/setera/pkg/generated/clientset/versioned"
@@ -45,6 +46,10 @@ type Operator struct {
 	nodeStoreLister seteralisters.NodeStoreLister
 
 	router op.EventReconciler
+
+	podMapMu     sync.Mutex
+	podMapKnown  map[uint32]podMapEntry
+	podMapByNode map[string]map[uint32]podMapEntry
 }
 
 func New(
@@ -71,6 +76,8 @@ func New(
 		nodeStoreLister: nodeStoreLister,
 		dp:              dispatcher,
 		nmOps:           nil,
+		podMapKnown:     make(map[uint32]podMapEntry),
+		podMapByNode:    make(map[string]map[uint32]podMapEntry),
 	}
 
 	// Register handlers and track cache sync with the base operator

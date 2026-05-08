@@ -20,8 +20,9 @@ package v1
 // Pod_InfoApplyConfiguration represents a declarative configuration of the Pod_Info type for use
 // with apply.
 type Pod_InfoApplyConfiguration struct {
-	Name *string `json:"name,omitempty"`
-	IP   *string `json:"ip,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	IP      *string `json:"ip,omitempty"`
+	Ifindex *int    `json:"ifindex,omitempty"`
 }
 
 // Pod_InfoApplyConfiguration constructs a declarative configuration of the Pod_Info type for use with
@@ -43,5 +44,13 @@ func (b *Pod_InfoApplyConfiguration) WithName(value string) *Pod_InfoApplyConfig
 // If called multiple times, the IP field is set to the value of the last call.
 func (b *Pod_InfoApplyConfiguration) WithIP(value string) *Pod_InfoApplyConfiguration {
 	b.IP = &value
+	return b
+}
+
+// WithIfindex sets the Ifindex field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Ifindex field is set to the value of the last call.
+func (b *Pod_InfoApplyConfiguration) WithIfindex(value int) *Pod_InfoApplyConfiguration {
+	b.Ifindex = &value
 	return b
 }

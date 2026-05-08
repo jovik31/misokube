@@ -20,10 +20,12 @@ type BitmapIPAM struct {
 
 // Stores container network information
 type ContainerNetInfo struct {
-	ID     string // container ID
-	IFname string //interface name
-	NetNS  string // netns path and name
-	IP     net.IP // allocated IP address for the container
+	ID           string // container ID
+	IFname       string //interface name
+	NetNS        string // netns path and name
+	IP           net.IP // allocated IP address for the container
+	Ifindex      int    // host-side veth ifindex for this pod
+	HostVethName string // actual host-side veth interface name (e.g., veth1a2b3c4d)
 }
 
 // newSubnetRecord initializes the bitmap, reserving ips for the bridge and vtep while excluding the broadcast address
@@ -139,10 +141,11 @@ func (ipam *BitmapIPAM) Allocate(podKey string, containerID string, ifName strin
 		ip := ipam.indexToIP(pos)            // convert position to IP
 
 		res := &ContainerNetInfo{
-			ID:     containerID,
-			IFname: ifName,
-			NetNS:  netns,
-			IP:     ip,
+			ID:      containerID,
+			IFname:  ifName,
+			NetNS:   netns,
+			IP:      ip,
+			Ifindex: -1,
 		}
 		ipam.IPs[podKey] = res
 
@@ -247,6 +250,18 @@ func (ipam *BitmapIPAM) GetAllocation(podName string) (*ContainerNetInfo, bool) 
 	}
 	copyInfo := *info
 	return &copyInfo, true
+}
+
+// SetHostVethName stores the host-side veth interface name for the given pod allocation.
+func (ipam *BitmapIPAM) SetHostVethName(podName string, hostIf string) error {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+	info, ok := ipam.IPs[podName]
+	if !ok || info == nil {
+		return fmt.Errorf("no allocation for pod %s", podName)
+	}
+	info.HostVethName = hostIf
+	return nil
 }
 
 // indexToIP maps bitmap index (0 = network+2) -> IP.

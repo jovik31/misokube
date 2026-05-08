@@ -22,6 +22,8 @@ import (
 	_ "github/setera/pkg/network/route/netlinkroute"
 )
 
+const defaultTenantLeafPrefix = 29
+
 // NewNetworkManager wires the default registered managers.
 // If you prefer explicit DI, add a NewNetworkManagerWithDeps that accepts the interfaces.
 func NewNetworkManager(rootCIDR *net.IPNet, nodeName string) (*NetworkManagerImpl, error) {
@@ -50,7 +52,7 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 			d.Subnet = sm
 		} else {
 			// No default SubnetManager registered: create a trie-backed manager and set it as default
-			tm := subtrie.NewTrieManager(rootCIDR, 30)
+			tm := subtrie.NewTrieManager(rootCIDR, defaultTenantLeafPrefix)
 			subnet.RegisterSubnetManager(tm)
 			d.Subnet = tm
 		}
@@ -58,7 +60,7 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 		// If we received a trie-backed manager with a different root, recreate to match this rootCIDR
 		if tm, ok := d.Subnet.(*subtrie.TrieManager); ok {
 			if !cidrEqual(tm.Root(), rootCIDR) {
-				d.Subnet = subtrie.NewTrieManager(rootCIDR, 30)
+				d.Subnet = subtrie.NewTrieManager(rootCIDR, defaultTenantLeafPrefix)
 			}
 		}
 	}
@@ -89,7 +91,7 @@ func cidrEqual(a, b *net.IPNet) bool {
 	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
 }
 
-// AllocateSubnet allocates a /30 from the trie.
+// AllocateSubnet allocates a leaf subnet from the trie.
 func (m *NetworkManagerImpl) AllocateTenant(ctx context.Context, id string) (*net.IPNet, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -138,7 +140,7 @@ func (m *NetworkManagerImpl) ExpandTenant(ctx context.Context, id string) (*Tena
 	log.Printf("tenant=%s expand: subnet manager returned %s", id, newNet.String())
 	if rec.Backend != nil {
 		log.Printf("tenant=%s expand: updating backend devices", id)
-		if err := rec.Backend.Update(newNet, m.NodeName); err != nil {
+		if err := rec.Backend.Update(m.RootCIDR, m.NodeName); err != nil {
 			return nil, fmt.Errorf("backend update: %w", err)
 		}
 	}

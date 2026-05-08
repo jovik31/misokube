@@ -63,6 +63,8 @@ type TenantInfra struct {
 }
 
 type Pod_Info struct {
-	Name string `json:"name"` //Pod Name
-	IP   string `json:"ip"`   //Pod IP address
+	Name         string `json:"name"`           //Pod Name
+	IP           string `json:"ip"`             //Pod IP address
+	Ifindex      int    `json:"ifindex"`        //Interface index of the pod's veth pair (not exposed in JSON)
+	HostVethName string `json:"host_veth_name"` //Host-side veth name for this pod
 }

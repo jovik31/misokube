@@ -77,8 +77,9 @@ type TenantInfraSnapshot struct {
 }
 
 type TenantPodInfo struct {
-	Name string
-	IP   net.IP
+	Name    string
+	IP      net.IP
+	Ifindex int
 }
 
 // RemoteTenantInfra describes the remote node’s tenant attributes needed to program ARP/FDB/routes.
