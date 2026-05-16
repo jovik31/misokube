@@ -195,3 +195,25 @@ func (nm *NetworkManagerImpl) RemoveTenant(ctx context.Context, tenantID string)
 	nm.emitNodeStoreEvent(op.EventDelete)
 	return nil
 }
+
+func (nm *NetworkManagerImpl) EnsureDefaultTenantProxy(ctx context.Context, tenantID string, remote RemoteTenantInfra) error {
+
+	// check if the remote infra exists and is equal to stored
+	if localTenantRoutes, ok := nm.DefaultRoutes[tenantID][remote.NodeName]; !ok {
+
+		if remotePeersEqual(localTenantRoutes, remote) {
+			// already exists; no-op
+			return nil
+		}
+	}
+
+	// configure routes on local default tenant
+
+	return nil
+}
+
+func (nm *NetworkManagerImpl) RemoveDefaultTenantProxy(ctx context.Context, tenantID string, remote RemoteTenantInfra) error {
+
+	return nil
+
+}

@@ -43,6 +43,8 @@ type NetworkManagerImpl struct {
 
 	// emitter allows NM to enqueue events into the daemon operator
 	emitter op.Emitter
+
+	DefaultRoutes map[string]map[string]RemoteTenantInfra // tenantID -> nodeName -> RemoteTenantInfra
 }
 
 // Deps allows explicit injection of manager dependencies. Nil fields fall back to package defaults.

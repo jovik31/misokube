@@ -8,10 +8,12 @@ import (
 type Op string
 
 const (
-	OpEnsure     Op = "ensure"
-	OpRemove     Op = "remove"
-	OpEnsurePeer Op = "ensure-peer"
-	OpRemovePeer Op = "remove-peer"
+	OpEnsure             Op = "ensure"
+	OpRemove             Op = "remove"
+	OpEnsurePeer         Op = "ensure-peer"
+	OpRemovePeer         Op = "remove-peer"
+	OpEnsureDefaultProxy Op = "ensure-default-proxy"
+	OpRemoveDefaultProxy Op = "remove-default-proxy"
 )
 
 type Command struct {

@@ -81,14 +81,6 @@ func NewNetworkManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*N
 	return nm, nil
 }
 
-// cidrEqual compares two *net.IPNet for exact IP+mask equality.
-func cidrEqual(a, b *net.IPNet) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
-}
-
 // AllocateSubnet allocates a /30 from the trie.
 func (m *NetworkManagerImpl) AllocateTenant(ctx context.Context, id string) (*net.IPNet, error) {
 	m.mu.Lock()
@@ -232,4 +224,26 @@ func (m *NetworkManagerImpl) ConfigureRoutes(
 	} // :contentReference[oaicite:6]{index=6}
 
 	return nil
+}
+
+// cidrEqual compares two *net.IPNet for exact IP+mask equality.
+func cidrEqual(a, b *net.IPNet) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
+}
+
+func ipEqual(a, b net.IP) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == 0 && len(b) == 0
+	}
+	return a.Equal(b)
+}
+
+func macEqual(a, b net.HardwareAddr) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == 0 && len(b) == 0
+	}
+	return bytes.Equal(a, b)
 }

@@ -97,6 +97,11 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 				err = d.nmt.EnsureTenant(context.Background(), cmd.TenantID)
 			case OpRemove:
 				err = d.nmt.RemoveTenant(context.Background(), cmd.TenantID)
+			case OpEnsureDefaultProxy:
+				err = d.nmt.EnsureDefaultTenantProxy(context.Background(), cmd.TenantID, cmd.Remote)
+
+			case OpRemoveDefaultProxy:
+				err = d.nmt.RemoveDefaultTenantProxy(context.Background(), cmd.TenantID, cmd.Remote)
 			case OpEnsurePeer:
 				err = d.nmn.EnsurePeer(context.Background(), cmd.TenantID, cmd.Remote)
 			case OpRemovePeer:

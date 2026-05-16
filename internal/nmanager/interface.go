@@ -25,6 +25,10 @@ type TenantOps interface {
 
 	// RemoveTenant tears down tenant network resources. Safe to call multiple times.
 	RemoveTenant(ctx context.Context, tenantID string) error
+
+	EnsureDefaultTenantProxy(ctx context.Context, tenantID string, remote RemoteTenantInfra) error
+
+	RemoveDefaultTenantProxy(ctx context.Context, tenantID string, remote RemoteTenantInfra) error
 }
 
 // NodeStoreOps exposes inter-node wiring primitives and local snapshots for a tenant.

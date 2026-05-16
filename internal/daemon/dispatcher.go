@@ -15,6 +15,8 @@ type Dispatcher interface {
 	RemoveTenant(namespace, name string)
 	EnsurePeer(remote nmanager.RemoteTenantInfra, tenantID string)
 	RemovePeer(remote nmanager.RemoteTenantInfra, tenantID string)
+	EnsureDefaultProxy(tenantID string, remote nmanager.RemoteTenantInfra)
+	RemoveDefaultProxy(tenantID string, remote nmanager.RemoteTenantInfra)
 }
 
 // dpAdapter adapts the internal dispatcher to the Operator's narrow Dispatcher interface.
@@ -50,6 +52,22 @@ func (a dpAdapter) RemovePeer(remote nmanager.RemoteTenantInfra, tenantID string
 	}
 	log.Printf("daemon-dispatcher: RemovePeer tenantID=%s remote=%+v", tenantID, remote)
 	a.d.Enqueue(dps.Command{TenantID: tenantID, Op: dps.OpRemovePeer, Remote: remote})
+}
+
+func (a dpAdapter) EnsureDefaultProxy(tenantID string, remote nmanager.RemoteTenantInfra) {
+	if a.d == nil || tenantID == "" {
+		return
+	}
+	log.Printf("daemon-dispatcher: EnsureDefaultProxy tenantID=%s", tenantID)
+	a.d.Enqueue(dps.Command{TenantID: tenantID, Op: dps.OpEnsureDefaultProxy, Remote: remote})
+}
+
+func (a dpAdapter) RemoveDefaultProxy(tenantID string, remote nmanager.RemoteTenantInfra) {
+	if a.d == nil || tenantID == "" {
+		return
+	}
+	log.Printf("daemon-dispatcher: RemoveDefaultProxy tenantID=%s", tenantID)
+	a.d.Enqueue(dps.Command{TenantID: tenantID, Op: dps.OpRemoveDefaultProxy, Remote: remote})
 }
 
 // NewDispatcherAdapter returns a Dispatcher interface backed by the internal dispatcher.

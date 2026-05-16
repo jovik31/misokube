@@ -1,10 +1,8 @@
 package nmanager
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"net"
 
 	"github/setera/pkg/network/arp"
 	"github/setera/pkg/network/backend"
@@ -344,18 +342,4 @@ func remotePeersEqual(a, b RemoteTenantInfra) bool {
 		return false
 	}
 	return true
-}
-
-func ipEqual(a, b net.IP) bool {
-	if len(a) == 0 || len(b) == 0 {
-		return len(a) == 0 && len(b) == 0
-	}
-	return a.Equal(b)
-}
-
-func macEqual(a, b net.HardwareAddr) bool {
-	if len(a) == 0 || len(b) == 0 {
-		return len(a) == 0 && len(b) == 0
-	}
-	return bytes.Equal(a, b)
 }

@@ -90,8 +90,8 @@ func New(
 	o.router = op.NewRouter("daemon", map[op.Source]map[op.Event]op.ReconcileFunc{
 		// Tenant CRD events
 		SourceTenantCRD: {
-			EventAdd:    o.reconcileTenantAddUpdate,
-			EventUpdate: o.reconcileTenantAddUpdate,
+			EventAdd:    o.reconcileTenantSourceAdd,
+			EventUpdate: o.reconcileTenantSourceUpdate,
 			EventDelete: o.reconcileTenantDelete,
 		},
 		// NodeStore CRD events
