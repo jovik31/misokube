@@ -46,7 +46,8 @@ static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb, struct 
     struct bpf_fib_lookup fib = {};
 
     fib.family = 2; // AF_INET
-    fib.ifindex = skb->ifindex;
+    // Let the kernel select the egress device for this destination.
+    fib.ifindex = 0;
     // Let kernel routing choose the egress source address for lookup.
     // With direct-veth /32 pod addressing, using pod IP here can make
     // FIB resolution fail as "network unreachable".
@@ -62,9 +63,8 @@ static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb, struct 
     }
 
     // Fall back to the kernel routing/bridge path when FIB lookup cannot
-    // resolve directly in BPF (e.g. bridge-based forwarding or unresolved
-    // neighbor while control-plane converges).
-    return TC_ACT_SHOT;
+    // resolve directly in BPF (e.g. unresolved neighbor while control-plane converges).
+    return TC_ACT_OK;
 }
 
 static __always_inline int redirect_local_peer(struct __sk_buff *skb, __u32 dst_ifindex)

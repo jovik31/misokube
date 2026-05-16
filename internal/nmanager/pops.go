@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"github/setera/internal/router"
 
@@ -21,6 +22,7 @@ var _ PodOps = (*NetworkManagerImpl)(nil)
 
 // Pod lifecycle operations exposed to CNI path via tenant actors.
 func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, args router.PodAttachArgs) (net.IPNet, net.IP, string, error) {
+	start := time.Now()
 	// Minimal implementation: allocate an IP for this endpoint via IPAM.
 	// Full veth/bridge/routes will be added in subsequent steps.
 	nm.mu.RLock()
@@ -38,11 +40,13 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 	}
 	// Use full CNI args for IPAM allocation.
 	key := podKey(args.Namespace, args.PodName)
+	allocStart := time.Now()
 	ci, err := rec.IPAM.Allocate(key, args.ContainerID, args.IfName, args.NetNS)
 	if err != nil {
 		log.Printf("tenant=%s pod=%s ipam allocate failed: %v", tenantID, args.PodName, err)
 		return net.IPNet{}, nil, "", err
 	}
+	log.Printf("tenant=%s pod=%s ipam allocate ok dur=%s", tenantID, args.PodName, time.Since(allocStart))
 
 	gateway := podHostGateway(ci.IP)
 	podIPNet := &net.IPNet{
@@ -51,6 +55,7 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 	}
 
 	// Attach pod veth directly to host namespace (no bridge master).
+	vethStart := time.Now()
 	hostVethName, err := device.SetupVethDirect(args.NetNS, 1500, args.IfName, podIPNet, gateway)
 	if err != nil {
 		// On failure, release IP
@@ -58,6 +63,7 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 		_ = rec.IPAM.Free(ci.IP)
 		return net.IPNet{}, nil, "", fmt.Errorf("setup veth: %w", err)
 	}
+	log.Printf("tenant=%s pod=%s setup veth ok dur=%s", tenantID, args.PodName, time.Since(vethStart))
 
 	// Store the created host veth name in IPAM allocation for later use by eBPF attachment
 	if setErr := rec.IPAM.SetHostVethName(key, hostVethName); setErr != nil {
@@ -70,7 +76,7 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 		// this pod will be routed via kernel routing instead of local peer redirect.
 	}
 
-	log.Print("pod ensured: ", tenantID, args.PodName, ci.IP.String())
+	log.Printf("pod ensured: tenant=%s pod=%s ip=%s total_dur=%s", tenantID, args.PodName, ci.IP.String(), time.Since(start))
 
 	nm.emitNodeStoreEvent(op.EventUpdate)
 

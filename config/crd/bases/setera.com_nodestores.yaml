@@ -54,8 +54,6 @@ spec:
             properties:
               freeSubnets:
                 type: integer
-              totalSubnets:
-                type: integer
               tenants:
                 additionalProperties:
                   properties:
@@ -70,11 +68,17 @@ spec:
                     pods:
                       items:
                         properties:
+                          host_veth_name:
+                            type: string
+                          ifindex:
+                            type: integer
                           ip:
                             type: string
                           name:
                             type: string
                         required:
+                        - host_veth_name
+                        - ifindex
                         - ip
                         - name
                         type: object
@@ -102,6 +106,11 @@ spec:
                   - vtep_name
                   type: object
                 type: object
+              totalSubnets:
+                type: integer
+            required:
+            - freeSubnets
+            - totalSubnets
             type: object
         required:
         - spec

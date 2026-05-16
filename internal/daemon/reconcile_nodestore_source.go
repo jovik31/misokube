@@ -205,7 +205,20 @@ func mergePodMapEntries(byNode map[string]map[uint32]podMapEntry) map[uint32]pod
 	out := make(map[uint32]podMapEntry)
 	for _, entries := range byNode {
 		for key, entry := range entries {
-			if existing, ok := out[key]; !ok || (existing.ifindex < 0 && entry.ifindex >= 0) {
+			existing, ok := out[key]
+			if !ok {
+				out[key] = entry
+				continue
+			}
+			// Prefer local entries (ifindex >= 0), and prefer ones with a host veth name.
+			replace := false
+			if existing.ifindex < 0 && entry.ifindex >= 0 {
+				replace = true
+			}
+			if !replace && existing.ifName == "" && entry.ifName != "" {
+				replace = true
+			}
+			if replace {
 				out[key] = entry
 			}
 		}

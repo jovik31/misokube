@@ -105,7 +105,8 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 		nm.TenantActors = make(map[string]TenantActor)
 	}
 	if _, ok := nm.TenantActors[tenantID]; !ok {
-		act := StartTenantActor(ctx, nm, tenantID, 128)
+		// Actor should not inherit short-lived request contexts (e.g., CNI timeouts).
+		act := StartTenantActor(context.Background(), nm, tenantID, 128)
 		nm.TenantActors[tenantID] = act
 		log.Printf("nm: tenant actor registered tenant=%s", tenantID)
 	}

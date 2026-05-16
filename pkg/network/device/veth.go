@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"syscall"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -184,6 +185,7 @@ func SetupVethDirect(
 	podIPNet *net.IPNet,
 	hostGateway net.IP,
 ) (hostVethName string, err error) {
+	start := time.Now()
 	if netnsPath == "" {
 		return "", errors.New("empty netnsPath")
 	}
@@ -255,6 +257,7 @@ func SetupVethDirect(
 	if err != nil {
 		return "", err
 	}
+	log.Printf("SetupVethDirect: netns ops ok dur=%s", time.Since(start))
 
 	hostVeth, err := nlLinkByName(hostIfaceName)
 	if err != nil {
@@ -306,6 +309,7 @@ func SetupVethDirect(
 		}
 	}
 
+	log.Printf("SetupVethDirect: completed host ops dur=%s total=%s", time.Since(start), time.Since(start))
 	// return the host side interface name created by the kernel
 	return hostIfaceName, nil
 }

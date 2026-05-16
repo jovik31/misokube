@@ -169,8 +169,21 @@ func (s *CNIServer) handleConn(c net.Conn) {
 			}
 			break
 		}
+		start := time.Now()
 		var ce string
 		resp, storeRes, storeEntry, ce = s.handleTenantCommand(&req, tenantID)
+		dur := time.Since(start)
+		if resp != nil {
+			podKey := req.PodNamespace + "/" + req.PodName
+			if podKey == "/" {
+				podKey = "-"
+			}
+			if resp.OK {
+				log.Printf("[CNI][%s] ok tenant=%s pod=%s dur=%s", req.Cmd, tenantID, podKey, dur)
+			} else {
+				log.Printf("[CNI][%s] error tenant=%s pod=%s dur=%s msg=%s", req.Cmd, tenantID, podKey, dur, resp.Message)
+			}
+		}
 		if ce != "" {
 			//cacheEvent = ce
 		}

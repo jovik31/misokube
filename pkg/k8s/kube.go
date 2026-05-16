@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	// k8s client-go
 	v1 "k8s.io/api/core/v1"
@@ -144,11 +145,21 @@ func GetNodeIP(clientset *kubernetes.Clientset, nodeName string) (string, error)
 
 func StoreTenantLabel(clientset *kubernetes.Clientset, labelKey, nodeName, tenant string) error {
 
-	patch := fmt.Sprintf(`{"metadata": {"labels": {"%s": "Enabled"}}}`, labelKey+"."+tenant)
+	fullKey := labelKey + "." + tenant
+	patch := fmt.Sprintf(`{"metadata": {"labels": {"%s": "Enabled"}}}`, fullKey)
 
 	_, err := clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to patch node %s with tenant annotation: %v", nodeName, err)
+	}
+
+	legacyBase := strings.Replace(labelKey, ".tenant", "/tenant", 1)
+	if legacyBase != labelKey {
+		legacyKey := legacyBase + "." + tenant
+		cleanup := fmt.Sprintf(`{"metadata": {"labels": {"%s": null}}}`, legacyKey)
+		if _, err := clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.MergePatchType, []byte(cleanup), metav1.PatchOptions{}); err != nil {
+			return fmt.Errorf("failed to remove legacy label %s from node %s: %v", legacyKey, nodeName, err)
+		}
 	}
 	return nil
 }

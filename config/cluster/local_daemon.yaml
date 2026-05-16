@@ -137,12 +137,13 @@ spec:
           mountPath: /opt/cni/bin
       - name: install-cni
         image: jovik31/tenantcni:latest
-        command: 
-        - cp
+        command:
+        - sh
         args:
-        - -f
-        - /etc/tenantcni/cni-conf.json
-        - /etc/cni/net.d/10-tenantcni.conf
+        - -c
+        - |
+          mkdir -p /etc/cni/net.d
+          cp -f /etc/tenantcni/cni-conf.json /etc/cni/net.d/10-tenantcni.conf
         volumeMounts:
         - name: cni
           mountPath: /etc/cni/net.d

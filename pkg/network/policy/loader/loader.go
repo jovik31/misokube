@@ -677,6 +677,30 @@ func DeletePodTenantVeth(ip net.IP) error {
 	return nil
 }
 
+// ClearPodTenantVethMap removes all entries from the tc_podIDs map.
+// Useful on daemon startup to avoid stale tenant mappings across restarts.
+func ClearPodTenantVethMap() error {
+	m, err := openTcPodIDsMap()
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return nil
+	}
+	defer m.Close()
+
+	it := m.Iterate()
+	var key uint32
+	var val tcPodIDValue
+	for it.Next(&key, &val) {
+		_ = m.Delete(key)
+	}
+	if err := it.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func openTcPodIDsMap() (*ebpf.Map, error) {
 	m, err := ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
 	if err != nil {

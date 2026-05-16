@@ -67,6 +67,7 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 				info.IP = pod.IP.String()
 			}
 			info.Ifindex = pod.Ifindex
+			info.HostVethName = pod.HostVethName
 			ti.Pods = append(ti.Pods, info)
 		}
 		newTenants[tenant] = ti
@@ -146,6 +147,7 @@ func (o *Operator) reconcileNodestoreTenantDelete(ctx context.Context, _ op.Sour
 				info.IP = pod.IP.String()
 			}
 			info.Ifindex = pod.Ifindex
+			info.HostVethName = pod.HostVethName
 			ti.Pods = append(ti.Pods, info)
 		}
 		newTenants[tenant] = ti

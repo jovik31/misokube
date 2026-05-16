@@ -9,6 +9,7 @@ import (
 	"github/setera/internal/dispatcher"
 	ebpfmanager "github/setera/internal/ebpfmanager"
 	nmanager "github/setera/internal/nmanager"
+	fw "github/setera/pkg/network/policy/loader"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -217,6 +218,9 @@ func main() {
 	if err != nil {
 		logger.Error(err, "failed to initialize EBPF manager")
 		os.Exit(1)
+	}
+	if err := fw.ClearPodTenantVethMap(); err != nil {
+		logger.Error(err, "failed to clear tc_podIDs map")
 	}
 	if err := ebpfm.EnsureNodeRouter("eth0"); err != nil {
 		logger.Error(err, "failed to attach node router to eth0")

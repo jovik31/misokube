@@ -56,10 +56,12 @@ func (a *tenantActor) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("tenant actor stopped tenant=%s err=%v", a.tenantID, ctx.Err())
 			return
 		case m := <-a.inbox:
 			switch m.kind {
 			case msgEnsure:
+				log.Printf("tenant=%s pod=%s ensure start", a.tenantID, m.args.PodName)
 				// Gate pod ops when tenant is closing
 				a.nm.mu.RLock()
 				rec := a.nm.TenantRecords[a.tenantID]
@@ -75,11 +77,13 @@ func (a *tenantActor) loop(ctx context.Context) {
 					ifName    string
 					res       *types100.Result
 				)
+				start := time.Now()
 				if state == TenantStateClosing {
 					err = ErrTenantClosing
 				} else {
 					err = a.ensurePodWithExpansion(ctx, m.args, &ipNet, &gatewayIP, &ifName, &res)
 				}
+				log.Printf("tenant=%s pod=%s ensure done dur=%s err=%v", a.tenantID, m.args.PodName, time.Since(start), err)
 				if m.reply != nil {
 					m.reply <- tenantReply{result: res, err: err}
 				}
@@ -185,9 +189,12 @@ func (a *tenantActor) reconcileExistingPods(ctx context.Context, trigger router.
 func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) (*types100.Result, error) {
 	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgEnsure, args: args, reply: reply}
+	enqStart := time.Now()
 	select {
 	case a.inbox <- msg:
+		log.Printf("tenant=%s pod=%s ensure enqueued in %s", a.tenantID, args.PodName, time.Since(enqStart))
 	case <-ctx.Done():
+		log.Printf("tenant=%s pod=%s ensure enqueue canceled: %v", a.tenantID, args.PodName, ctx.Err())
 		return nil, ctx.Err()
 	}
 	// Optional timeout to avoid indefinite waits
@@ -203,6 +210,7 @@ func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) 
 	case resp := <-reply:
 		return resp.result, resp.err
 	case <-time.After(timeout):
+		log.Printf("tenant=%s pod=%s ensure reply timeout after %s", a.tenantID, args.PodName, timeout)
 		return nil, context.DeadlineExceeded
 	}
 }
@@ -211,9 +219,12 @@ func (a *tenantActor) EnsurePod(ctx context.Context, args router.PodAttachArgs) 
 func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) error {
 	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgRemove, args: args, reply: reply}
+	enqStart := time.Now()
 	select {
 	case a.inbox <- msg:
+		log.Printf("tenant=%s pod=%s remove enqueued in %s", a.tenantID, args.PodName, time.Since(enqStart))
 	case <-ctx.Done():
+		log.Printf("tenant=%s pod=%s remove enqueue canceled: %v", a.tenantID, args.PodName, ctx.Err())
 		return ctx.Err()
 	}
 	timeout := time.Second * 10
@@ -227,6 +238,7 @@ func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) 
 	case resp := <-reply:
 		return resp.err
 	case <-time.After(timeout):
+		log.Printf("tenant=%s pod=%s remove reply timeout after %s", a.tenantID, args.PodName, timeout)
 		return context.DeadlineExceeded
 	}
 }
@@ -235,9 +247,12 @@ func (a *tenantActor) RemovePod(ctx context.Context, args router.PodAttachArgs) 
 func (a *tenantActor) UpdatePod(ctx context.Context, args router.PodAttachArgs) error {
 	reply := make(chan tenantReply, 1)
 	msg := tenantMsg{kind: msgUpdate, args: args, reply: reply}
+	enqStart := time.Now()
 	select {
 	case a.inbox <- msg:
+		log.Printf("tenant=%s pod=%s update enqueued in %s", a.tenantID, args.PodName, time.Since(enqStart))
 	case <-ctx.Done():
+		log.Printf("tenant=%s pod=%s update enqueue canceled: %v", a.tenantID, args.PodName, ctx.Err())
 		return ctx.Err()
 	}
 	timeout := time.Second * 10
@@ -251,6 +266,7 @@ func (a *tenantActor) UpdatePod(ctx context.Context, args router.PodAttachArgs) 
 	case resp := <-reply:
 		return resp.err
 	case <-time.After(timeout):
+		log.Printf("tenant=%s pod=%s update reply timeout after %s", a.tenantID, args.PodName, timeout)
 		return context.DeadlineExceeded
 	}
 }
