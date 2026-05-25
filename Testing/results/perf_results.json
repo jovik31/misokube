@@ -1,0 +1,74 @@
+[
+  {
+    "scenario": {
+      "tenant_count": 1,
+      "pods_per_tenant": 2
+    },
+    "latency_ms": {
+      "samples": 200,
+      "min_ms": 0.14,
+      "max_ms": 0.325,
+      "avg_ms": 0.210215,
+      "p50_ms": 0.21,
+      "p90_ms": 0.258,
+      "p99_ms": 0.303
+    },
+    "iperf": {
+      "error": "command terminated with exit code 1"
+    }
+  },
+  {
+    "scenario": {
+      "tenant_count": 1,
+      "pods_per_tenant": 5
+    },
+    "latency_ms": {
+      "samples": 200,
+      "min_ms": 0.123,
+      "max_ms": 0.79,
+      "avg_ms": 0.211145,
+      "p50_ms": 0.206,
+      "p90_ms": 0.264,
+      "p99_ms": 0.324
+    },
+    "iperf": {
+      "error": "command terminated with exit code 1"
+    }
+  },
+  {
+    "scenario": {
+      "tenant_count": 20,
+      "pods_per_tenant": 2
+    },
+    "latency_ms": {
+      "samples": 200,
+      "min_ms": 0.124,
+      "max_ms": 0.698,
+      "avg_ms": 0.21863,
+      "p50_ms": 0.214,
+      "p90_ms": 0.272,
+      "p99_ms": 0.349
+    },
+    "iperf": {
+      "error": "command terminated with exit code 1"
+    }
+  },
+  {
+    "scenario": {
+      "tenant_count": 20,
+      "pods_per_tenant": 5
+    },
+    "latency_ms": {
+      "samples": 200,
+      "min_ms": 0.14,
+      "max_ms": 0.483,
+      "avg_ms": 0.232655,
+      "p50_ms": 0.232,
+      "p90_ms": 0.304,
+      "p99_ms": 0.359
+    },
+    "iperf": {
+      "error": "command terminated with exit code 1"
+    }
+  }
+]

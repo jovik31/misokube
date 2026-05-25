@@ -1,0 +1,98 @@
+[
+  {
+    "test": "same-tenant-same-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod2-t1-worker",
+    "expected": "allow",
+    "observed": "allow",
+    "ok": true
+  },
+  {
+    "test": "same-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t1-worker2",
+    "expected": "allow",
+    "observed": "allow",
+    "ok": true
+  },
+  {
+    "test": "same-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t1-worker3",
+    "expected": "allow",
+    "observed": "allow",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-same-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t2-worker",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-same-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t3-worker",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t2-worker2",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t2-worker3",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t3-worker2",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "different-tenant-different-node",
+    "src": "pod1-t1-worker",
+    "dst": "pod1-t3-worker3",
+    "expected": "drop",
+    "observed": "drop",
+    "ok": true
+  },
+  {
+    "test": "dns",
+    "src": "pod1-t1-worker",
+    "dst": "nslookup kubernetes.default.svc.cluster.local",
+    "expected": "allow",
+    "observed": "drop",
+    "ok": false
+  },
+  {
+    "test": "kube-api",
+    "src": "pod1-t1-worker",
+    "dst": "wget -qO- --timeout=2 https://kubernetes.default.svc.cluster.local >/dev/null",
+    "expected": "allow",
+    "observed": "drop",
+    "ok": false
+  },
+  {
+    "test": "external-ip",
+    "src": "pod1-t1-worker",
+    "dst": "8.8.8.8",
+    "expected": "allow",
+    "observed": "allow",
+    "ok": true
+  }
+]

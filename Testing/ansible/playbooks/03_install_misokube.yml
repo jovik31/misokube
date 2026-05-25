@@ -1,0 +1,109 @@
+- name: Build and install MisoKube
+  hosts: control_plane
+  become: true
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+  tasks:
+    - name: Install build dependencies
+      ansible.builtin.apt:
+        update_cache: true
+        name: "{{ build_packages }}"
+        state: present
+
+    - name: Ensure repo directory exists
+      ansible.builtin.file:
+        path: "{{ repo_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Clone repo
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_path }}"
+        version: "HEAD"
+        update: true
+
+    - name: Build daemon image
+      ansible.builtin.command: make build-daemon
+      args:
+        chdir: "{{ repo_path }}"
+      environment:
+        DAEMON_IMG: "{{ images.daemon }}"
+
+    - name: Build orchestrator image
+      ansible.builtin.command: make build-orchestrator
+      args:
+        chdir: "{{ repo_path }}"
+      environment:
+        ORCHESTRATOR_IMG: "{{ images.orchestrator }}"
+
+    - name: Build cni image
+      ansible.builtin.command: make build-cni
+      args:
+        chdir: "{{ repo_path }}"
+      environment:
+        CNI_IMG: "{{ images.cni }}"
+
+    - name: Save images to tar
+      ansible.builtin.command: "docker save {{ item }} -o /tmp/{{ item | regex_replace('[^a-zA-Z0-9_.-]', '_') }}.tar"
+      loop:
+        - "{{ images.daemon }}"
+        - "{{ images.orchestrator }}"
+        - "{{ images.cni }}"
+
+    - name: Fetch image tars to local artifacts
+      ansible.builtin.fetch:
+        src: "/tmp/{{ item | regex_replace('[^a-zA-Z0-9_.-]', '_') }}.tar"
+        dest: "{{ artifact_dir }}/"
+        flat: true
+      loop:
+        - "{{ images.daemon }}"
+        - "{{ images.orchestrator }}"
+        - "{{ images.cni }}"
+
+- name: Load images on all nodes
+  hosts: all
+  become: true
+  vars:
+    local_artifact_dir: "{{ hostvars[groups['control_plane'][0]].artifact_dir }}"
+  tasks:
+    - name: Copy image tars to node
+      ansible.builtin.copy:
+        src: "{{ local_artifact_dir }}/{{ item | regex_replace('[^a-zA-Z0-9_.-]', '_') }}.tar"
+        dest: "/tmp/{{ item | regex_replace('[^a-zA-Z0-9_.-]', '_') }}.tar"
+        mode: "0644"
+      loop:
+        - "{{ images.daemon }}"
+        - "{{ images.orchestrator }}"
+        - "{{ images.cni }}"
+
+    - name: Import images into containerd
+      ansible.builtin.command: "ctr -n k8s.io images import /tmp/{{ item | regex_replace('[^a-zA-Z0-9_.-]', '_') }}.tar"
+      loop:
+        - "{{ images.daemon }}"
+        - "{{ images.orchestrator }}"
+        - "{{ images.cni }}"
+
+- name: Apply CRDs, RBAC, and daemon
+  hosts: control_plane
+  become: true
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+  tasks:
+    - name: Install CRDs and RBAC
+      ansible.builtin.command: make install
+      args:
+        chdir: "{{ repo_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Render daemon manifest
+      ansible.builtin.template:
+        src: "{{ repo_path }}/Testing/ansible/templates/local_daemon.yaml.j2"
+        dest: /tmp/local_daemon.yaml
+        mode: "0644"
+
+    - name: Apply daemon manifest
+      ansible.builtin.command: "kubectl apply -f /tmp/local_daemon.yaml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"

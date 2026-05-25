@@ -1,0 +1,15 @@
+- name: Join worker nodes
+  hosts: workers
+  become: true
+  tasks:
+    - name: Read join command from control plane
+      ansible.builtin.slurp:
+        src: /tmp/kubeadm_join.sh
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      run_once: true
+      register: join_cmd
+
+    - name: Join node to cluster
+      ansible.builtin.command: "{{ join_cmd.content | b64decode }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf

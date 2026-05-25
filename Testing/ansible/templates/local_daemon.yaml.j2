@@ -1,0 +1,281 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: daemon-service-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: daemon-cluster-role
+rules:
+- apiGroups:
+  - setera.com
+  resources:
+  - tenants
+  - nodestores
+  - tenants/status
+  - nodestores/status
+  verbs:
+  - list
+  - watch
+  - create
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - list
+  - watch
+  - create
+  - get
+  - patch
+  - update
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - namespaces
+  - pods
+  - configmaps
+  - events
+  verbs:
+  - create
+  - list
+  - watch
+  - get
+  - patch
+  - update
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: daemon-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: daemon-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: daemon-service-account
+  namespace: default
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: tenantcni-config
+  namespace: default
+  labels:
+    tier: node
+    app: tenantcni
+data:
+  cni-conf.json: |
+   {
+      "cniVersion": "0.4.0",
+      "name": "tenantcni",
+      "type": "tenantcni"
+    }
+  net-conf.json: |
+    {
+      "PodCIDR": "10.244.0.0/24",
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  creationTimestamp: null
+  labels:
+    tier: node
+    app: daemon
+  name: daemon
+spec:
+  selector:
+    matchLabels:
+      app: daemon
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: daemon
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      serviceAccountName: daemon-service-account
+      initContainers:
+      - name: install-cni-plugin
+        image: {{ images.cni }}
+        command:
+        - cp
+        args:
+        - -f
+        - /tenantcni
+        - /opt/cni/bin/tenantcni
+        volumeMounts:
+        - name: cni-plugin
+          mountPath: /opt/cni/bin
+      - name: install-cni
+        image: {{ images.cni }}
+        command:
+        - cp
+        args:
+        - -f
+        - /etc/tenantcni/cni-conf.json
+        - /etc/cni/net.d/10-tenantcni.conf
+        volumeMounts:
+        - name: cni
+          mountPath: /etc/cni/net.d
+        - name: tenantcni
+          mountPath: /etc/tenantcni/
+      containers:
+      - image: {{ images.daemon }}
+        name: daemon
+        command:
+        - /daemon
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        securityContext:
+          privileged: true
+          capabilities:
+            add: ["NET_ADMIN", "NET_RAW", "BPF", "SYS_ADMIN"]
+        volumeMounts:
+        - name: tenantcni-cfg
+          mountPath: /etc/tenantcni
+          readOnly: true
+        - name: bpffs
+          mountPath: /sys/fs/bpf
+          mountPropagation: Bidirectional
+        - name: debugfs
+          mountPath: /sys/kernel/debug
+      volumes:
+        - name: var-lib-cni-tenantcni
+          hostPath:
+            path: /var/lib/cni/tenantcni
+        - name: cni-plugin
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni
+          hostPath:
+            path: /etc/cni/net.d
+        - name: tenantcni
+          configMap:
+            name: tenantcni-config
+        - name: tenantcni-cfg
+          configMap:
+            name: tenantcni-config
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+        - name: debugfs
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchestrator-service-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orchestrator-cluster-role
+rules:
+- apiGroups:
+  - setera.com
+  resources:
+  - tenants
+  - nodestores
+  - tenants/status
+  - nodestores/status
+  verbs:
+  - list
+  - watch
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orchestrator-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orchestrator-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: orchestrator-service-account
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: default
+  labels:
+    app: orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      serviceAccountName: orchestrator-service-account
+      containers:
+      - name: orchestrator
+        image: {{ images.orchestrator }}
+        imagePullPolicy: IfNotPresent
+        command:
+        - /orchestrator

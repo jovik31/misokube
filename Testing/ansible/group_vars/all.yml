@@ -1,0 +1,22 @@
+k8s_version: "latest"
+k8s_repo_version: "1.30"
+pod_network_cidr: "10.244.0.0/16"
+
+repo_url: "https://github.com/your-org/setera-orchestrator.git"
+repo_path: "/opt/setera-orchestrator"
+
+images:
+  daemon: "setera-daemon:v0.1.0"
+  orchestrator: "setera-orchestrator:v0.1.0"
+  cni: "jovik31/tenantcni:latest"
+
+artifact_dir: "./Testing/artifacts"
+
+build_packages:
+  - git
+  - make
+  - docker.io
+  - golang
+  - clang
+  - llvm
+  - libbpf-dev

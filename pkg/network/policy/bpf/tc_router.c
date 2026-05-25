@@ -139,7 +139,7 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
         return redirect_local_peer(skb, dst_info->veth_ifindex);
     }
 
-    return TC_ACT_SHOT;
+    return TC_ACT_OK;
 
 }
 
