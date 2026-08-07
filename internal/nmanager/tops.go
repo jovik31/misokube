@@ -7,7 +7,10 @@ import (
 
 	"github/setera/pkg/network/backend"
 	"github/setera/pkg/network/ipam"
+	fw "github/setera/pkg/network/policy/loader"
 	op "github/setera/pkg/operator"
+
+	"github.com/vishvananda/netlink"
 )
 
 var _ TenantOps = (*NetworkManagerImpl)(nil)
@@ -47,6 +50,15 @@ func (nm *NetworkManagerImpl) EnsureTenant(ctx context.Context, tenantID string)
 	if err := be.Create(tenantID, nm.RootCIDR, nm.NodeName); err != nil {
 		_ = nm.Subnet.Deallocate(tenantID)
 		return fmt.Errorf("backend create: %w", err)
+	}
+	if vxDev, ok := backend.VTEP(be); ok && vxDev != nil {
+		if link, err := netlink.LinkByName(vxDev.GetName()); err == nil {
+			if err := fw.SetVxlanIfindex(link.Attrs().Index); err != nil {
+				log.Printf("WARN: failed to set vxlan ifindex: %v", err)
+			}
+		} else {
+			log.Printf("WARN: failed to resolve vxlan link %s: %v", vxDev.GetName(), err)
+		}
 	}
 
 	// Tenant policy setup

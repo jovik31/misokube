@@ -99,6 +99,10 @@ metadata:
     app: stub-daemon
   name: stub-daemon
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   selector:
     matchLabels:
       app: stub-daemon
@@ -173,6 +177,8 @@ spec:
               fieldPath: status.hostIP
         - name: SOCKET
           value: /var/run/setera/setera.sock
+        - name: CLUSTER_CIDR
+          value: "10.200.0.0/16"
         securityContext:
           privileged: true
           capabilities:
@@ -301,6 +307,10 @@ metadata:
     app: orchestrator
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   selector:
     matchLabels:
       app: orchestrator

@@ -70,6 +70,9 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 		o.logger.Info("tenant not found; skipping nodestore update reconcile", "tenant", fmt.Sprintf("%s/%s", ref.Namespace, ref.Name))
 		return nil
 	}
+	if t.DeletionTimestamp != nil {
+		return o.reconcileTenantDelete(ctx, SourceNodeStoreCRD, ref)
+	}
 
 	// fetch nodestore from indexer
 	nodestores, err := o.nodeStoresForTenant(t.Name)

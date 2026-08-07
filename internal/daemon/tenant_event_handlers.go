@@ -22,6 +22,10 @@ func (o *Operator) addEventTenantHandler(obj interface{}) {
 	if t == nil {
 		return
 	}
+	if t.DeletionTimestamp != nil {
+		o.base.EnqueueWith(SourceTenantCRD, EventDelete, op.ResourceRef{Group: "setera.com", Version: "v1", Kind: "Tenant", Namespace: t.Namespace, Name: t.Name})
+		return
+	}
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		return
@@ -60,6 +64,11 @@ func (o *Operator) updateEventTenantHandler(oldObj, newObj interface{}) {
 		}
 	}
 	if newT == nil {
+		return
+	}
+	if newT.DeletionTimestamp != nil {
+		o.logger.WithValues("tenant", newT.Name, "namespace", newT.Namespace).Info("enqueue tenant dataplane cleanup")
+		o.base.EnqueueWith(SourceTenantCRD, EventDelete, op.ResourceRef{Group: "setera.com", Version: "v1", Kind: "Tenant", Namespace: newT.Namespace, Name: newT.Name})
 		return
 	}
 	nodeName := os.Getenv("NODE_NAME")

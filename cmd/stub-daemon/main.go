@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github/setera/internal/daemon"
 	"github/setera/internal/dispatcher"
@@ -16,12 +17,15 @@ import (
 	"github/setera/internal/nmanager"
 	rsv "github/setera/internal/resolver"
 	"github/setera/internal/router"
+	"github/setera/pkg"
 	seterainformers "github/setera/pkg/generated/informers/externalversions"
 	seterav1informers "github/setera/pkg/generated/informers/externalversions/setera.com/v1"
 	"github/setera/pkg/k8s"
+	"github/setera/pkg/network/device"
 	policynode "github/setera/pkg/network/policy"
 	fw "github/setera/pkg/network/policy/loader"
 	_ "github/setera/pkg/network/policy/node"
+	"github/setera/pkg/network/routing"
 	op "github/setera/pkg/operator"
 
 	seterav1 "github/setera/pkg/api/setera.com/v1"
@@ -36,12 +40,23 @@ import (
 
 // stub-daemon: minimal UDS server to exercise the CNI shim.
 // It accepts framed JSON requests and returns OK with an optional minimal result.
-const defaultCNIConfPath = "/etc/tenantcni/cni-conf.json"
+const (
+	defaultCNIConfPath = "/etc/tenantcni/cni-conf.json"
+	defaultClusterCIDR = "10.244.0.0/16"
+)
+
+func logStartupStage(logger klog.Logger, startedAt, stageStart time.Time, stage string, kv ...any) {
+	fields := append([]any{"stage", stage, "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt)}, kv...)
+	logger.Info("startup stage complete", fields...)
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	logger := klog.FromContext(ctx).WithName("stub-daemon-main")
 	defer stop()
+	startedAt := time.Now()
+	stageStart := startedAt
+	logger.Info("startup began")
 
 	// init config
 	restCfg, err := initKube()
@@ -105,28 +120,45 @@ func main() {
 	}
 
 	// initialize network manager
+	stageStart = time.Now()
 	nm, err := nmanager.NewNetworkManager(nodeCIDRParsed, nodeName)
 	if err != nil {
 		logger.Error(err, "failed to initialize network manager")
 		os.Exit(1)
 	}
+	logStartupStage(logger, startedAt, stageStart, "init network manager", "node", nodeName)
+	stageStart = time.Now()
 
 	if err := initNodePolicies(); err != nil {
 		logger.Error(err, "failed to initialize node policies")
 		os.Exit(1)
 	}
+	stageStart = time.Now()
+
 	ebpfm, err := ebpfmanager.NewEbpfManager(nodeCIDRParsed, nodeName)
 	if err != nil {
 		logger.Error(err, "failed to initialize EBPF manager")
 		os.Exit(1)
 	}
+	logStartupStage(logger, startedAt, stageStart, "init ebpf manager", "node", nodeName)
+	stageStart = time.Now()
+
 	if err := fw.ClearPodTenantVethMap(); err != nil {
 		logger.Error(err, "failed to clear tc_podIDs map")
 	}
-	if err := ebpfm.EnsureNodeRouter("eth0"); err != nil {
-		logger.Error(err, "failed to attach node router to eth0")
+
+	ifaceName, err := nodeRouterIface()
+	if err != nil {
+		logger.Error(err, "failed to determine node router interface")
 		os.Exit(1)
 	}
+	if err := ebpfm.EnsureNodeRouter(ifaceName); err != nil {
+		logger.Error(err, "failed to attach node router", "iface", ifaceName)
+		os.Exit(1)
+	}
+	logStartupStage(logger, startedAt, stageStart, "attach node router to iface", "node", nodeName, "iface", ifaceName)
+	stageStart = time.Now()
+	go attachNodeRouterToVxlan(ctx, logger, ebpfm, nodeName)
 
 	// Prepare operator base and wire NM -> operator emitter
 	base := op.NewBaseOperator("stub-daemon", klog.FromContext(ctx), nil)
@@ -159,6 +191,7 @@ func main() {
 
 	// Sync initial subnet counts so the orchestrator can score nodes
 	// before any tenant event triggers a full NodeStore update.
+	stageStart = time.Now()
 	if existing, getErr := seteraClient.SeteraV1().NodeStores(metav1.NamespaceNone).Get(ctx, nodeName, metav1.GetOptions{}); getErr == nil {
 		existing.Status.TotalSubnets = nm.SubnetTotalCount()
 		existing.Status.FreeSubnets = nm.SubnetFreeCount()
@@ -175,7 +208,7 @@ func main() {
 	if dOpr != nil {
 		factory.Start(ctx.Done())
 		go func() {
-			if err := dOpr.Run(ctx); err != nil {
+			if err := dOpr.Run(ctx, startedAt); err != nil {
 				logger.Error(err, "daemon operator stopped running")
 			}
 		}()
@@ -190,6 +223,7 @@ func main() {
 	if err := srv.Run(); err != nil {
 		logger.Error(err, "cniserver failed to run")
 	}
+	logStartupStage(logger, startedAt, stageStart, "cni server listening", "socket", socket)
 
 	<-ctx.Done()
 	logger.Info("shuttind down daemon")
@@ -203,6 +237,48 @@ func getSocketPath() string {
 		return s
 	}
 	return "/var/run/setera/setera.sock"
+}
+
+func nodeRouterIface() (string, error) {
+	if envIface := os.Getenv("NODE_IFACE"); envIface != "" {
+		return envIface, nil
+	}
+	iface, err := routing.GetDefaultGatewayInterface()
+	if err != nil {
+		return "", err
+	}
+	if iface == nil || iface.Name == "" {
+		return "", fmt.Errorf("default gateway interface unavailable")
+	}
+	return iface.Name, nil
+}
+
+func attachNodeRouterToVxlan(ctx context.Context, logger klog.Logger, ebpfm *ebpfmanager.EbpfManagerImpl, nodeName string) {
+	vxName, err := device.GenerateDeviceName(pkg.VxlanPrefix, nodeName)
+	if err != nil {
+		logger.Error(err, "failed to generate vxlan interface name")
+		return
+	}
+
+	logged := false
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		if err := ebpfm.EnsureNodeRouter(vxName); err == nil {
+			logger.Info("attached node router to vxlan interface", "iface", vxName)
+			return
+		} else if !logged {
+			logger.Info("waiting for vxlan interface before attaching node router", "iface", vxName, "err", err)
+			logged = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func initKube() (*rest.Config, error) {
@@ -310,8 +386,24 @@ func initNodePolicies() error {
 	if err := mgr.EnsureForwardPolicyDrop(); err != nil {
 		return fmt.Errorf("forward policy drop: %w", err)
 	}
-	if err := mgr.EnsureClusterMasquerade("10.244.0.0/16"); err != nil {
+	clusterCIDR, err := configuredClusterCIDR()
+	if err != nil {
+		return fmt.Errorf("configured cluster CIDR: %w", err)
+	}
+	if err := mgr.EnsureClusterMasquerade(clusterCIDR); err != nil {
 		return fmt.Errorf("cluster masquerade: %w", err)
 	}
 	return nil
+}
+
+func configuredClusterCIDR() (string, error) {
+    value := envOrDefault("CLUSTER_CIDR", defaultClusterCIDR)
+    ip, network, err := net.ParseCIDR(value)
+    if err != nil {
+        return "", fmt.Errorf("invalid CLUSTER_CIDR %q: %w", value, err)
+    }
+    if ip.To4() == nil {
+        return "", fmt.Errorf("CLUSTER_CIDR must be an IPv4 CIDR: %q", value)
+    }
+    return network.String(), nil
 }

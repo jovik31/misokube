@@ -2,6 +2,7 @@ package nmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -56,7 +57,7 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 
 	// Attach pod veth directly to host namespace (no bridge master).
 	vethStart := time.Now()
-	hostVethName, err := device.SetupVethDirect(args.NetNS, 1450, args.IfName, podIPNet, gateway)
+	hostVethName, err := device.SetupVethDirect(args.NetNS, 1500, args.IfName, podIPNet, gateway)
 	if err != nil {
 		// On failure, release IP
 		log.Print("failed to setup veth", err)
@@ -113,41 +114,88 @@ func (nm *NetworkManagerImpl) RemovePod(ctx context.Context, tenantID string, ar
 	rec, ok := nm.TenantRecords[tenantID]
 	nm.mu.RUnlock()
 	if !ok || rec == nil {
-		// CNI DEL is idempotent. The Tenant may already have been removed.
 		return nil
 	}
 	if rec.IPAM == nil {
+		log.Printf("tenant=%s pod=%s remove: ipam not initialized", tenantID, args.PodName)
+		nm.emitNodeStoreEvent(op.EventUpdate)
 		return nil
 	}
 
 	key := podKey(args.Namespace, args.PodName)
-	allocation, found := rec.IPAM.GetAllocation(key)
-	if !found || allocation == nil {
+	alloc, ok := rec.IPAM.GetAllocation(key)
+	if !ok || alloc == nil {
+		if k, info := findAllocationByArgs(rec.IPAM, args); info != nil {
+			key = k
+			alloc = info
+		}
+	}
+	if alloc == nil {
+		log.Printf("tenant=%s pod=%s remove: no allocation found", tenantID, args.PodName)
+		nm.emitNodeStoreEvent(op.EventUpdate)
 		return nil
 	}
 
-	// Ignore a delayed DEL from an older sandbox after Kubernetes recreated
-	// the same namespace/name with a different container ID.
-	if args.ContainerID != "" && allocation.ID != "" && allocation.ID != args.ContainerID {
-		log.Printf(
-			"tenant=%s pod=%s ignoring stale DEL container=%s current=%s",
-			tenantID,
-			key,
-			args.ContainerID,
-			allocation.ID,
-		)
-		return nil
+	if err := removePodVeth(alloc); err != nil {
+		log.Printf("tenant=%s pod=%s remove: veth cleanup failed: %v", tenantID, args.PodName, err)
+	}
+	if err := rec.IPAM.Free(alloc.IP); err != nil {
+		log.Printf("tenant=%s pod=%s remove: ipam free failed ip=%s err=%v", tenantID, args.PodName, alloc.IP, err)
+	} else {
+		log.Printf("tenant=%s pod=%s remove: released ip=%s key=%s", tenantID, args.PodName, alloc.IP, key)
 	}
 
-	if err := rec.IPAM.Free(allocation.IP); err != nil {
-		return fmt.Errorf("release pod IP tenant=%s pod=%s ip=%s: %w", tenantID, key, allocation.IP, err)
-	}
-	log.Printf("pod removed: tenant=%s pod=%s ip=%s", tenantID, key, allocation.IP)
-
-	// NodeStore mirroring removes the pod from tc_podIDs and detaches the
-	// local pod program by diffing the new snapshot against the old one.
 	nm.emitNodeStoreEvent(op.EventUpdate)
 	return nil
+}
+
+func findAllocationByArgs(ipam ipam.IPAM, args router.PodAttachArgs) (string, *ipam.ContainerNetInfo) {
+	allocs := ipam.ListAllocations()
+	for k, v := range allocs {
+		if v == nil {
+			continue
+		}
+		if args.ContainerID != "" && v.ID == args.ContainerID {
+			return k, v
+		}
+		if args.NetNS != "" && v.NetNS == args.NetNS {
+			return k, v
+		}
+		if args.IfName != "" && v.IFname == args.IfName {
+			return k, v
+		}
+	}
+	return "", nil
+}
+
+func removePodVeth(alloc *ipam.ContainerNetInfo) error {
+	if alloc == nil {
+		return nil
+	}
+
+	if alloc.NetNS != "" && alloc.IFname != "" {
+		nsHandle, err := ns.GetNS(alloc.NetNS)
+		if err == nil {
+			defer nsHandle.Close()
+			if err := device.DelVeth(nsHandle, alloc.IFname); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	if alloc.HostVethName == "" {
+		return nil
+	}
+	link, err := netlink.LinkByName(alloc.HostVethName)
+	if err != nil {
+		var notFound netlink.LinkNotFoundError
+		if errors.As(err, &notFound) {
+			return nil
+		}
+		return err
+	}
+	return netlink.LinkDel(link)
 }
 
 // UpdatePod applies changes required during tenant expansion or migration.
@@ -187,7 +235,7 @@ func (nm *NetworkManagerImpl) UpdatePod(ctx context.Context, tenantID string, ar
 		if err := flushLinkIPv4Addrs(link); err != nil {
 			return fmt.Errorf("flush pod iface addresses: %w", err)
 		}
-		if err := netlink.LinkSetMTU(link, 1450); err != nil {
+		if err := netlink.LinkSetMTU(link, 1500); err != nil {
 			return fmt.Errorf("set mtu: %w", err)
 		}
 		addr := &netlink.Addr{IPNet: podIPNet}

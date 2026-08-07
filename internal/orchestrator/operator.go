@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"time"
 
 	// internal
 	seteraclient "github/setera/pkg/generated/clientset/versioned"
@@ -9,9 +10,9 @@ import (
 	op "github/setera/pkg/operator"
 
 	// client-go
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/kubernetes"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	// logging
@@ -23,8 +24,8 @@ type Operator struct {
 	logger   klog.Logger
 	recorder record.EventRecorder
 
-	setera seteraclient.Interface
-	kubeclient kubernetes.Interface
+	setera        seteraclient.Interface
+	kubeclient    kubernetes.Interface
 	metricsClient *metricsclient.Clientset
 
 	// tenant lister and informer
@@ -117,8 +118,8 @@ func New(
 	return o
 }
 
-func (o *Operator) Run(ctx context.Context) error {
+func (o *Operator) Run(ctx context.Context, startedAt time.Time) error {
 	o.logger.Info("starting orchestrator")
 	defer o.logger.Info("orchestrator stopped")
-	return o.base.Run(ctx, o.router)
+	return o.base.Run(ctx, o.router, startedAt)
 }

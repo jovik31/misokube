@@ -113,27 +113,6 @@ func (ipam *BitmapIPAM) Allocate(podKey string, containerID string, ifName strin
 	ipam.mu.Lock()
 	defer ipam.mu.Unlock()
 
-	// CNI ADD may be retried for the same container. Return the existing
-	// allocation instead of consuming another bitmap slot.
-	if existing, ok := ipam.IPs[podKey]; ok && existing != nil {
-		if containerID == "" || existing.ID == "" || existing.ID == containerID {
-			return existing, nil
-		}
-
-		// Kubernetes can recreate a pod with the same namespace/name before a
-		// delayed DEL for the previous sandbox arrives. Replace the old sandbox
-		// allocation atomically; RemovePod validates the container ID so that the
-		// delayed DEL cannot free this new allocation.
-		idx := ipam.ipToIndex(existing.IP)
-		if idx >= 0 {
-			wi, off := idx/64, uint(idx%64)
-			if wi < len(ipam.bitmap) {
-				ipam.bitmap[wi] &^= 1 << off
-			}
-		}
-		delete(ipam.IPs, podKey)
-	}
-
 	capacity, err := ipam.capacityLocked()
 	if err != nil {
 		return nil, err

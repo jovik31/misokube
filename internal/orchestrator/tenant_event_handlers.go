@@ -15,6 +15,11 @@ func (t *Operator) addEventTenantHandler(obj any) {
 		t.logger.WithValues("event", EventAdd).Info("failed to cast object to tenant in add handler")
 		return
 	}
+	if tenant.DeletionTimestamp != nil {
+		t.logger.WithValues("event", EventDelete, "tenant", tenant.Name, "ns", tenant.Namespace).Info("enqueue deleting tenant observed during add")
+		t.base.EnqueueObjectWith(SourceTenantCRD, EventDelete, tenant)
+		return
+	}
 	t.logger.WithValues("event", EventAdd, "tenant", tenant.Name, "ns", tenant.Namespace).Info("enqueue tenant add")
 	t.base.EnqueueObjectWith(SourceTenantCRD, EventAdd, tenant)
 }
@@ -44,6 +49,11 @@ func (t *Operator) updateEventTenantHandler(oldObj, newObj any) {
 	}
 	if oldTenant == nil || newTenant == nil {
 		t.logger.WithValues("event", EventUpdate).Info("failed to cast objects to tenant in update handler")
+		return
+	}
+	if newTenant.DeletionTimestamp != nil {
+		t.logger.WithValues("event", EventDelete, "tenant", newTenant.Name, "ns", newTenant.Namespace).Info("enqueue tenant deletionTimestamp update")
+		t.base.EnqueueObjectWith(SourceTenantCRD, EventDelete, newTenant)
 		return
 	}
 

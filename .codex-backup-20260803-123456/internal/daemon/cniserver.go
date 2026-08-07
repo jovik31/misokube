@@ -36,14 +36,14 @@ type CNIServer struct {
 }
 
 type podCacheEntry struct {
-	result   types100.Result
-	tenantID string
-	lastCmd  wire.Command
-	idemKey  string
-	updated  time.Time
+	result  types100.Result
+	lastCmd wire.Command
+	idemKey string
+	tenant  string
+	updated time.Time
 }
 
-func (s *CNIServer) cacheStore(uid string, tenantID string, cmd wire.Command, idemKey string, res *types100.Result) {
+func (s *CNIServer) cacheStore(uid string, cmd wire.Command, idemKey string, tenant string, res *types100.Result) {
 	if uid == "" {
 		return
 	}
@@ -54,11 +54,11 @@ func (s *CNIServer) cacheStore(uid string, tenantID string, cmd wire.Command, id
 		stored = *res
 	}
 	s.cache[uid] = podCacheEntry{
-		result:   stored,
-		tenantID: tenantID,
-		lastCmd:  cmd,
-		idemKey:  idemKey,
-		updated:  time.Now(),
+		result:  stored,
+		lastCmd: cmd,
+		idemKey: idemKey,
+		tenant:  tenant,
+		updated: time.Now(),
 	}
 }
 
@@ -149,11 +149,11 @@ func (s *CNIServer) handleConn(c net.Conn) {
 
 	// Handle per-command behavior with minimal responses.
 	var (
-		resp             *wire.Response
-		resolvedTenantID string
+		resp *wire.Response
 		//cacheEvent = "none"
 		storeEntry bool
 		storeRes   *types100.Result
+		storeTenant string
 	)
 	switch req.Cmd {
 	case wire.CmdSTATUS:
@@ -163,8 +163,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 		resp = s.handleGCRequest(&req)
 		//cacheEvent = "skip"
 	default:
-		var resolveErr error
-		resolvedTenantID, resolveErr = s.resolveTenantForRequest(&req)
+		tenantID, resolveErr := s.resolveTenantForRequest(&req)
 		if resolveErr != nil {
 			resp = &wire.Response{
 				OK:      false,
@@ -173,9 +172,10 @@ func (s *CNIServer) handleConn(c net.Conn) {
 			}
 			break
 		}
+		storeTenant = tenantID
 		start := time.Now()
 		var ce string
-		resp, storeRes, storeEntry, ce = s.handleTenantCommand(&req, resolvedTenantID)
+		resp, storeRes, storeEntry, ce = s.handleTenantCommand(&req, tenantID)
 		dur := time.Since(start)
 		if resp != nil {
 			podKey := req.PodNamespace + "/" + req.PodName
@@ -183,9 +183,9 @@ func (s *CNIServer) handleConn(c net.Conn) {
 				podKey = "-"
 			}
 			if resp.OK {
-				log.Printf("[CNI][%s] ok tenant=%s pod=%s dur=%s", req.Cmd, resolvedTenantID, podKey, dur)
+				log.Printf("[CNI][%s] ok tenant=%s pod=%s dur=%s", req.Cmd, tenantID, podKey, dur)
 			} else {
-				log.Printf("[CNI][%s] error tenant=%s pod=%s dur=%s msg=%s", req.Cmd, resolvedTenantID, podKey, dur, resp.Message)
+				log.Printf("[CNI][%s] error tenant=%s pod=%s dur=%s msg=%s", req.Cmd, tenantID, podKey, dur, resp.Message)
 			}
 		}
 		if ce != "" {
@@ -194,7 +194,7 @@ func (s *CNIServer) handleConn(c net.Conn) {
 	}
 
 	if resp != nil && resp.OK && storeEntry {
-		s.cacheStore(req.PodUID, resolvedTenantID, req.Cmd, req.IdemKey, storeRes)
+		s.cacheStore(req.PodUID, req.Cmd, req.IdemKey, storeTenant, storeRes)
 	}
 
 	_ = uds.WriteResponse(c, hdr.Cmd, hdr.Flags, resp)
@@ -315,26 +315,37 @@ func (s *CNIServer) resolveTenantForRequest(req *wire.Request) (string, error) {
 	default:
 		return "", nil
 	}
-
-	// The Pod object can disappear from the informer before kubelet sends CNI
-	// DEL. Reuse the Tenant selected during ADD so cleanup does not depend on
-	// the deleted Kubernetes object still being resolvable.
-	if req.Cmd == wire.CmdDEL && req.PodUID != "" {
-		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.tenantID != "" {
-			return entry.tenantID, nil
+	if req.Cmd == wire.CmdDEL {
+		if entry, err := s.cacheGet(req.PodUID); err == nil && entry.tenant != "" {
+			return entry.tenant, nil
 		}
 	}
 	if s.resolver == nil {
 		return "", errors.New("resolver not configured")
 	}
 	if !s.resolver.Ready() {
+		if req.Cmd == wire.CmdDEL {
+			if entry, err := s.cacheGet(req.PodUID); err == nil && entry.tenant != "" {
+				return entry.tenant, nil
+			}
+		}
 		return "", errors.New("resolver pending")
 	}
 	tenantID, pending, err := s.resolver.Resolve(req.PodUID)
 	if err != nil {
+		if req.Cmd == wire.CmdDEL {
+			if entry, cacheErr := s.cacheGet(req.PodUID); cacheErr == nil && entry.tenant != "" {
+				return entry.tenant, nil
+			}
+		}
 		return "", err
 	}
 	if pending {
+		if req.Cmd == wire.CmdDEL {
+			if entry, cacheErr := s.cacheGet(req.PodUID); cacheErr == nil && entry.tenant != "" {
+				return entry.tenant, nil
+			}
+		}
 		return "", errors.New("resolver pending")
 	}
 	return tenantID, nil

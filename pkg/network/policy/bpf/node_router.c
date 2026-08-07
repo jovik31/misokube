@@ -26,21 +26,6 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_podIDs SEC(".maps");
 
-static __always_inline int is_default_tenant(char *name)
-{
-    if (!name)
-        return 0;
-    if (name[0] != 'd') return 0;
-    if (name[1] != 'e') return 0;
-    if (name[2] != 'f') return 0;
-    if (name[3] != 'a') return 0;
-    if (name[4] != 'u') return 0;
-    if (name[5] != 'l') return 0;
-    if (name[6] != 't') return 0;
-    if (name[7] != '\0') return 0;
-    return 1;
-}
-
 static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 direction)
 {
     void *data     = (void *)(long)skb->data;
@@ -70,6 +55,8 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
 
     __u32 pkt_len = data_end - data;
 
+    //bpf_printk("node_router: dir=%d ifindex=%d s=%x d=%x proto=%d\n", direction, skb->ifindex, iph->saddr, iph->daddr, iph->protocol);
+
     // Update stats
     struct pkt_stats *stats = bpf_map_lookup_elem(&tc_stats, &direction);
     if (stats) {
@@ -82,28 +69,18 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
         }
     }
 
-     // Load interface config
-    __u32 cfg_key = 0;
-    struct iface_config *cfg = bpf_map_lookup_elem(&tc_iface_cfg, &cfg_key);
-    int conntrack_enabled = cfg && (cfg->flags & 1);
-
     struct veth_tenant *dst_info = bpf_map_lookup_elem(&tc_podIDs, &iph->daddr);
 
     if (dst_info) {
-        if (!is_default_tenant((char *)my_tenant) && !is_default_tenant(dst_info->tenant)) {
-            for (int i = 0; i < 64; i++) {
-                if (dst_info->tenant[i] != my_tenant[i]) {
-                    if (stats)
-                        stats->dropped++;
-                    return TC_ACT_SHOT;
-                }
-                if (dst_info->tenant[i] == '\0')
-                    break;
-            }
-        }
         if (dst_info->veth_ifindex != (__u32)-1) {
+            //bpf_printk("node_router: redirect to veth ifindex=%d d=%x\n", dst_info->veth_ifindex, iph->daddr);
             return bpf_redirect_peer(dst_info->veth_ifindex, 0);
         }
+        //bpf_printk("node_router: map hit but veth_ifindex=-1 d=%x\n", iph->daddr);
+        return TC_ACT_OK;
+    }
+    else{
+        //bpf_printk("node_router: map miss d=%x\n", iph->daddr);
         return TC_ACT_OK;
     }
 
@@ -119,10 +96,7 @@ int tc_node_ingress(struct __sk_buff *skb)
 SEC("tc/egress")
 int tc_node_egress(struct __sk_buff *skb)
 {
-    // Routing/isolation decisions are enforced on ingress.
-    // Keeping egress passive avoids veth recirculation artifacts.
-    (void)skb;
-    return TC_ACT_OK;
+    return tc_firewall_core(skb, DIR_INGRESS);
 }
 
 char _license[] SEC("license") = "GPL";

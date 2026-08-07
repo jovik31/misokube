@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"math"
 	"net"
 	"os"
+	"time"
 
 	"github/setera/internal/dispatcher"
 	ebpfmanager "github/setera/internal/ebpfmanager"
@@ -16,8 +19,11 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github/setera/pkg"
 	seterav1 "github/setera/pkg/api/setera.com/v1"
 	"github/setera/pkg/k8s"
+	"github/setera/pkg/network/device"
+	"github/setera/pkg/network/routing"
 
 	// daemon operator
 	doper "github/setera/internal/daemon"
@@ -113,14 +119,20 @@ func initNodestore(cfg *daemonConfig) *seterav1.NodeStore {
 func main() {
 
 	// init
+	startedAt := time.Now()
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx).WithName("daemon")
+	logger.Info("startup began")
+
+	stageStart := startedAt
 
 	config, err := k8s.InitKubeConfig()
 	if err != nil {
 		logger.Error(err, "failed to fetch kubeconfig")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init kubeconfig", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	if config == nil {
 		logger.Error(nil, "kubeconfig is nil, cannot proceed")
@@ -132,9 +144,13 @@ func main() {
 		logger.Error(err, "failed to initialize Kubernetes clients")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init clients", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
 
 	// parse flags
+	stageStart = time.Now()
 	cfg := parseFlags()
+	logger.Info("startup stage complete", "stage", "parse flags", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	// NODE_NAME and NODE_IP must be set via env vars by the DaemonSet
 	cfg.nodeName = os.Getenv("NODE_NAME")
@@ -143,6 +159,8 @@ func main() {
 		logger.Error(nil, "NODE_NAME and NODE_IP environment variables must be set")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "load node env", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
 
 	// get node_cidr (needed before NodeStore creation to compute subnet counts)
 	node, err := kubeclient.CoreV1().Nodes().Get(ctx, cfg.nodeName, metav1.GetOptions{})
@@ -156,6 +174,8 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.nodeCIDR = node.Spec.PodCIDR
+	logger.Info("startup stage complete", "stage", "fetch node pod cidr", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName, "podCIDR", cfg.nodeCIDR)
+	stageStart = time.Now()
 
 	// Compute total leaf subnets from PodCIDR.
 	// The trie subdivides the node CIDR down to /30 leaves,
@@ -169,6 +189,8 @@ func main() {
 	const leafMask = 30
 	totalLeaves := int(math.Pow(2, float64(leafMask-prefixLen)))
 	logger.Info("Computed total leaf subnets for node", "node", cfg.nodeName, "podCIDR", cfg.nodeCIDR, "totalLeafSubnets", totalLeaves)
+	logger.Info("startup stage complete", "stage", "compute subnet counts", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	// create nodestore object for the node
 	nd := initNodestore(&cfg)
@@ -196,6 +218,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	logger.Info("startup stage complete", "stage", "create or update nodestore", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
 	logger.Info("NodeStore subnet counts initialized", "node", cfg.nodeName, "total", totalLeaves, "free", totalLeaves)
 
 	// Start daemon operator (informers + reconciler)
@@ -207,32 +231,56 @@ func main() {
 	nodeStoreLister := v1.NodeStores().Lister()
 
 	base := op.NewBaseOperator("daemon", logger, nil)
+	stageStart = time.Now()
 	nm, err := nmanager.NewNetworkManager(nodeCIDRNet, cfg.nodeName)
 	if err != nil {
 		logger.Error(err, "failed to initialize network manager")
 		os.Exit(1)
 	}
 	nm.SetEmitter(base)
+	logger.Info("startup stage complete", "stage", "init network manager", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
 
 	ebpfm, err := ebpfmanager.NewEbpfManager(nodeCIDRNet, cfg.nodeName)
 	if err != nil {
 		logger.Error(err, "failed to initialize EBPF manager")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init ebpf manager", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
+
 	if err := fw.ClearPodTenantVethMap(); err != nil {
 		logger.Error(err, "failed to clear tc_podIDs map")
 	}
-	if err := ebpfm.EnsureNodeRouter("eth0"); err != nil {
-		logger.Error(err, "failed to attach node router to eth0")
+	logger.Info("startup stage complete", "stage", "clear tc map", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
+
+	ifaceName, err := nodeRouterIface()
+	if err != nil {
+		logger.Error(err, "failed to determine node router interface")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "resolve node router iface", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName, "iface", ifaceName)
+	stageStart = time.Now()
 
+	if err := ebpfm.EnsureNodeRouter(ifaceName); err != nil {
+		logger.Error(err, "failed to attach node router", "iface", ifaceName)
+		os.Exit(1)
+	}
+	logger.Info("startup stage complete", "stage", "attach node router to iface", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName, "iface", ifaceName)
+	stageStart = time.Now()
+
+	go attachNodeRouterToVxlan(ctx, logger, ebpfm, cfg.nodeName, startedAt)
+
+	stageStart = time.Now()
 	dp := dispatcher.New(nm, nm, ebpfm, ebpfm)
 	go func() {
 		if err := dp.Run(ctx); err != nil {
 			logger.Error(err, "dispatcher stopped running")
 		}
 	}()
+	logger.Info("startup stage complete", "stage", "start dispatcher", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
 
 	dispatcherAdapter := doper.NewDispatcherAdapter(dp)
 	daemonOp := doper.New(base, logger, nil, seteraClient, kubeclient, tenantInf, tenantLister, nodeStoreInf, nodeStoreLister, dispatcherAdapter)
@@ -240,12 +288,57 @@ func main() {
 		logger.Error(nil, "failed to construct daemon operator")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "construct daemon operator", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
+	stageStart = time.Now()
 	daemonOp.SetNodeName(cfg.nodeName)
 	daemonOp.SetNMOps(nm)
+	logger.Info("startup stage complete", "stage", "configure daemon operator", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt), "node", cfg.nodeName)
 
 	factory.Start(ctx.Done())
-	if err := daemonOp.Run(ctx); err != nil {
+	if err := daemonOp.Run(ctx, startedAt); err != nil {
 		logger.Error(err, "daemon operator failed")
 		os.Exit(1)
+	}
+}
+
+func nodeRouterIface() (string, error) {
+	if envIface := os.Getenv("NODE_IFACE"); envIface != "" {
+		return envIface, nil
+	}
+	iface, err := routing.GetDefaultGatewayInterface()
+	if err != nil {
+		return "", err
+	}
+	if iface == nil || iface.Name == "" {
+		return "", fmt.Errorf("default gateway interface unavailable")
+	}
+	return iface.Name, nil
+}
+
+func attachNodeRouterToVxlan(ctx context.Context, logger klog.Logger, ebpfm *ebpfmanager.EbpfManagerImpl, nodeName string, startedAt time.Time) {
+	vxName, err := device.GenerateDeviceName(pkg.VxlanPrefix, nodeName)
+	if err != nil {
+		logger.Error(err, "failed to generate vxlan interface name")
+		return
+	}
+
+	logged := false
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		if err := ebpfm.EnsureNodeRouter(vxName); err == nil {
+			logger.Info("attached node router to vxlan interface", "iface", vxName, "elapsed", time.Since(startedAt))
+			return
+		} else if !logged {
+			logger.Info("waiting for vxlan interface before attaching node router", "iface", vxName, "err", err, "elapsed", time.Since(startedAt))
+			logged = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }

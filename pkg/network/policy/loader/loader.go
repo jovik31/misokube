@@ -16,12 +16,13 @@ import (
 
 // Action constants matching the BPF program defines.
 const (
-	tcPodIDsMapPath          = "/sys/fs/bpf/setera/tc/tc_podIDs"
-	ActionDrop        uint32 = 0
-	ActionAllow       uint32 = 1
-	ActionLog         uint32 = 2
-	tcFlagConntrack   uint32 = 1 << 0
-	tcPodIDsValueSize        = 68
+	tcPodIDsMapPath              = "/sys/fs/bpf/setera/tc/tc_podIDs"
+	tcVxlanIfindexMapPath        = "/sys/fs/bpf/setera/tc/tc_vxlan_ifindex"
+	ActionDrop            uint32 = 0
+	ActionAllow           uint32 = 1
+	ActionLog             uint32 = 2
+	tcFlagConntrack       uint32 = 1 << 0
+	tcPodIDsValueSize            = 68
 )
 
 type tcPodIDValue struct {
@@ -135,6 +136,11 @@ var tcPodIDsShared struct {
 	mapFD *ebpf.Map
 }
 
+var tcVxlanIfindexShared struct {
+	mu    sync.Mutex
+	mapFD *ebpf.Map
+}
+
 func getOrCreateSharedTcPodIDsMap() (*ebpf.Map, error) {
 	tcPodIDsShared.mu.Lock()
 	defer tcPodIDsShared.mu.Unlock()
@@ -176,6 +182,73 @@ func getOrCreateSharedTcPodIDsMap() (*ebpf.Map, error) {
 
 	tcPodIDsShared.mapFD = m
 	return m, nil
+}
+
+func getOrCreateSharedTcVxlanIfindexMap() (*ebpf.Map, error) {
+	tcVxlanIfindexShared.mu.Lock()
+	defer tcVxlanIfindexShared.mu.Unlock()
+
+	if tcVxlanIfindexShared.mapFD != nil {
+		return tcVxlanIfindexShared.mapFD, nil
+	}
+
+	m, err := ebpf.LoadPinnedMap(tcVxlanIfindexMapPath, nil)
+	if err == nil {
+		tcVxlanIfindexShared.mapFD = m
+		return m, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("open pinned map %s: %w", tcVxlanIfindexMapPath, err)
+	}
+
+	m, err = ebpf.NewMap(&ebpf.MapSpec{
+		Name:       "tc_vxlan_ifindex",
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create shared tc_vxlan_ifindex map: %w", err)
+	}
+	if err := m.Pin(tcVxlanIfindexMapPath); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			m.Close()
+			return nil, fmt.Errorf("pin shared tc_vxlan_ifindex map: %w", err)
+		}
+		m.Close()
+		m, err = ebpf.LoadPinnedMap(tcVxlanIfindexMapPath, nil)
+		if err != nil {
+			return nil, fmt.Errorf("reopen shared tc_vxlan_ifindex map: %w", err)
+		}
+	}
+
+	tcVxlanIfindexShared.mapFD = m
+	return m, nil
+}
+
+// SetVxlanIfindex updates the shared map used by tc_router for remote redirects.
+func SetVxlanIfindex(ifindex int) error {
+	print("Setting VXLAN ifindex in shared map to %d\n", ifindex)
+	if ifindex <= 0 {
+		return fmt.Errorf("invalid vxlan ifindex %d", ifindex)
+	}
+	if err := ensureBPFFSMounted("/sys/fs/bpf"); err != nil {
+		return err
+	}
+	if err := os.MkdirAll("/sys/fs/bpf/setera/tc", 0755); err != nil {
+		return fmt.Errorf("create vxlan ifindex pin dir: %w", err)
+	}
+	m, err := getOrCreateSharedTcVxlanIfindexMap()
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return nil
+	}
+	key := uint32(0)
+	val := uint32(ifindex)
+	return m.Update(&key, &val, ebpf.UpdateAny)
 }
 
 func loadTcFirewallObjectsWithSharedPodMap(obj interface{}, opts *ebpf.CollectionOptions) error {

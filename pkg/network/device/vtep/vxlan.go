@@ -2,13 +2,15 @@ package vtep
 
 import (
 	"crypto/sha1"
+	stdErrors "errors"
 	"github/setera/pkg/network/device"
 	"log"
+	"net"
 	"strings"
+	"syscall"
 
 	config "github/setera/pkg"
 	"github/setera/pkg/network/routing"
-	"net"
 
 	"github.com/pkg/errors"
 	"github.com/vishvananda/netlink"
@@ -40,7 +42,7 @@ func SetupVxlan(subnet *net.IPNet, nodeName string) (*netlink.Vxlan, *net.IPNet,
 	}
 
 	// init the IPNet for the VTEP
-	hostIP, err := device.HostIP(subnet)
+	hostIP, err := device.FirstIP(subnet)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "get host IP for subnet %s", subnet)
 	}
@@ -51,23 +53,27 @@ func SetupVxlan(subnet *net.IPNet, nodeName string) (*netlink.Vxlan, *net.IPNet,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 
-	// if no address exists, assign the first IP of the subnet
-	if len(existingAddrs) == 0 {
-		hostIP, err := device.HostIP(subnet)
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "get host IP for subnet %s", subnet)
+	// If the address already exists, skip; otherwise add it.
+	addrPresent := false
+	for _, addr := range existingAddrs {
+		if addr.IPNet != nil && addr.IPNet.IP.Equal(vtepIP.IP) {
+			addrPresent = true
+			break
 		}
-
-		if err := netlink.AddrAdd(vxlanLink, &netlink.Addr{
-			IPNet: vtepIP,
-		}); err != nil {
-			return nil, nil, errors.Wrapf(err, "add address %s to vxlan device %s", hostIP, vtepName)
+	}
+	if !addrPresent {
+		if err := netlink.AddrAdd(vxlanLink, &netlink.Addr{IPNet: vtepIP}); err != nil {
+			if !isAddrInUse(err) {
+				return nil, nil, errors.Wrapf(err, "add address %s to vxlan device %s", vtepIP, vtepName)
+			}
 		}
 	}
 
 	// set the vxlan link up
 	if err := netlink.LinkSetUp(vxlanLink); err != nil {
-		return nil, nil, errors.Wrapf(err, "set vxlan device %s up", vtepName)
+		if !isAddrInUse(err) {
+			return nil, nil, errors.Wrapf(err, "set vxlan device %s up", vtepName)
+		}
 	}
 	log.Printf("vxlan device %s created with VNI %d, MAC %s and IP %s", vtepName, vni, vtepMac, vtepIP)
 
@@ -155,7 +161,7 @@ func UpdateIP(dv device.Device, subnet *net.IPNet) (*net.IPNet, error) {
 	}
 
 	// Compute host (/32) address inside the tenant subnet.
-	hostIP, err := device.HostIP(subnet)
+	hostIP, err := device.FirstIP(subnet)
 	if err != nil {
 		return nil, errors.Wrapf(err, "UpdateIP: hostIP(%s)", subnet)
 	}
@@ -202,4 +208,14 @@ func VtepMAC(nodeName string) net.HardwareAddr {
 	copy(mac, sum[:6])
 	mac[0] = (mac[0] & 0xFE) | 0x02 // local bit set, multicast bit cleared
 	return net.HardwareAddr(mac)
+}
+
+func isAddrInUse(err error) bool {
+	if err == nil {
+		return false
+	}
+	if stdErrors.Is(err, syscall.EADDRINUSE) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "address already in use")
 }

@@ -163,7 +163,7 @@ func (c *BaseOperator) EnqueueWith(src Source, ev Event, res ResourceRef) {
 func (c *BaseOperator) Emitter() Emitter { return c }
 
 // Run waits for caches to sync and starts worker goroutines that call r.ReconcileEvent.
-func (c *BaseOperator) Run(ctx context.Context, r EventReconciler) error {
+func (c *BaseOperator) Run(ctx context.Context, r EventReconciler, startedAt time.Time) error {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
@@ -177,6 +177,7 @@ func (c *BaseOperator) Run(ctx context.Context, r EventReconciler) error {
 	for i := 0; i < c.workers; i++ {
 		go c.worker(ctx, r)
 	}
+	c.logger.Info("startup ready", "name", c.name, "reconciler", r.Name(), "elapsed", time.Since(startedAt))
 
 	<-ctx.Done()
 	if c.shutdownDelay > 0 {

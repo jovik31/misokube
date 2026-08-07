@@ -56,7 +56,7 @@ func (nm *NetworkManagerImpl) EnsurePod(ctx context.Context, tenantID string, ar
 
 	// Attach pod veth directly to host namespace (no bridge master).
 	vethStart := time.Now()
-	hostVethName, err := device.SetupVethDirect(args.NetNS, 1450, args.IfName, podIPNet, gateway)
+	hostVethName, err := device.SetupVethDirect(args.NetNS, 1500, args.IfName, podIPNet, gateway)
 	if err != nil {
 		// On failure, release IP
 		log.Print("failed to setup veth", err)
@@ -187,7 +187,7 @@ func (nm *NetworkManagerImpl) UpdatePod(ctx context.Context, tenantID string, ar
 		if err := flushLinkIPv4Addrs(link); err != nil {
 			return fmt.Errorf("flush pod iface addresses: %w", err)
 		}
-		if err := netlink.LinkSetMTU(link, 1450); err != nil {
+		if err := netlink.LinkSetMTU(link, 1500); err != nil {
 			return fmt.Errorf("set mtu: %w", err)
 		}
 		addr := &netlink.Addr{IPNet: podIPNet}

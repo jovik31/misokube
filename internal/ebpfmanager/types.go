@@ -19,9 +19,8 @@ type EbpfManagerImpl struct {
 	TP policy.TenantPolicyManager
 	PP policy.PodPolicyManager
 
-	nodeRouterMu    sync.Mutex
-	nodeRouter      interface{ Close() error }
-	nodeRouterIface string
+	nodeRouterMu sync.Mutex
+	nodeRouters  map[string]interface{ Close() error }
 
 	defaultPodIfName func(tenantID, podName string) string
 }

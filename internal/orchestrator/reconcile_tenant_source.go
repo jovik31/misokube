@@ -3,8 +3,10 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	// k8s
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -17,6 +19,9 @@ func (o *Operator) reconcileTenantAdd(ctx context.Context, _ op.Source, ref op.R
 	t, err := o.tenantLister.Tenants(ref.Namespace).Get(ref.Name)
 	if err != nil {
 		return fmt.Errorf("get Tenant %s/%s: %w", ref.Namespace, ref.Name, err)
+	}
+	if t.DeletionTimestamp != nil {
+		return o.reconcileTenantDelete(ctx, SourceTenantCRD, ref)
 	}
 
 	// Ensure finalizer (metadata patch; no in-memory mutation)
@@ -61,6 +66,9 @@ func (o *Operator) reconcileTenantUpdate(ctx context.Context, _ op.Source, ref o
 	if err != nil {
 		return fmt.Errorf("get Tenant %s/%s: %w", ref.Namespace, ref.Name, err)
 	}
+	if t.DeletionTimestamp != nil {
+		return o.reconcileTenantDelete(ctx, SourceTenantCRD, ref)
+	}
 	if err = o.ensureTenantFinalizer(ctx, t); err != nil {
 		return err
 	}
@@ -89,6 +97,31 @@ func (o *Operator) reconcileTenantUpdate(ctx context.Context, _ op.Source, ref o
 	return nil
 }
 func (o *Operator) reconcileTenantDelete(ctx context.Context, _ op.Source, ref op.ResourceRef) error {
-	// Nothing to do on deletion; finalizer removal is handled elsewhere.
-	return nil
+	t, err := o.tenantLister.Tenants(ref.Namespace).Get(ref.Name)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get deleting Tenant %s/%s: %w", ref.Namespace, ref.Name, err)
+	}
+	if !slices.Contains(t.Finalizers, tenantFinalizer) {
+		return nil
+	}
+	stores, err := o.nodeStoresForTenant(t.Name)
+	if err != nil {
+		return fmt.Errorf("list NodeStores for deleting Tenant %s/%s: %w", t.Namespace, t.Name, err)
+	}
+	if len(stores) > 0 {
+		nodeNames := make([]string, 0, len(stores))
+		for _, store := range stores {
+			nodeName := store.Spec.Name
+			if nodeName == "" {
+				nodeName = store.Name
+			}
+			nodeNames = append(nodeNames, nodeName)
+		}
+		return fmt.Errorf("waiting for Tenant %s/%s cleanup on NodeStores %v", t.Namespace, t.Name, nodeNames)
+	}
+	o.logger.WithValues("tenant", t.Name, "namespace", t.Namespace).Info("tenant cleanup completed; removing finalizer")
+	return o.removeTenantFinalizer(ctx, t)
 }

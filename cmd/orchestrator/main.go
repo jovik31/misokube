@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"time"
 
 	// internal
 	orch "github/setera/internal/orchestrator"
@@ -28,15 +29,20 @@ import (
 func main() {
 
 	// Initialize command line flags
+	startedAt := time.Now()
 
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx).WithName("orchestrator-main")
+	logger.Info("startup began")
+
+	stageStart := startedAt
 
 	config, err := k8s.InitKubeConfig()
 	if err != nil {
 		logger.Error(err, "failed to fetch kubeconfig")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init kubeconfig", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
 
 	// Check if kubeclientset is nil
 	if config == nil {
@@ -45,18 +51,23 @@ func main() {
 	} else {
 		logger.Info("INIT KUBECONFIG SUCCESSFUL")
 	}
+	stageStart = time.Now()
 
 	kubeclient, seteraClient, err := k8s.InitClients(config)
 	if err != nil {
 		logger.Error(err, "failed to initialize clients")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init clients", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	metricsClient, err := initMetricsClient(config)
 	if err != nil {
 		logger.Error(err, "failed to initialize metrics client")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "init metrics client", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	// Shared informer factory for Setera CRDs
 	factory := seterainformers.NewSharedInformerFactory(seteraClient, 0)
@@ -66,6 +77,8 @@ func main() {
 	tenantLister := v1.Tenants().Lister()
 	nodeStoreInf := v1.NodeStores().Informer()
 	nodeStoreLister := v1.NodeStores().Lister()
+	logger.Info("startup stage complete", "stage", "build informers", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	// deploy default tenant
 	err = ensureDefaultTenant(ctx, seteraClient, kubeclient, logger)
@@ -73,6 +86,8 @@ func main() {
 		logger.Error(err, "failed to ensure default tenant")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "ensure default tenant", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
+	stageStart = time.Now()
 
 	// Base operator
 	base := op.NewBaseOperator("orchestrator", logger, nil)
@@ -94,10 +109,11 @@ func main() {
 		logger.Error(nil, "failed to construct orchestrator operator")
 		os.Exit(1)
 	}
+	logger.Info("startup stage complete", "stage", "construct orchestrator", "stageDuration", time.Since(stageStart), "totalElapsed", time.Since(startedAt))
 
 	// Start informers then run the operator
 	factory.Start(ctx.Done())
-	if err := orchOp.Run(ctx); err != nil {
+	if err := orchOp.Run(ctx, startedAt); err != nil {
 		logger.Error(err, "orchestrator failed to run")
 		os.Exit(1)
 	}

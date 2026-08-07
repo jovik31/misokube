@@ -279,36 +279,6 @@ func SetupVethDirect(
 		return "", fmt.Errorf("set host route to pod %s via %s: %w", podHostRoute.String(), hostIfaceName, err)
 	}
 
-	if hw := hostVeth.Attrs().HardwareAddr; len(hw) > 0 {
-		hostGatewayMAC := append(net.HardwareAddr(nil), hw...)
-		err = nsHandle.Do(func(_ ns.NetNS) error {
-			conLink, err := nlLinkByName(ifName)
-			if err != nil {
-				return fmt.Errorf("lookup container link %q for neighbor: %w", ifName, err)
-			}
-			baseNeigh := &netlink.Neigh{
-				LinkIndex: conLink.Attrs().Index,
-				IP:        hostGateway,
-			}
-			if err := nlNeighDel(baseNeigh); err != nil && !errors.Is(err, syscall.ENOENT) {
-				return fmt.Errorf("delete existing neighbor %s: %w", hostGateway, err)
-			}
-			neigh := &netlink.Neigh{
-				LinkIndex:    conLink.Attrs().Index,
-				IP:           hostGateway,
-				HardwareAddr: hostGatewayMAC,
-				State:        netlink.NUD_PERMANENT,
-			}
-			if err := nlNeighSet(neigh); err != nil {
-				return fmt.Errorf("set static neighbor %s: %w", hostGateway, err)
-			}
-			return nil
-		})
-		if err != nil {
-			return "", err
-		}
-	}
-
 	log.Printf("SetupVethDirect: completed host ops dur=%s total=%s", time.Since(start), time.Since(start))
 	// return the host side interface name created by the kernel
 	return hostIfaceName, nil

@@ -15,7 +15,10 @@ func (em *EbpfManagerImpl) EnsureNodeRouter(ifaceName string) error {
 	em.nodeRouterMu.Lock()
 	defer em.nodeRouterMu.Unlock()
 
-	if em.nodeRouter != nil && em.nodeRouterIface == ifaceName {
+	if em.nodeRouters == nil {
+		em.nodeRouters = make(map[string]interface{ Close() error })
+	}
+	if _, ok := em.nodeRouters[ifaceName]; ok {
 		return nil
 	}
 
@@ -24,10 +27,6 @@ func (em *EbpfManagerImpl) EnsureNodeRouter(ifaceName string) error {
 		return fmt.Errorf("ensure node router on %s: %w", ifaceName, err)
 	}
 
-	if em.nodeRouter != nil {
-		_ = em.nodeRouter.Close()
-	}
-	em.nodeRouter = router
-	em.nodeRouterIface = ifaceName
+	em.nodeRouters[ifaceName] = router
 	return nil
 }

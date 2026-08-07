@@ -40,6 +40,29 @@ func (o *Operator) ensureTenantFinalizer(ctx context.Context, t *seterav1.Tenant
 	return nil
 }
 
+// removeTenantFinalizer removes only the MIsoKube Tenant finalizer.
+// It is idempotent and preserves finalizers owned by other controllers.
+func (o *Operator) removeTenantFinalizer(ctx context.Context, t *seterav1.Tenant) error {
+	if !slices.Contains(t.Finalizers, tenantFinalizer) {
+		return nil
+	}
+	finalizers := make([]string, 0, len(t.Finalizers))
+	for _, finalizer := range t.Finalizers {
+		if finalizer != tenantFinalizer {
+			finalizers = append(finalizers, finalizer)
+		}
+	}
+	payload := map[string]any{"metadata": map[string]any{"finalizers": finalizers}}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal finalizer removal patch for %s/%s: %w", t.Namespace, t.Name, err)
+	}
+	if _, err := o.setera.SeteraV1().Tenants(t.Namespace).Patch(ctx, t.Name, types.MergePatchType, b, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("remove finalizer from Tenant %s/%s: %w", t.Namespace, t.Name, err)
+	}
+	return nil
+}
+
 // selectInitialAwaitingNodes returns up to t.Spec.Zones node IDs from current NodeStores.
 // Non-deterministic selection is fine by your design.
 func (o *Operator) selectInitialAwaitingNodes(t *seterav1.Tenant) ([]string, error) {
@@ -278,16 +301,14 @@ func (o *Operator) getNodeScoreMetrics(ctx context.Context, ns seterav1.NodeStor
 	score := (cpuScore + memScore) / 2
 
 	o.logger.Info("computed node score from metrics", "node", ns.Spec.Name, "cpuUsage", cpuUsage, "memUsage", memUsage, "cpuMax", cpuMax, "memMax", memMax, "score", score)
-	
-	return (1-score)*100, nil
-}
 
+	return (1 - score) * 100, nil
+}
 
 func (o *Operator) getNodeScoreFreeSubnets(ns seterav1.NodeStore) (float64, error) {
-    if ns.Status.TotalSubnets == 0 {
-        return 0, fmt.Errorf("total subnets is zero, cannot compute free subnet ratio")
-    }
+	if ns.Status.TotalSubnets == 0 {
+		return 0, fmt.Errorf("total subnets is zero, cannot compute free subnet ratio")
+	}
 	o.logger.Info("got node subnet counts for scoring", "node", ns.Spec.Name, "freeSubnets", ns.Status.FreeSubnets, "totalSubnets", ns.Status.TotalSubnets)
-    return (1-(float64(ns.Status.FreeSubnets)/float64(ns.Status.TotalSubnets)))*100, nil
+	return (1 - (float64(ns.Status.FreeSubnets) / float64(ns.Status.TotalSubnets))) * 100, nil
 }
-

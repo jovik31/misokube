@@ -25,7 +25,8 @@ func (o *Operator) addNodestoreEventHandler(obj interface{}) {
 
 }
 
-// enqueue nodestore update events only for the remote nodestor
+// Enqueue NodeStore updates for both local and remote nodes. Local updates carry
+// pod/ifindex changes needed by tc_podIDs even though they do not need peer setup.
 func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {
 	var oldNS, newNS *seterav1.NodeStore
 
@@ -52,12 +53,6 @@ func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {
 		return
 	}
 
-	// Ignore updates for this daemon's node; we only care about remote peers.
-	if newNS.Spec.Name == o.nodeName {
-		return
-	}
-
-	
 	if equalTenantInfraForPeers(oldNS.Status.Tenants, newNS.Status.Tenants) {
 		return
 	}
@@ -91,7 +86,7 @@ func equalTenantInfraForPeers(a, b map[string]seterav1.TenantInfra) bool {
 	return true
 }
 
-//Compare pod lists nowing they might not be ordered the same
+// Compare pod lists nowing they might not be ordered the same
 func comparePodLists(oldList, newList []seterav1.Pod_Info) bool {
 	if len(oldList) != len(newList) {
 		return false
@@ -117,6 +112,5 @@ func comparePodLists(oldList, newList []seterav1.Pod_Info) bool {
 	}
 	return true
 }
-
 
 func (o *Operator) deleteEventNodestoretHandler(obj interface{}) {}

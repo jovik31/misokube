@@ -59,8 +59,19 @@ func (o *Operator) reconcileNodeStoreUpdate(ctx context.Context, _ op.Source, re
 	}
 
 	if ns.Spec.Name == o.nodeName {
+		// NodeStore status is derived state. It may lag behind a Tenant deletion,
+		// so it must not resurrect a terminating or already deleted Tenant.
+		activeTenants, err := o.activeTenantNames()
+		if err != nil {
+			return err
+		}
 		if o.dp != nil {
 			for tenantID := range ns.Status.Tenants {
+				if _, active := activeTenants[tenantID]; !active {
+					o.logger.WithValues("tenant", tenantID, "node", ns.Spec.Name).
+						Info("skip local NodeStore ensure for absent or terminating Tenant")
+					continue
+				}
 				o.dp.EnsureTenant(ns.Namespace, tenantID)
 				o.dp.EnsureMap(tenantID)
 			}
@@ -109,29 +120,46 @@ func (o *Operator) reconcileNodeStoreUpdate(ctx context.Context, _ op.Source, re
 	return nil
 }
 
-func (o *Operator) syncPodMapForNode(ns *seterav1.NodeStore) error {
-	if ns == nil {
-		return nil
+func (o *Operator) activeTenantNames() (map[string]struct{}, error) {
+	tenants, err := o.tenantLister.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("list Tenants for local NodeStore reconciliation: %w", err)
+	}
+	active := make(map[string]struct{}, len(tenants))
+	for _, tenant := range tenants {
+		if tenant == nil || tenant.DeletionTimestamp != nil {
+			continue
+		}
+		active[tenant.Name] = struct{}{}
+	}
+	return active, nil
+}
+
+func (o *Operator) syncPodMapForNode(_ *seterav1.NodeStore) error {
+	// Serialize the complete read/diff/enqueue/commit sequence. Without this,
+	// concurrent reconciles can calculate diffs from the same old snapshot and
+	// enqueue a stale delete after an upsert for a reused IP.
+	o.podMapMu.Lock()
+	defer o.podMapMu.Unlock()
+
+	stores, err := o.nodeStoreLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("list NodeStores for pod map reconciliation: %w", err)
 	}
 
-	o.podMapMu.Lock()
-	stores, err := o.nodeStoreLister.List(labels.Everything())
-	if err == nil {
-		// First key is the name of the node and second key is podIP which gives us tenant name and ifindex
-		refreshed := make(map[string]map[uint32]podMapEntry, len(stores))
-		for _, s := range stores {
-			if s == nil {
-				continue
-			}
-			// For each node we collect the pod entries
-			refreshed[s.Spec.Name] = collectNodePodEntries(s, o.nodeName)
+	// The lister is the source of current desired state. Do not overwrite one
+	// entry with the object attached to the queued event: that event may be older
+	// than the lister snapshot after workqueue delay.
+	refreshed := make(map[string]map[uint32]podMapEntry, len(stores))
+	for _, store := range stores {
+		if store == nil {
+			continue
 		}
-		o.podMapByNode = refreshed
+		refreshed[store.Spec.Name] = collectNodePodEntries(store, o.nodeName)
 	}
-	o.podMapByNode[ns.Spec.Name] = collectNodePodEntries(ns, o.nodeName)
+	o.podMapByNode = refreshed
 	desired := mergePodMapEntries(o.podMapByNode)
 	current := o.podMapKnown
-	o.podMapMu.Unlock()
 
 	for key, entry := range desired {
 		if old, ok := current[key]; ok && old == entry {
@@ -159,9 +187,7 @@ func (o *Operator) syncPodMapForNode(ns *seterav1.NodeStore) error {
 		}
 	}
 
-	o.podMapMu.Lock()
 	o.podMapKnown = desired
-	o.podMapMu.Unlock()
 	return nil
 }
 
@@ -235,11 +261,13 @@ func ipv4ToU32(ip net.IP) uint32 {
 }
 
 func (o *Operator) reconcileNodeStoreDelete(ctx context.Context, _ op.Source, res op.ResourceRef) error {
+	// Serialize deletes with normal map reconciliation for the same reason as
+	// syncPodMapForNode: eBPF deletes are keyed only by IP.
 	o.podMapMu.Lock()
+	defer o.podMapMu.Unlock()
 	delete(o.podMapByNode, res.Name)
 	desired := mergePodMapEntries(o.podMapByNode)
 	current := o.podMapKnown
-	o.podMapMu.Unlock()
 
 	for key := range current {
 		if _, ok := desired[key]; ok {
@@ -255,9 +283,7 @@ func (o *Operator) reconcileNodeStoreDelete(ctx context.Context, _ op.Source, re
 		}
 	}
 
-	o.podMapMu.Lock()
 	o.podMapKnown = desired
-	o.podMapMu.Unlock()
 	return nil
 }
 

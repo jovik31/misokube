@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"sync"
+	"time"
 
 	nmanager "github/setera/internal/nmanager"
 	seteraclient "github/setera/pkg/generated/clientset/versioned"
@@ -127,10 +128,10 @@ func (o *Operator) SetNMOps(nm nmanager.NodestoreOps) { o.nmOps = nm }
 
 // removed SetDispatcher; dispatcher is injected via New()
 
-func (o *Operator) Run(ctx context.Context) error {
+func (o *Operator) Run(ctx context.Context, startedAt time.Time) error {
 	o.logger.Info("starting daemon operator")
 	defer o.logger.Info("daemon operator stopped")
-	return o.base.Run(ctx, o.router)
+	return o.base.Run(ctx, o.router, startedAt)
 }
 
 func (o *Operator) ensurePeer(ctx context.Context, tenantID string, remote nmanager.RemoteTenantInfra) {
