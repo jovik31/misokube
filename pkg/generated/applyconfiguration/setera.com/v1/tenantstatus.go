@@ -24,10 +24,13 @@ import (
 // TenantStatusApplyConfiguration represents a declarative configuration of the TenantStatus type for use
 // with apply.
 type TenantStatusApplyConfiguration struct {
-	AssignedNodes             []NodeInfoApplyConfiguration         `json:"assignedNodes,omitempty"`
-	Paused                    *bool                                `json:"paused,omitempty"`
-	AwaitingNodeConfiguration []string                             `json:"waitingForNodeConfiguration,omitempty"`
-	Conditions                []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	// assigned nodes
+	AssignedNodes []NodeInfoApplyConfiguration `json:"assignedNodes,omitempty"`
+	// paused is true if the tenant is paused
+	Paused                    *bool    `json:"paused,omitempty"`
+	AwaitingNodeConfiguration []string `json:"waitingForNodeConfiguration,omitempty"`
+	// Conditions is a list of conditions for the tenant
+	Conditions []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
 }
 
 // TenantStatusApplyConfiguration constructs a declarative configuration of the TenantStatus type for use with

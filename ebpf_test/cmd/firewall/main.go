@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/setera/ebpf-test/pkg/firewall"
+	"github/setera/ebpf-test/pkg/firewall"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -21,14 +21,14 @@ import (
 
 // RuleConfig represents a single rule in the JSON rules file.
 type RuleConfig struct {
-	SrcIP    string `json:"srcIP,omitempty"`
-	DstIP    string `json:"dstIP,omitempty"`
-	SrcPort  int    `json:"srcPort,omitempty"`
-	DstPort  int    `json:"dstPort,omitempty"`
+	SrcIP     string `json:"srcIP,omitempty"`
+	DstIP     string `json:"dstIP,omitempty"`
+	SrcPort   int    `json:"srcPort,omitempty"`
+	DstPort   int    `json:"dstPort,omitempty"`
 	SrcPrefix int    `json:"srcPrefix,omitempty"` // CIDR prefix length for source IP
 	DstPrefix int    `json:"dstPrefix,omitempty"` // CIDR prefix length for destination IP
-	Protocol string `json:"protocol,omitempty"` // tcp, udp, icmp
-	Action   string `json:"action"`             // allow, drop, log
+	Protocol  string `json:"protocol,omitempty"`  // tcp, udp, icmp
+	Action    string `json:"action"`              // allow, drop, log
 }
 
 func main() {

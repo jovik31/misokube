@@ -101,6 +101,7 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 	temp := t.DeepCopy()
 	temp.Status.AssignedNodes = newAssigned
 	newAwaiting, newAssignedFinal, changedStructural := o.recomputeAwaitingAndAssignedForZones(temp, allStores)
+
 	// detect pure value changes (e.g., TenantCIDR) even when counts stay the same
 	awaitingChanged := !slices.Equal(t.Status.AwaitingNodeConfiguration, newAwaiting)
 	assignedChanged := !equalNodeInfosByValue(t.Status.AssignedNodes, newAssignedFinal)
@@ -109,7 +110,8 @@ func (o *Operator) reconcileNodestoreUpdate(ctx context.Context, _ op.Source, re
 	}
 
 	// Update status using a DeepCopy (never mutate informer object)
-	mod := t.DeepCopy()
+	mod := t.DeepCopy(), status
+	
 	mod.Status.AwaitingNodeConfiguration = newAwaiting
 	mod.Status.AssignedNodes = newAssignedFinal
 

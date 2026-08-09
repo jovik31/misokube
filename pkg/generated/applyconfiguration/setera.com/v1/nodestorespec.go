@@ -20,7 +20,8 @@ package v1
 // NodeStoreSpecApplyConfiguration represents a declarative configuration of the NodeStoreSpec type for use
 // with apply.
 type NodeStoreSpecApplyConfiguration struct {
-	Name      *string           `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
+	// Node name
 	NodeIP    *string           `json:"nodeIP,omitempty"`
 	Selectors map[string]string `json:"selectors,omitempty"`
 }

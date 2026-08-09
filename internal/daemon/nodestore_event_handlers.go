@@ -2,6 +2,7 @@ package daemon
 
 import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
+
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -57,7 +58,6 @@ func (o *Operator) updateNodestoreEventHandler(oldObj, newObj interface{}) {
 		return
 	}
 
-	
 	if equalTenantInfraForPeers(oldNS.Status.Tenants, newNS.Status.Tenants) {
 		return
 	}
@@ -91,7 +91,7 @@ func equalTenantInfraForPeers(a, b map[string]seterav1.TenantInfra) bool {
 	return true
 }
 
-//Compare pod lists nowing they might not be ordered the same
+// Compare pod lists nowing they might not be ordered the same
 func comparePodLists(oldList, newList []seterav1.Pod_Info) bool {
 	if len(oldList) != len(newList) {
 		return false
@@ -117,6 +117,5 @@ func comparePodLists(oldList, newList []seterav1.Pod_Info) bool {
 	}
 	return true
 }
-
 
 func (o *Operator) deleteEventNodestoretHandler(obj interface{}) {}

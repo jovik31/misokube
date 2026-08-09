@@ -20,16 +20,9 @@ package v1
 // TenantInfraApplyConfiguration represents a declarative configuration of the TenantInfra type for use
 // with apply.
 type TenantInfraApplyConfiguration struct {
-	Name        *string                      `json:"name,omitempty"`
-	TenantCIDR  *string                      `json:"tenant_cidr,omitempty"`
-	VTEP_NAME   *string                      `json:"vtep_name,omitempty"`
-	VNI         *int                         `json:"vni,omitempty"`
-	VTEP_IP     *string                      `json:"vtep_ip,omitempty"`
-	VTEP_MAC    *string                      `json:"vtep_mac,omitempty"`
-	BRIDGE_NAME *string                      `json:"bridge_name,omitempty"`
-	BRIDGE_IP   *string                      `json:"bridge_ip,omitempty"`
-	BRIDGE_MAC  *string                      `json:"bridge_mac,omitempty"`
-	Pods        []Pod_InfoApplyConfiguration `json:"pods,omitempty"`
+	Name *string `json:"name,omitempty"`
+	// Tenant Name
+	Pods []Pod_InfoApplyConfiguration `json:"pods,omitempty"`
 }
 
 // TenantInfraApplyConfiguration constructs a declarative configuration of the TenantInfra type for use with
@@ -43,70 +36,6 @@ func TenantInfra() *TenantInfraApplyConfiguration {
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *TenantInfraApplyConfiguration) WithName(value string) *TenantInfraApplyConfiguration {
 	b.Name = &value
-	return b
-}
-
-// WithTenantCIDR sets the TenantCIDR field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TenantCIDR field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithTenantCIDR(value string) *TenantInfraApplyConfiguration {
-	b.TenantCIDR = &value
-	return b
-}
-
-// WithVTEP_NAME sets the VTEP_NAME field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the VTEP_NAME field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithVTEP_NAME(value string) *TenantInfraApplyConfiguration {
-	b.VTEP_NAME = &value
-	return b
-}
-
-// WithVNI sets the VNI field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the VNI field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithVNI(value int) *TenantInfraApplyConfiguration {
-	b.VNI = &value
-	return b
-}
-
-// WithVTEP_IP sets the VTEP_IP field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the VTEP_IP field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithVTEP_IP(value string) *TenantInfraApplyConfiguration {
-	b.VTEP_IP = &value
-	return b
-}
-
-// WithVTEP_MAC sets the VTEP_MAC field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the VTEP_MAC field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithVTEP_MAC(value string) *TenantInfraApplyConfiguration {
-	b.VTEP_MAC = &value
-	return b
-}
-
-// WithBRIDGE_NAME sets the BRIDGE_NAME field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BRIDGE_NAME field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithBRIDGE_NAME(value string) *TenantInfraApplyConfiguration {
-	b.BRIDGE_NAME = &value
-	return b
-}
-
-// WithBRIDGE_IP sets the BRIDGE_IP field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BRIDGE_IP field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithBRIDGE_IP(value string) *TenantInfraApplyConfiguration {
-	b.BRIDGE_IP = &value
-	return b
-}
-
-// WithBRIDGE_MAC sets the BRIDGE_MAC field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BRIDGE_MAC field is set to the value of the last call.
-func (b *TenantInfraApplyConfiguration) WithBRIDGE_MAC(value string) *TenantInfraApplyConfiguration {
-	b.BRIDGE_MAC = &value
 	return b
 }
 

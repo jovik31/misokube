@@ -20,11 +20,12 @@ package v1
 // NodeInfoApplyConfiguration represents a declarative configuration of the NodeInfo type for use
 // with apply.
 type NodeInfoApplyConfiguration struct {
-	Name       *string `json:"name,omitempty"`
-	NodeIP     *string `json:"node ip,omitempty"`
-	TenantCIDR *string `json:"tenant network,omitempty"`
-	VtepIP     *string `json:"vtepIP,omitempty"`
-	VtepMAC    *string `json:"vtepMAC,omitempty"`
+	Name *string `json:"name,omitempty"`
+	// Name of the node
+	NodeIP *string `json:"node ip,omitempty"`
+	VtepIP *string `json:"vtepIP,omitempty"`
+	// VTEP IP address of the node, if applicable
+	VtepMAC *string `json:"vtepMAC,omitempty"`
 }
 
 // NodeInfoApplyConfiguration constructs a declarative configuration of the NodeInfo type for use with
@@ -46,14 +47,6 @@ func (b *NodeInfoApplyConfiguration) WithName(value string) *NodeInfoApplyConfig
 // If called multiple times, the NodeIP field is set to the value of the last call.
 func (b *NodeInfoApplyConfiguration) WithNodeIP(value string) *NodeInfoApplyConfiguration {
 	b.NodeIP = &value
-	return b
-}
-
-// WithTenantCIDR sets the TenantCIDR field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TenantCIDR field is set to the value of the last call.
-func (b *NodeInfoApplyConfiguration) WithTenantCIDR(value string) *NodeInfoApplyConfiguration {
-	b.TenantCIDR = &value
 	return b
 }
 

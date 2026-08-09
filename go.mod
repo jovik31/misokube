@@ -12,7 +12,6 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect; compatible with apimachery v0.33.2 due to merge-diff version 4 vs 6
 	sigs.k8s.io/controller-runtime v0.21.0
-	sigs.k8s.io/structured-merge-diff/v4 v4.7.0
 )
 
 require (
@@ -26,6 +25,7 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/sys v0.38.0
 	k8s.io/metrics v0.28.0
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 )
 
 require (
@@ -73,6 +73,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/knftables v0.0.18 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )

@@ -40,10 +40,10 @@ func (o *Operator) reconcileNodestoreTenantUpdate(ctx context.Context, _ op.Sour
 	for tenant, snap := range snaps {
 		o.logger.WithValues("node", o.nodeName, "tenant", tenant, "pods", len(snap.Pods)).Info("mirroring tenant snapshot")
 		ti := seterav1.TenantInfra{Name: tenant}
+		// code refactor in the scope of the nodestore and ebpf refactoring
 		if snap.Subnet != nil {
 			ti.TenantCIDR = snap.Subnet.String()
 		}
-
 		ti.VNI = int(snap.VNI)
 		ti.VTEP_NAME = snap.VTEPDev
 		if snap.VTEPIP != nil {

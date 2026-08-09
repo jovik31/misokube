@@ -25,6 +25,8 @@ import (
 
 // TenantApplyConfiguration represents a declarative configuration of the Tenant type for use
 // with apply.
+//
+// Tenant is a specification for a Tenant resource
 type TenantApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -42,6 +44,8 @@ func Tenant(name, namespace string) *TenantApplyConfiguration {
 	b.WithAPIVersion("setera.com/v1")
 	return b
 }
+
+func (b TenantApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
@@ -217,8 +221,24 @@ func (b *TenantApplyConfiguration) WithStatus(value *TenantStatusApplyConfigurat
 	return b
 }
 
+// GetKind retrieves the value of the Kind field in the declarative configuration.
+func (b *TenantApplyConfiguration) GetKind() *string {
+	return b.TypeMetaApplyConfiguration.Kind
+}
+
+// GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
+func (b *TenantApplyConfiguration) GetAPIVersion() *string {
+	return b.TypeMetaApplyConfiguration.APIVersion
+}
+
 // GetName retrieves the value of the Name field in the declarative configuration.
 func (b *TenantApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
+}
+
+// GetNamespace retrieves the value of the Namespace field in the declarative configuration.
+func (b *TenantApplyConfiguration) GetNamespace() *string {
+	b.ensureObjectMetaApplyConfigurationExists()
+	return b.ObjectMetaApplyConfiguration.Namespace
 }

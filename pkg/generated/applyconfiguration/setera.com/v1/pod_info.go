@@ -20,9 +20,13 @@ package v1
 // Pod_InfoApplyConfiguration represents a declarative configuration of the Pod_Info type for use
 // with apply.
 type Pod_InfoApplyConfiguration struct {
-	Name    *string `json:"name,omitempty"`
-	IP      *string `json:"ip,omitempty"`
-	Ifindex *int    `json:"ifindex,omitempty"`
+	Name *string `json:"name,omitempty"`
+	// Pod Name
+	IP *string `json:"ip,omitempty"`
+	// Pod IP address
+	Ifindex *int `json:"ifindex,omitempty"`
+	// Interface index of the pod's veth pair (not exposed in JSON)
+	HostVethName *string `json:"host_veth_name,omitempty"`
 }
 
 // Pod_InfoApplyConfiguration constructs a declarative configuration of the Pod_Info type for use with
@@ -52,5 +56,13 @@ func (b *Pod_InfoApplyConfiguration) WithIP(value string) *Pod_InfoApplyConfigur
 // If called multiple times, the Ifindex field is set to the value of the last call.
 func (b *Pod_InfoApplyConfiguration) WithIfindex(value int) *Pod_InfoApplyConfiguration {
 	b.Ifindex = &value
+	return b
+}
+
+// WithHostVethName sets the HostVethName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HostVethName field is set to the value of the last call.
+func (b *Pod_InfoApplyConfiguration) WithHostVethName(value string) *Pod_InfoApplyConfiguration {
+	b.HostVethName = &value
 	return b
 }

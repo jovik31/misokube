@@ -25,6 +25,8 @@ import (
 
 // NodeStoreApplyConfiguration represents a declarative configuration of the NodeStore type for use
 // with apply.
+//
+// NodeStore is a specification for a NodeStore resource
 type NodeStoreApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -42,6 +44,8 @@ func NodeStore(name, namespace string) *NodeStoreApplyConfiguration {
 	b.WithAPIVersion("setera.com/v1")
 	return b
 }
+
+func (b NodeStoreApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
@@ -217,8 +221,24 @@ func (b *NodeStoreApplyConfiguration) WithStatus(value *NodeStoreStatusApplyConf
 	return b
 }
 
+// GetKind retrieves the value of the Kind field in the declarative configuration.
+func (b *NodeStoreApplyConfiguration) GetKind() *string {
+	return b.TypeMetaApplyConfiguration.Kind
+}
+
+// GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
+func (b *NodeStoreApplyConfiguration) GetAPIVersion() *string {
+	return b.TypeMetaApplyConfiguration.APIVersion
+}
+
 // GetName retrieves the value of the Name field in the declarative configuration.
 func (b *NodeStoreApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
+}
+
+// GetNamespace retrieves the value of the Namespace field in the declarative configuration.
+func (b *NodeStoreApplyConfiguration) GetNamespace() *string {
+	b.ensureObjectMetaApplyConfigurationExists()
+	return b.ObjectMetaApplyConfiguration.Namespace
 }

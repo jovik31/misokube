@@ -34,9 +34,14 @@ type NodeStoreSpec struct {
 type NodeStoreStatus struct {
 
 	// +kubebuilder:validation:Optional
-	Tenants map[string]TenantInfra `json:"tenants"` // Tenants that are deployed on this node
-	FreeSubnets int                    `json:"freeSubnets"` // Number of free subnets available on this node
-	TotalSubnets int                   `json:"totalSubnets"` // Total number of subnets available on this node
+	Tenants    map[string]TenantInfra `json:"tenants"`    // Tenants that are deployed on this node
+	TunnelInfo TunnelInfo             `json:"tunnelInfo"` // Tunnel information for this node
+}
+
+type TunnelInfo struct {
+	VTEP_NAME string `json:"vtep_name"` // VTEP device name for this node
+	VTEP_IP   string `json:"vtep_ip"`   // VTEP IP address for this node
+	VTEP_MAC  string `json:"vtep_mac"`  // VTEP MAC address for this node
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -49,16 +54,8 @@ type NodeStoreList struct {
 }
 
 type TenantInfra struct {
-	Name        string     `json:"name"`        //Tenant Name
-	TenantCIDR  string     `json:"tenant_cidr"` //Tenant CIDR
-	VTEP_NAME   string     `json:"vtep_name"`   //VTEP Name
-	VNI         int        `json:"vni"`         //Tenant VNI identification
-	VTEP_IP     string     `json:"vtep_ip"`     //VTEP IP address
-	VTEP_MAC    string     `json:"vtep_mac"`    //VTEP MAC address
-	BRIDGE_NAME string     `json:"bridge_name"` //Bridge Name
-	BRIDGE_IP   string     `json:"bridge_ip"`   //Bridge IP address
-	BRIDGE_MAC  string     `json:"bridge_mac"`  //Bridge MAC address
-	Pods        []Pod_Info `json:"pods"`        //Pods that are deployed on this tenant
+	Name string     `json:"name"` //Tenant Name
+	Pods []Pod_Info `json:"pods"` //Pods that are deployed on this tenant
 
 }
 
