@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github/setera/internal/podnetwork"
+	"github/setera/pkg/tenantmeta"
 	"github/setera/pkg/wire"
 )
 
@@ -22,7 +23,7 @@ func TestHandleAddUsesPodMetadata(t *testing.T) {
 			Name:      "pod-a",
 			UID:       "pod-uid-a",
 			Labels: map[string]string{
-				tenantLabelKey: "tenant-a",
+				tenantmeta.PodTenantLabel: "tenant-a",
 			},
 		},
 	})
@@ -76,7 +77,7 @@ func TestHandleAddRejectsPodUIDMismatch(t *testing.T) {
 			Name:      "pod-a",
 			UID:       "current-uid",
 			Labels: map[string]string{
-				tenantLabelKey: "tenant-a",
+				tenantmeta.PodTenantLabel: "tenant-a",
 			},
 		},
 	})

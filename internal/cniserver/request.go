@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	"github/setera/internal/podnetwork"
+	"github/setera/pkg/tenantmeta"
 	"github/setera/pkg/wire"
 )
-
-const tenantLabelKey = "setera.com.v1.tenant"
 
 func (s *Server) handleRequest(ctx context.Context, req *wire.Request) *wire.Response {
 	if req == nil {
@@ -54,13 +53,13 @@ func (s *Server) handleAdd(ctx context.Context, req *wire.Request) *wire.Respons
 		))
 	}
 
-	tenantID := pod.Labels[tenantLabelKey]
+	tenantID := pod.Labels[tenantmeta.PodTenantLabel]
 	if tenantID == "" {
 		return failure(fmt.Sprintf(
 			"pod %s/%s is missing tenant label %q",
 			req.PodNamespace,
 			req.PodName,
-			tenantLabelKey,
+			tenantmeta.PodTenantLabel,
 		))
 	}
 

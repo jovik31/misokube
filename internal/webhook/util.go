@@ -2,6 +2,7 @@ package webhook
 
 import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
+	"github/setera/pkg/tenantmeta"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,7 +40,7 @@ func checkTenantLabel(labels map[string]string, tenantList *seterav1.TenantList)
 
 	var allowed bool = true
 	// check if tenant label is present
-	tenant_label, ok := labels[tenantLabelKey]
+	tenant_label, ok := labels[tenantmeta.PodTenantLabel]
 	if !ok {
 		return !allowed, tenantLabelNotFound
 	}

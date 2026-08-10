@@ -20,8 +20,6 @@ const (
 	contentTypeHeader string = "content-type"
 	contentTypeJSON   string = "application/json"
 
-	tenantLabelKey string = "setera.com.v1.tenant"
-
 	tenantNotFound      string = "tenant not found"
 	tenantLabelNotFound string = "tenant label not found"
 	podIsValid          string = "pod is valid"
