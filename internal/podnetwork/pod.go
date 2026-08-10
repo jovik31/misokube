@@ -14,7 +14,8 @@ type Request struct {
 
 // Result is the local network state returned after a successful ADD.
 type Result struct {
-	IP netip.Addr
+	IP      netip.Addr
+	Gateway netip.Addr
 
 	HostVethName    string
 	HostVethIfIndex int

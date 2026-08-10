@@ -4,15 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
-	"os"
-
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/vishvananda/netlink"
 
 	"github/setera/internal/nodeipam"
-	"github/setera/pkg/network/device"
+	"github/setera/pkg/network"
 )
 
 var (
@@ -29,24 +24,24 @@ type nodeIPAM interface {
 	Get(nodeipam.Owner) (nodeipam.Allocation, bool)
 }
 
+// networkOps is the Linux network API used by the configurator.
+// pkg/network keeps netlink and network namespace types behind this boundary.
+type networkOps interface {
+	SetupVeth(
+		netnsPath string,
+		ifName string,
+		podIP netip.Addr,
+		gateway netip.Addr,
+		mtu int,
+	) (network.Veth, error)
+	DeleteVeth(netnsPath, ifName string) error
+	CheckVeth(netnsPath, ifName string, podIP netip.Addr) error
+}
+
 // localDatapath is the local pod datapath API required by the configurator.
 type localDatapath interface {
 	AddLocalPod(context.Context, LocalPod) error
 	DeleteLocalPod(context.Context, netip.Addr) error
-}
-
-type networkState struct {
-	hostVethName    string
-	hostVethIfIndex int
-}
-
-// networkOps contains the Linux network operations required by Configurator.
-// It is an interface so transaction behavior can be tested without creating
-// real network namespaces.
-type networkOps interface {
-	Setup(netnsPath, ifName string, podIP, gateway netip.Addr, mtu int) (networkState, error)
-	Delete(netnsPath, ifName string) error
-	Check(netnsPath, ifName string, podIP netip.Addr) error
 }
 
 // Configurator creates and removes the network state for local pods.
@@ -60,11 +55,7 @@ type Configurator struct {
 }
 
 // New creates a local pod network configurator.
-func New(ipam nodeIPAM, datapath localDatapath, hostGateway netip.Addr, mtu int) (*Configurator, error) {
-	return newConfigurator(ipam, linuxNetworkOps{}, datapath, hostGateway, mtu)
-}
-
-func newConfigurator(
+func New(
 	ipam nodeIPAM,
 	network networkOps,
 	datapath localDatapath,
@@ -116,7 +107,7 @@ func (c *Configurator) AddPod(ctx context.Context, req Request) (Result, error) 
 		return Result{}, fmt.Errorf("allocate pod IP: %w", err)
 	}
 
-	state, err := c.network.Setup(
+	veth, err := c.network.SetupVeth(
 		req.NetNS,
 		req.IfName,
 		allocation.IP,
@@ -138,12 +129,12 @@ func (c *Configurator) AddPod(ctx context.Context, req Request) (Result, error) 
 		IP:              allocation.IP,
 		PodUID:          allocation.PodUID,
 		TenantID:        allocation.TenantID,
-		HostVethName:    state.hostVethName,
-		HostVethIfIndex: state.hostVethIfIndex,
+		HostVethName:    veth.HostName,
+		HostVethIfIndex: veth.HostIfIndex,
 	}
 
 	if err := c.datapath.AddLocalPod(ctx, pod); err != nil {
-		deleteErr := c.network.Delete(req.NetNS, req.IfName)
+		deleteErr := c.network.DeleteVeth(req.NetNS, req.IfName)
 		releaseErr := c.ipam.Release(ctx, owner)
 
 		return Result{}, errors.Join(
@@ -155,8 +146,9 @@ func (c *Configurator) AddPod(ctx context.Context, req Request) (Result, error) 
 
 	return Result{
 		IP:              allocation.IP,
-		HostVethName:    state.hostVethName,
-		HostVethIfIndex: state.hostVethIfIndex,
+		Gateway:         c.hostGateway,
+		HostVethName:    veth.HostName,
+		HostVethIfIndex: veth.HostIfIndex,
 	}, nil
 }
 
@@ -182,7 +174,7 @@ func (c *Configurator) DelPod(ctx context.Context, req Request) error {
 	}
 
 	var networkErr error
-	if err := c.network.Delete(req.NetNS, req.IfName); err != nil {
+	if err := c.network.DeleteVeth(req.NetNS, req.IfName); err != nil {
 		networkErr = fmt.Errorf("delete pod network: %w", err)
 	}
 
@@ -214,7 +206,7 @@ func (c *Configurator) CheckPod(ctx context.Context, req Request) error {
 		return ErrAllocationMissing
 	}
 
-	if err := c.network.Check(req.NetNS, req.IfName, allocation.IP); err != nil {
+	if err := c.network.CheckVeth(req.NetNS, req.IfName, allocation.IP); err != nil {
 		return fmt.Errorf("check pod network: %w", err)
 	}
 
@@ -269,90 +261,4 @@ func wrapError(operation string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", operation, err)
-}
-
-// linuxNetworkOps uses the existing direct-veth implementation.
-type linuxNetworkOps struct{}
-
-func (linuxNetworkOps) Setup(
-	netnsPath,
-	ifName string,
-	podIP,
-	gateway netip.Addr,
-	mtu int,
-) (networkState, error) {
-	if !podIP.Is4() {
-		return networkState{}, fmt.Errorf("only IPv4 pod addresses are supported: %s", podIP)
-	}
-
-	podNet := &net.IPNet{
-		IP:   addrToIP(podIP),
-		Mask: net.CIDRMask(32, 32),
-	}
-
-	hostVethName, err := device.SetupVethDirect(
-		netnsPath,
-		mtu,
-		ifName,
-		podNet,
-		addrToIP(gateway),
-	)
-	if err != nil {
-		cleanupErr := linuxNetworkOps{}.Delete(netnsPath, ifName)
-		return networkState{}, errors.Join(
-			fmt.Errorf("setup direct veth: %w", err),
-			wrapError("cleanup partial pod veth", cleanupErr),
-		)
-	}
-
-	hostVeth, err := netlink.LinkByName(hostVethName)
-	if err != nil {
-		cleanupErr := linuxNetworkOps{}.Delete(netnsPath, ifName)
-		return networkState{}, errors.Join(
-			fmt.Errorf("lookup host veth %q: %w", hostVethName, err),
-			wrapError("cleanup pod veth", cleanupErr),
-		)
-	}
-
-	return networkState{
-		hostVethName:    hostVethName,
-		hostVethIfIndex: hostVeth.Attrs().Index,
-	}, nil
-}
-
-func (linuxNetworkOps) Delete(netnsPath, ifName string) error {
-	if netnsPath == "" {
-		return nil
-	}
-
-	netns, err := ns.GetNS(netnsPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) || os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("open netns %q: %w", netnsPath, err)
-	}
-	defer netns.Close()
-
-	return device.DelVeth(netns, ifName)
-}
-
-func (linuxNetworkOps) Check(netnsPath, ifName string, podIP netip.Addr) error {
-	netns, err := ns.GetNS(netnsPath)
-	if err != nil {
-		return fmt.Errorf("open netns %q: %w", netnsPath, err)
-	}
-	defer netns.Close()
-
-	return device.CheckVeth(netns, ifName, addrToIP(podIP))
-}
-
-func addrToIP(addr netip.Addr) net.IP {
-	addr = addr.Unmap()
-	if addr.Is4() {
-		v := addr.As4()
-		return net.IPv4(v[0], v[1], v[2], v[3])
-	}
-	v := addr.As16()
-	return net.IP(v[:])
 }

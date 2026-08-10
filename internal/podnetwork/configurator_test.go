@@ -7,15 +7,16 @@ import (
 	"testing"
 
 	"github/setera/internal/nodeipam"
+	"github/setera/pkg/network"
 )
 
 func TestAddPod(t *testing.T) {
 	allocation := testAllocation()
 	ipam := &fakeNodeIPAM{allocation: allocation}
 	network := &fakeNetwork{
-		state: networkState{
-			hostVethName:    "veth1234",
-			hostVethIfIndex: 42,
+		veth: network.Veth{
+			HostName:    "veth1234",
+			HostIfIndex: 42,
 		},
 	}
 	datapath := &fakeDatapath{}
@@ -78,9 +79,9 @@ func TestAddPodRollsBackIPAMWhenNetworkFails(t *testing.T) {
 func TestAddPodRollsBackNetworkAndIPAMWhenDatapathFails(t *testing.T) {
 	ipam := &fakeNodeIPAM{allocation: testAllocation()}
 	network := &fakeNetwork{
-		state: networkState{
-			hostVethName:    "veth1234",
-			hostVethIfIndex: 42,
+		veth: network.Veth{
+			HostName:    "veth1234",
+			HostIfIndex: 42,
 		},
 	}
 	datapath := &fakeDatapath{addErr: errors.New("datapath failed")}
@@ -235,7 +236,7 @@ func newTestConfigurator(
 ) *Configurator {
 	t.Helper()
 
-	configurator, err := newConfigurator(
+	configurator, err := New(
 		ipam,
 		network,
 		datapath,
@@ -308,7 +309,7 @@ func (f *fakeNodeIPAM) Get(_ nodeipam.Owner) (nodeipam.Allocation, bool) {
 }
 
 type fakeNetwork struct {
-	state networkState
+	veth network.Veth
 
 	setupErr  error
 	deleteErr error
@@ -322,25 +323,25 @@ type fakeNetwork struct {
 	lastCheckIP     netip.Addr
 }
 
-func (f *fakeNetwork) Setup(
+func (f *fakeNetwork) SetupVeth(
 	_, _ string,
 	_, _ netip.Addr,
 	_ int,
-) (networkState, error) {
+) (network.Veth, error) {
 	f.setupCalls++
 	if f.setupErr != nil {
-		return networkState{}, f.setupErr
+		return network.Veth{}, f.setupErr
 	}
-	return f.state, nil
+	return f.veth, nil
 }
 
-func (f *fakeNetwork) Delete(netnsPath, _ string) error {
+func (f *fakeNetwork) DeleteVeth(netnsPath, _ string) error {
 	f.deleteCalls++
 	f.lastDeleteNetNS = netnsPath
 	return f.deleteErr
 }
 
-func (f *fakeNetwork) Check(_, _ string, podIP netip.Addr) error {
+func (f *fakeNetwork) CheckVeth(_, _ string, podIP netip.Addr) error {
 	f.checkCalls++
 	f.lastCheckIP = podIP
 	return f.checkErr
