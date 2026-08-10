@@ -3,6 +3,7 @@ package tenantcontroller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	seteraclient "github/setera/pkg/generated/clientset/versioned"
 	seteralisters "github/setera/pkg/generated/listers/setera.com/v1"
@@ -14,7 +15,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const tenantFinalizer = "setera.com/tenant-finalizer"
+const (
+	tenantFinalizer   = "setera.com/tenant-finalizer"
+	blockedRetryDelay = 10 * time.Second
+)
 
 // Controller reconciles Tenant resources into Kubernetes Node tenant labels.
 type Controller struct {
@@ -22,15 +26,13 @@ type Controller struct {
 
 	setera seteraclient.Interface
 	kube   kubernetes.Interface
+	pods   podReader
 
 	tenantInformer cache.SharedIndexInformer
 	tenantLister   seteralisters.TenantLister
 
 	nodeInformer cache.SharedIndexInformer
 	nodeLister   corelisters.NodeLister
-
-	podInformer cache.SharedIndexInformer
-	podLister   corelisters.PodLister
 
 	queue workqueue.TypedRateLimitingInterface[string]
 }
@@ -43,19 +45,16 @@ func New(
 	tenantLister seteralisters.TenantLister,
 	nodeInformer cache.SharedIndexInformer,
 	nodeLister corelisters.NodeLister,
-	podInformer cache.SharedIndexInformer,
-	podLister corelisters.PodLister,
 ) *Controller {
 	c := &Controller{
 		logger:         logger.WithName("tenant-controller"),
 		setera:         seteraClient,
 		kube:           kubeClient,
+		pods:           newKubePodReader(kubeClient),
 		tenantInformer: tenantInformer,
 		tenantLister:   tenantLister,
 		nodeInformer:   nodeInformer,
 		nodeLister:     nodeLister,
-		podInformer:    podInformer,
-		podLister:      podLister,
 		queue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 		),
@@ -73,7 +72,6 @@ func (c *Controller) Run(ctx context.Context) error {
 		ctx.Done(),
 		c.tenantInformer.HasSynced,
 		c.nodeInformer.HasSynced,
-		c.podInformer.HasSynced,
 	); !ok {
 		return fmt.Errorf("tenant controller: informer cache sync failed")
 	}

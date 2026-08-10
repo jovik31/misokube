@@ -23,12 +23,6 @@ func (c *Controller) registerEventHandlers() {
 		UpdateFunc: c.onNodeUpdate,
 		DeleteFunc: c.onNodeDelete,
 	})
-
-	c.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.onPodAdd,
-		UpdateFunc: c.onPodUpdate,
-		DeleteFunc: c.onPodDelete,
-	})
 }
 
 func (c *Controller) onTenantAdd(obj any) {
@@ -72,37 +66,6 @@ func (c *Controller) onNodeDelete(_ any) {
 	c.enqueueAllTenants()
 }
 
-func (c *Controller) onPodAdd(obj any) {
-	if pod, ok := podFromObject(obj); ok {
-		c.enqueuePodTenant(pod)
-	}
-}
-
-func (c *Controller) onPodUpdate(oldObj, newObj any) {
-	oldPod, oldOK := podFromObject(oldObj)
-	newPod, newOK := podFromObject(newObj)
-	if !oldOK || !newOK {
-		return
-	}
-
-	oldTenant := oldPod.Labels[tenantmeta.PodTenantLabel]
-	newTenant := newPod.Labels[tenantmeta.PodTenantLabel]
-	if oldTenant != newTenant || oldPod.Spec.NodeName != newPod.Spec.NodeName || oldPod.Status.Phase != newPod.Status.Phase {
-		if oldTenant != "" {
-			c.enqueueTenantName(oldTenant)
-		}
-		if newTenant != "" && newTenant != oldTenant {
-			c.enqueueTenantName(newTenant)
-		}
-	}
-}
-
-func (c *Controller) onPodDelete(obj any) {
-	if pod, ok := podFromObject(obj); ok {
-		c.enqueuePodTenant(pod)
-	}
-}
-
 func (c *Controller) enqueueTenant(obj any) {
 	tenant, ok := tenantFromObject(obj)
 	if !ok {
@@ -114,25 +77,6 @@ func (c *Controller) enqueueTenant(obj any) {
 		return
 	}
 	c.queue.Add(key)
-}
-
-func (c *Controller) enqueueTenantName(name string) {
-	if name == "" {
-		return
-	}
-
-	tenant, err := c.tenantLister.Tenants("").Get(name)
-	if err != nil {
-		return
-	}
-	c.enqueueTenant(tenant)
-}
-
-func (c *Controller) enqueuePodTenant(pod *corev1.Pod) {
-	if pod == nil {
-		return
-	}
-	c.enqueueTenantName(pod.Labels[tenantmeta.PodTenantLabel])
 }
 
 func (c *Controller) enqueueAllTenants() {
@@ -166,18 +110,6 @@ func nodeFromObject(obj any) (*corev1.Node, bool) {
 	case cache.DeletedFinalStateUnknown:
 		node, ok := value.Obj.(*corev1.Node)
 		return node, ok && node != nil
-	default:
-		return nil, false
-	}
-}
-
-func podFromObject(obj any) (*corev1.Pod, bool) {
-	switch value := obj.(type) {
-	case *corev1.Pod:
-		return value, value != nil
-	case cache.DeletedFinalStateUnknown:
-		pod, ok := value.Obj.(*corev1.Pod)
-		return pod, ok && pod != nil
 	default:
 		return nil, false
 	}

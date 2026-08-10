@@ -1,4 +1,4 @@
-package orchestrator
+package tenantcontroller
 
 import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"

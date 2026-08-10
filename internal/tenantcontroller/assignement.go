@@ -50,13 +50,13 @@ func (c *Controller) reconcileAssignments(ctx context.Context, tenant string, zo
 	}
 
 	if len(assigned) > desired {
-		podNodes, err := c.activeTenantPodNodes(tenant)
+		activePodNodes, err := c.pods.ActiveTenantPodNodes(ctx, tenant)
 		if err != nil {
 			return assignmentResult{}, err
 		}
 
 		removeCount := len(assigned) - desired
-		removable := scaleDownCandidates(assigned, podNodes)
+		removable := scaleDownCandidates(assigned, activePodNodes)
 		if removeCount > len(removable) {
 			removeCount = len(removable)
 		}
@@ -157,25 +157,6 @@ func scaleDownCandidates(nodes []*corev1.Node, activePodNodes map[string]struct{
 	return out
 }
 
-func (c *Controller) activeTenantPodNodes(tenant string) (map[string]struct{}, error) {
-	selector := labels.SelectorFromSet(labels.Set{
-		tenantmeta.PodTenantLabel: tenant,
-	})
-	pods, err := c.podLister.List(selector)
-	if err != nil {
-		return nil, fmt.Errorf("list tenant pods: %w", err)
-	}
-
-	nodes := make(map[string]struct{})
-	for _, pod := range pods {
-		if pod.Spec.NodeName == "" || podTerminal(pod) {
-			continue
-		}
-		nodes[pod.Spec.NodeName] = struct{}{}
-	}
-	return nodes, nil
-}
-
 func (c *Controller) patchNodeTenantLabel(ctx context.Context, nodeName, labelKey string, present bool) error {
 	var value any = "true"
 	if !present {
@@ -220,8 +201,4 @@ func nodeReady(node *corev1.Node) bool {
 		}
 	}
 	return false
-}
-
-func podTerminal(pod *corev1.Pod) bool {
-	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 }
