@@ -13,8 +13,8 @@ import (
 //		return nil
 //	}
 //
-// A backend can wrap a sentinel with %w or with an *OpError. errors.Is still
-// finds the sentinel through the wrap.
+// A backend can wrap a sentinel with %w. errors.Is still finds the
+// sentinel through the wrap.
 var (
 	// ErrNotFound reports that a key does not exist.
 	ErrNotFound = errors.New("store: not found")

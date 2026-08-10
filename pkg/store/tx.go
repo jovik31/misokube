@@ -39,43 +39,6 @@
 // the length of the slice, to decide if a key exists.
 package store
 
-import (
-	"context"
-)
-
-// Store reads values and runs write transactions.
-type Store interface {
-	// View runs fn inside a read-only transaction. The store gives fn a ReadTx
-	// that observes the last committed state. View returns the error from fn.
-	// View returns ErrClosed if the store is closed. View returns the context
-	// error if the context is done.
-	//
-	// The store does not change any data during View.
-	View(ctx context.Context, fn func(ReadTx) error) error
-
-	// Update runs fn inside a read-write transaction. The store gives fn a
-	// WriteTx. The store commits the staged changes if fn returns nil. The store
-	// rolls back the staged changes if fn returns an error, and Update returns
-	// that error.
-	//
-	// The store runs at most one Update at a time. Update waits until the active
-	// Update completes or the context is done. Update returns the context error
-	// if the context is done before the transaction starts. Update returns
-	// ErrClosed if the store is closed. Update returns ErrLocked if another
-	// process or store instance owns the data.
-	//
-	// If fn panics, the store rolls back the staged changes and raises the panic
-	// again.
-	Update(ctx context.Context, fn func(WriteTx) error) error
-
-	// Close releases the resources of the store. Close makes the exclusive lock
-	// free for another process. After Close, View and Update return ErrClosed.
-	// Close is idempotent. A second call returns nil.
-	Close() error
-}
-
-// ReadTx is a read-only view of the store.
-//
 // A ReadTx from View observes the last committed state. A WriteTx embeds ReadTx,
 // so a read inside a write transaction also observes the pending changes of that
 // transaction. This behavior is read-your-writes.

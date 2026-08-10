@@ -1,6 +1,7 @@
 //go:build linux
 
-// Package file implements a Linux-local filesystem-backed store.Store.
+// Package file implements a Linux-local filesystem-backed transactional
+// key-value store.
 //
 // The backend stores one value in one regular file under a root directory. It
 // hex-encodes each key into the filename. So a caller key never acts as a
@@ -81,8 +82,7 @@ func WithFileMode(mode fs.FileMode) Option {
 	}
 }
 
-// Store implements store.Store with one regular file per key under a root
-// directory.
+// Store is a filesystem-backed transactional key-value store.
 type Store struct {
 	root string
 	cfg  config
@@ -97,8 +97,6 @@ type Store struct {
 	closed   bool
 	lockFile *os.File
 }
-
-var _ store.Store = (*Store)(nil)
 
 // Open opens or creates a filesystem store rooted at root.
 //

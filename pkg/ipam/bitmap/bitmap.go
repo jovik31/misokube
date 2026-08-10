@@ -61,8 +61,6 @@ type Allocator struct {
 	next      uint64
 }
 
-var _ ipam.Allocator = (*Allocator)(nil)
-
 // New creates a bitmap allocator for prefix.
 //
 // The prefix is masked before use. Pools larger than the configured maximum are
