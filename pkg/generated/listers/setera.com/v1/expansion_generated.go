@@ -17,18 +17,6 @@ limitations under the License.
 
 package v1
 
-// NodeStoreListerExpansion allows custom methods to be added to
-// NodeStoreLister.
-type NodeStoreListerExpansion interface{}
-
-// NodeStoreNamespaceListerExpansion allows custom methods to be added to
-// NodeStoreNamespaceLister.
-type NodeStoreNamespaceListerExpansion interface{}
-
 // TenantListerExpansion allows custom methods to be added to
 // TenantLister.
 type TenantListerExpansion interface{}
-
-// TenantNamespaceListerExpansion allows custom methods to be added to
-// TenantNamespaceLister.
-type TenantNamespaceListerExpansion interface{}

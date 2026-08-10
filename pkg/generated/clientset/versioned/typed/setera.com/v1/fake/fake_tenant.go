@@ -31,11 +31,11 @@ type fakeTenants struct {
 	Fake *FakeSeteraV1
 }
 
-func newFakeTenants(fake *FakeSeteraV1, namespace string) typedseteracomv1.TenantInterface {
+func newFakeTenants(fake *FakeSeteraV1) typedseteracomv1.TenantInterface {
 	return &fakeTenants{
 		gentype.NewFakeClientWithListAndApply[*v1.Tenant, *v1.TenantList, *seteracomv1.TenantApplyConfiguration](
 			fake.Fake,
-			namespace,
+			"",
 			v1.SchemeGroupVersion.WithResource("tenants"),
 			v1.SchemeGroupVersion.WithKind("Tenant"),
 			func() *v1.Tenant { return &v1.Tenant{} },

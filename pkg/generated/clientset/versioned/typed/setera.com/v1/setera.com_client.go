@@ -27,7 +27,6 @@ import (
 
 type SeteraV1Interface interface {
 	RESTClient() rest.Interface
-	NodeStoresGetter
 	TenantsGetter
 }
 
@@ -36,12 +35,8 @@ type SeteraV1Client struct {
 	restClient rest.Interface
 }
 
-func (c *SeteraV1Client) NodeStores(namespace string) NodeStoreInterface {
-	return newNodeStores(c, namespace)
-}
-
-func (c *SeteraV1Client) Tenants(namespace string) TenantInterface {
-	return newTenants(c, namespace)
+func (c *SeteraV1Client) Tenants() TenantInterface {
+	return newTenants(c)
 }
 
 // NewForConfig creates a new SeteraV1Client for the given config.

@@ -32,7 +32,7 @@ import (
 // TenantsGetter has a method to return a TenantInterface.
 // A group's client should implement this interface.
 type TenantsGetter interface {
-	Tenants(namespace string) TenantInterface
+	Tenants() TenantInterface
 }
 
 // TenantInterface has methods to work with Tenant resources.
@@ -59,13 +59,13 @@ type tenants struct {
 }
 
 // newTenants returns a Tenants
-func newTenants(c *SeteraV1Client, namespace string) *tenants {
+func newTenants(c *SeteraV1Client) *tenants {
 	return &tenants{
 		gentype.NewClientWithListAndApply[*seteracomv1.Tenant, *seteracomv1.TenantList, *applyconfigurationseteracomv1.TenantApplyConfiguration](
 			"tenants",
 			c.RESTClient(),
 			scheme.ParameterCodec,
-			namespace,
+			"",
 			func() *seteracomv1.Tenant { return &seteracomv1.Tenant{} },
 			func() *seteracomv1.TenantList { return &seteracomv1.TenantList{} },
 		),

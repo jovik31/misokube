@@ -119,19 +119,13 @@ func nodeAssignmentStateChanged(oldNode, newNode *corev1.Node) bool {
 	if oldNode.Spec.Unschedulable != newNode.Spec.Unschedulable {
 		return true
 	}
+
 	if nodeReady(oldNode) != nodeReady(newNode) {
 		return true
 	}
-	if !reflect.DeepEqual(tenantmeta.Tenants(oldNode.Labels), tenantmeta.Tenants(newNode.Labels)) {
-		return true
-	}
-	if oldNode.Labels[tenantmeta.NodeVTEPReadyLabel] != newNode.Labels[tenantmeta.NodeVTEPReadyLabel] {
-		return true
-	}
-	if oldNode.Annotations[tenantmeta.NodeVTEPIPAnnotation] != newNode.Annotations[tenantmeta.NodeVTEPIPAnnotation] ||
-		oldNode.Annotations[tenantmeta.NodeVTEPMACAnnotation] != newNode.Annotations[tenantmeta.NodeVTEPMACAnnotation] {
-		return true
-	}
 
-	return nodeInternalIP(oldNode) != nodeInternalIP(newNode)
+	return !reflect.DeepEqual(
+		tenantmeta.Tenants(oldNode.Labels),
+		tenantmeta.Tenants(newNode.Labels),
+	)
 }

@@ -36,10 +36,9 @@ type TenantApplyConfiguration struct {
 
 // Tenant constructs a declarative configuration of the Tenant type for use with
 // apply.
-func Tenant(name, namespace string) *TenantApplyConfiguration {
+func Tenant(name string) *TenantApplyConfiguration {
 	b := &TenantApplyConfiguration{}
 	b.WithName(name)
-	b.WithNamespace(namespace)
 	b.WithKind("Tenant")
 	b.WithAPIVersion("setera.com/v1")
 	return b

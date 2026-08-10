@@ -25,10 +25,7 @@ import (
 // with apply.
 type TenantStatusApplyConfiguration struct {
 	// assigned nodes
-	AssignedNodes []NodeInfoApplyConfiguration `json:"assignedNodes,omitempty"`
-	// paused is true if the tenant is paused
-	Paused                    *bool    `json:"paused,omitempty"`
-	AwaitingNodeConfiguration []string `json:"waitingForNodeConfiguration,omitempty"`
+	AssignedNodes []string `json:"assignedNodes,omitempty"`
 	// Conditions is a list of conditions for the tenant
 	Conditions []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
 }
@@ -42,30 +39,9 @@ func TenantStatus() *TenantStatusApplyConfiguration {
 // WithAssignedNodes adds the given value to the AssignedNodes field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the AssignedNodes field.
-func (b *TenantStatusApplyConfiguration) WithAssignedNodes(values ...*NodeInfoApplyConfiguration) *TenantStatusApplyConfiguration {
+func (b *TenantStatusApplyConfiguration) WithAssignedNodes(values ...string) *TenantStatusApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithAssignedNodes")
-		}
-		b.AssignedNodes = append(b.AssignedNodes, *values[i])
-	}
-	return b
-}
-
-// WithPaused sets the Paused field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Paused field is set to the value of the last call.
-func (b *TenantStatusApplyConfiguration) WithPaused(value bool) *TenantStatusApplyConfiguration {
-	b.Paused = &value
-	return b
-}
-
-// WithAwaitingNodeConfiguration adds the given value to the AwaitingNodeConfiguration field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the AwaitingNodeConfiguration field.
-func (b *TenantStatusApplyConfiguration) WithAwaitingNodeConfiguration(values ...string) *TenantStatusApplyConfiguration {
-	for i := range values {
-		b.AwaitingNodeConfiguration = append(b.AwaitingNodeConfiguration, values[i])
+		b.AssignedNodes = append(b.AssignedNodes, values[i])
 	}
 	return b
 }
