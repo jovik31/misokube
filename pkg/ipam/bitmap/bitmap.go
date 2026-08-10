@@ -1,4 +1,4 @@
-// Package bitmap implements ipam.Allocator with an in-memory bitmap.
+// Package bitmap provides an in-memory bitmap-backed IP address allocator.
 //
 // The allocator supports IPv4 and IPv6 prefixes whose address count fits within
 // the configured maximum. It is intended for bounded local pools where bitmap
@@ -46,8 +46,7 @@ func WithReserved(addrs ...netip.Addr) Option {
 	}
 }
 
-// Allocator implements ipam.Allocator using two bitmaps: one for dynamic
-// allocations and one for permanently reserved addresses.
+// Allocator manages dynamic and permanently reserved addresses using bitmaps.
 type Allocator struct {
 	prefix   netip.Prefix
 	base     netip.Addr

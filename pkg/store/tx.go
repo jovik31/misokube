@@ -1,8 +1,10 @@
 // Package store defines a small transactional key-value store.
 //
 // A store keeps opaque byte values under byte keys. All access happens inside a
-// transaction. A read transaction observes the last committed state. A write
-// transaction stages changes and makes them durable as one atomic unit.
+// transaction. A read transaction observes committed state. A write transaction
+// stages changes and applies them when the transaction function succeeds.
+//
+// Durability and crash-atomicity guarantees are backend-specific.
 //
 // # Transaction model
 //

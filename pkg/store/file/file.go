@@ -17,9 +17,8 @@
 // applies them only when the callback returns nil. During the apply step Update
 // holds a write lock, so a reader never sees a half-applied commit.
 //
-// The backend does not provide crash-atomicity across many keys. A crash during
-// a multi-key commit can leave some keys applied and others not. Use the WAL
-// backend when you need all-or-nothing durability across keys.
+// The backend does not provide crash-atomicity across multiple keys. A crash
+// during a multi-key commit can leave some keys applied and others unapplied.
 //
 // This package is Linux-only. It uses flock for the process lock and O_NOFOLLOW
 // to reject symlinks.

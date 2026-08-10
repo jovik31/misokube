@@ -14,7 +14,6 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 
 	"github/setera/internal/resolver"
-	"github/setera/internal/router"
 	"github/setera/pkg/transport/uds"
 	"github/setera/pkg/wire"
 )
