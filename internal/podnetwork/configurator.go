@@ -22,6 +22,7 @@ type nodeIPAM interface {
 	Allocate(context.Context, nodeipam.Request) (nodeipam.Allocation, error)
 	Release(context.Context, nodeipam.Owner) error
 	Get(nodeipam.Owner) (nodeipam.Allocation, bool)
+	List() []nodeipam.Allocation
 }
 
 // networkOps is the Linux network API used by the configurator.
@@ -36,12 +37,14 @@ type networkOps interface {
 	) (network.Veth, error)
 	DeleteVeth(netnsPath, ifName string) error
 	CheckVeth(netnsPath, ifName string, podIP netip.Addr) error
+	FindPodVeth(podIP netip.Addr) (network.Veth, error)
 }
 
 // localDatapath is the local pod datapath API required by the configurator.
 type localDatapath interface {
 	AddLocalPod(context.Context, LocalPod) error
 	DeleteLocalPod(context.Context, netip.Addr) error
+	RecoverLocalPod(context.Context, LocalPod) error
 }
 
 // Configurator creates and removes the network state for local pods.

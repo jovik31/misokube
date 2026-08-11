@@ -50,43 +50,18 @@ help:
 
 
 
-##@ Code generation
-
-.PHONY: generate-code
-generate-code: ## Generate api code for the Tenant and Nodestore CRDs
-	export GOFLAGS="-mod=mod"
-	hack/codegen.sh
-
-##@ Manifest generation
-
-.PHONY: crd
-crd: controller-gen ## Generate CRDS for the defined types: Tenant and NodeStore
-	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=$(CRD_DIR)
-
-.PHONY: rbac-daemon
-rbac-daemon: controller-gen ## Generate RBAC configuration for the daemon component
-	$(CONTROLLER_GEN) rbac:roleName=agent-role paths=./internal/$(DAEMON_COMPONENT) output:rbac:dir=./$(RBAC_ORCHESTRATOR_DIR)
-
-
-.PHONY: rbac-orchestrator
-rbac-orchestrator: controller-gen ## Generate RBAC configuration for the orchestrator component
-	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths=./internal/$(ORCHESTRATOR_COMPONENT) output:rbac:dir=./$(RBAC_DAEMON_DIR)
-
-.PHONY: rbac-all
-rbac-all: rbac-daemon rbac-orchestrator ## Generate RBAC for all the components
-
-
+## Generation targets are defined in make/gen.mk.
 
 ##@ Manifest installation
 .PHONY: install
 install: ## Install CRDs, RBAC and webhook configuration onto the cluster - make sure the kubeconfig file is pointing to the correct cluster
 	kubectl apply -f config/crd/bases
 	kubectl apply -f $(RBAC_ORCHESTRATOR_DIR)
+	kubectl apply -f $(RBAC_DAEMON_DIR)
 	kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 	kubectl -n kube-system patch deployment metrics-server \
   --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
-##	kubectl apply -f $(RBAC_DAEMON_DIR)
 
 
 ##@ Development
@@ -213,12 +188,12 @@ ebpf-clean: ## Clean eBPF test environment
 ##@ Installation
 
 .PHONY: daemon
-daemon: generate-code crd install build-daemon kind-cluster-load-daemon-image ## Install the daemon component
+daemon: generate-code manifests install build-daemon kind-cluster-load-daemon-image ## Install the daemon component
 	kubectl delete -f config/cluster/local_daemon.yaml
 	kubectl apply -f config/cluster/local_daemon.yaml
 
 .PHONY: orchestrator
-orchestrator: build-orchestrator kind-cluster-load-orchestrator-image ## Deploy orchestrator using local_daemon.yaml (combined manifest)
+orchestrator: build-orchestrator kind-cluster-load-orchestrator-image ## Deploy orchestrator using the current combined local manifest
 	kubectl apply -f config/cluster/local_daemon.yaml
 
 

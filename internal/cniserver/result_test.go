@@ -21,6 +21,7 @@ func TestEncodeAddResult(t *testing.T) {
 		},
 		podnetwork.Result{
 			IP:              netip.MustParseAddr("10.244.0.10"),
+			Gateway:         netip.MustParseAddr("169.254.1.1"),
 			HostVethName:    "veth1234",
 			HostVethIfIndex: 42,
 		},
@@ -57,6 +58,9 @@ func TestEncodeAddResult(t *testing.T) {
 	}
 	if result.IPs[0].Interface == nil || *result.IPs[0].Interface != 1 {
 		t.Fatalf("pod IP is not attached to interface index 1")
+	}
+	if got := result.IPs[0].Gateway.String(); got != "169.254.1.1" {
+		t.Fatalf("got gateway %s, want 169.254.1.1", got)
 	}
 }
 

@@ -57,6 +57,7 @@ type dependencies struct {
 	attachPodProgram func(ifName, tenant string) (podProgram, error)
 	upsertEndpoint   func(ip netip.Addr, tenant string, ifIndex int) error
 	deleteEndpoint   func(ip netip.Addr) error
+	listEndpoints    func() ([]ebpf.PodEndpoint, error)
 }
 
 func defaultDependencies() dependencies {
@@ -66,6 +67,7 @@ func defaultDependencies() dependencies {
 		},
 		upsertEndpoint: ebpf.UpsertPodEndpoint,
 		deleteEndpoint: ebpf.DeletePodEndpoint,
+		listEndpoints:  ebpf.ListPodEndpoints,
 	}
 }
 

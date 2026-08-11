@@ -56,6 +56,7 @@ func encodeAddResult(
 			{
 				Interface: &podInterface,
 				Address:   address,
+				Gateway:   net.IP(result.Gateway.AsSlice()),
 			},
 		},
 	}

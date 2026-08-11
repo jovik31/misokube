@@ -273,8 +273,9 @@ func testAllocation() nodeipam.Allocation {
 }
 
 type fakeNodeIPAM struct {
-	allocation nodeipam.Allocation
-	hasOwner   bool
+	allocation  nodeipam.Allocation
+	allocations []nodeipam.Allocation
+	hasOwner    bool
 
 	allocateErr error
 	releaseErr  error
@@ -308,12 +309,19 @@ func (f *fakeNodeIPAM) Get(_ nodeipam.Owner) (nodeipam.Allocation, bool) {
 	return f.allocation, f.hasOwner
 }
 
+func (f *fakeNodeIPAM) List() []nodeipam.Allocation {
+	return append([]nodeipam.Allocation(nil), f.allocations...)
+}
+
 type fakeNetwork struct {
 	veth network.Veth
 
 	setupErr  error
 	deleteErr error
 	checkErr  error
+	findErr   error
+
+	vethByIP map[netip.Addr]network.Veth
 
 	setupCalls  int
 	deleteCalls int
@@ -347,15 +355,29 @@ func (f *fakeNetwork) CheckVeth(_, _ string, podIP netip.Addr) error {
 	return f.checkErr
 }
 
+func (f *fakeNetwork) FindPodVeth(ip netip.Addr) (network.Veth, error) {
+	if f.findErr != nil {
+		return network.Veth{}, f.findErr
+	}
+	veth, ok := f.vethByIP[ip]
+	if !ok {
+		return network.Veth{}, network.ErrPodVethNotFound
+	}
+	return veth, nil
+}
+
 type fakeDatapath struct {
-	addErr    error
-	deleteErr error
+	addErr     error
+	deleteErr  error
+	recoverErr error
 
-	addCalls    int
-	deleteCalls int
+	addCalls     int
+	deleteCalls  int
+	recoverCalls int
 
-	addedPod  LocalPod
-	deletedIP netip.Addr
+	addedPod     LocalPod
+	recoveredPod LocalPod
+	deletedIP    netip.Addr
 }
 
 func (f *fakeDatapath) AddLocalPod(_ context.Context, pod LocalPod) error {
@@ -368,4 +390,10 @@ func (f *fakeDatapath) DeleteLocalPod(_ context.Context, ip netip.Addr) error {
 	f.deleteCalls++
 	f.deletedIP = ip
 	return f.deleteErr
+}
+
+func (f *fakeDatapath) RecoverLocalPod(_ context.Context, pod LocalPod) error {
+	f.recoverCalls++
+	f.recoveredPod = pod
+	return f.recoverErr
 }

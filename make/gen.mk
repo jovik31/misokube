@@ -17,8 +17,8 @@ APIS_DIR ?= ./pkg/api
 CRD_DIR  ?= ./config/crd/bases
 
 # Where to generate RBAC from
-ORCH_PKG ?= ./internal/orchestrator
-DAEMON_PKG ?= ./internal/daemon
+ORCH_PKG ?= ./cmd/orchestrator
+DAEMON_PKG ?= ./cmd/daemon
 
 # Helper: install Go tools to LOCALBIN with version pinning
 define go-install-tool
@@ -51,30 +51,27 @@ deepcopy: controller-gen ## Generate deepcopy funcs for APIs
 ##@ Generate CRDs from Go types
 .PHONY: crd
 crd: controller-gen ## Generate CRDs into $(CRD_DIR)
-	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=$(CRD_DIR)
+	$(CONTROLLER_GEN) crd paths="$(APIS_DIR)/..." output:crd:artifacts:config=$(CRD_DIR)
 
 ##@ Generate RBAC from markers
 .PHONY: rbac-orchestrator
 rbac-orchestrator: controller-gen ## Generate orchestrator RBAC manifests
-	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths=$(ORCH_PKG) output:rbac:dir=./config/rbac/orchestrator
+	@mkdir -p ./config/rbac/orchestrator
+	$(CONTROLLER_GEN) rbac:roleName=orchestrator-role paths="$(ORCH_PKG)" output:rbac:dir=./config/rbac/orchestrator
 
 .PHONY: rbac-daemon
 rbac-daemon: controller-gen ## Generate daemon RBAC manifests
-	$(CONTROLLER_GEN) rbac:roleName=daemon-role paths=$(DAEMON_PKG) output:rbac:dir=./config/rbac/daemon
+	@mkdir -p ./config/rbac/daemon
+	$(CONTROLLER_GEN) rbac:roleName=daemon-role paths="$(DAEMON_PKG)" output:rbac:dir=./config/rbac/daemon
 
 .PHONY: rbac-all
 rbac-all: rbac-orchestrator rbac-daemon ## Generate all RBAC
 
 ##@ Aggregate manifest generation
 .PHONY: manifests
-manifests: crd rbac-orchestrator ## Generate CRDs and orchestrator RBAC
+manifests: crd rbac-all ## Generate CRDs and all RBAC
 
-##@ Client/lister/informer codegen (if you use k8s.io/code-generator)
+##@ Client/lister/informer codegen
 .PHONY: generate-code
-generate-code: ## Run repo codegen script if present
-	@if [ -x hack/update-codegen.sh ]; then \
-		echo "Running hack/update-codegen.sh"; \
-		hack/update-codegen.sh; \
-	else \
-		echo "hack/update-codegen.sh not found; skipping client codegen"; \
-	fi
+generate-code: ## Generate API clients, listers and informers
+	GOFLAGS="-mod=mod" hack/codegen.sh

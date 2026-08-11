@@ -2,37 +2,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: agent-role
+  name: daemon-role
 rules:
 - apiGroups:
   - ""
   resources:
   - nodes
+  - pods
   verbs:
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - setera.com
-  resources:
-  - nodeStores
-  - tenants
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - setera.com
-  resources:
-  - nodeStores/status
-  - tenants/status
-  verbs:
-  - get
-  - patch
-  - update
