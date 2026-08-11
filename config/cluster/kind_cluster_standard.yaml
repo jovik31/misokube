@@ -11,5 +11,5 @@ nodes:
   - role: worker
     image: kind-node-nettool:v1.33.1
 networking:
-  disableDefaultCNI: false
+  disableDefaultCNI: true
   kubeProxyMode: iptables

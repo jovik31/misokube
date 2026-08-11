@@ -191,6 +191,10 @@ spec:
             - name: ipam-state
               mountPath: /var/lib/cni/tenantcni/ipam
 
+            - name: host-netns
+              mountPath: /var/run/netns
+              mountPropagation: HostToContainer
+
       volumes:
         - name: cni-bin
           hostPath:
@@ -220,6 +224,11 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
+
+        - name: host-netns
+          hostPath:
+            path: /var/run/netns
+            type: DirectoryOrCreate
 
 ---
 apiVersion: apps/v1
