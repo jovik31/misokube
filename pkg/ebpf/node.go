@@ -1,1 +1,94 @@
 package ebpf
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+
+	"github/setera/pkg/ebpf/loader"
+)
+
+// NodeProgram is the Setera TC router attached to a node-level interface.
+//
+// The node program is node-wide and therefore has no tenant identity of its
+// own. Tenant isolation is enforced by the Pod programs attached to local
+// host-side veth interfaces.
+type NodeProgram struct {
+	closeOnce sync.Once
+	closeErr  error
+
+	handle nodeProgramHandle
+}
+
+// AttachNodeProgram loads and attaches the Setera node router to ifaceName.
+//
+// The underlying BPF node router uses the default identity so the node-level
+// forwarding path does not apply a single tenant identity to all traffic.
+func AttachNodeProgram(ifName string) (*NodeProgram, error) {
+	return attachNodeProgram(
+		ifName,
+		func(ifName string) (nodeProgramHandle, error) {
+			return loader.NewNodeRouter(ifName)
+		},
+	)
+}
+
+// Close detaches the node router and releases its eBPF resources.
+// It is safe to call Close more than once.
+func (p *NodeProgram) Close() error {
+	if p == nil {
+		return nil
+	}
+
+	p.closeOnce.Do(func() {
+		if p.handle != nil {
+			p.closeErr = p.handle.Close()
+		}
+	})
+
+	return p.closeErr
+}
+
+type nodeProgramHandle interface {
+	Close() error
+}
+
+type nodeProgramAttacher func(
+	ifName string,
+) (nodeProgramHandle, error)
+
+func attachNodeProgram(
+	ifName string,
+	attach nodeProgramAttacher,
+) (*NodeProgram, error) {
+	if strings.TrimSpace(ifName) == "" {
+		return nil, fmt.Errorf(
+			"ebpf: node program interface name is empty",
+		)
+	}
+
+	if attach == nil {
+		return nil, fmt.Errorf(
+			"ebpf: node program attacher is nil",
+		)
+	}
+
+	handle, err := attach(ifName)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"ebpf: attach node program to %q: %w",
+			ifName,
+			err,
+		)
+	}
+	if handle == nil {
+		return nil, fmt.Errorf(
+			"ebpf: attach node program to %q returned nil handle",
+			ifName,
+		)
+	}
+
+	return &NodeProgram{
+		handle: handle,
+	}, nil
+}

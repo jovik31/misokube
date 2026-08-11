@@ -16,12 +16,14 @@ import (
 
 // Action constants matching the BPF program defines.
 const (
-	tcPodIDsMapPath          = "/sys/fs/bpf/setera/tc/tc_podIDs"
-	ActionDrop        uint32 = 0
-	ActionAllow       uint32 = 1
-	ActionLog         uint32 = 2
-	tcFlagConntrack   uint32 = 1 << 0
-	tcPodIDsValueSize        = 68
+	tcPinRoot                 = "/sys/fs/bpf/setera/tc"
+	tcPodIDsMapPath           = tcPinRoot + "/tc_podIDs"
+	tcPodIDsMaxEntries uint32 = 256
+	ActionDrop         uint32 = 0
+	ActionAllow        uint32 = 1
+	ActionLog          uint32 = 2
+	tcFlagConntrack    uint32 = 1 << 0
+	tcPodIDsValueSize  uint32 = 68
 )
 
 type tcPodIDValue struct {
@@ -108,78 +110,206 @@ type XDPFirewall struct {
 	rules map[ruleKeyHash]uint32
 }
 
-// TCFirewall manages the TC firewall program lifecycle.
+// TCFirewall manages the Pod TC program lifecycle.
+//
+// It owns the ingress and egress filters it attaches, but it does not own the
+// interface's clsact qdisc. clsact is shared TC infrastructure and may be used
+// by other programs on the same interface.
 type TCFirewall struct {
-	objs      tcFirewallObjects
-	ingressFD int
-	egressFD  int
-	iface     string
-	qdisc     *netlink.GenericQdisc
-	rules     map[ruleKeyHash]uint32
+	objs tcFirewallObjects
+
+	ingressFilter *netlink.BpfFilter
+	egressFilter  *netlink.BpfFilter
+
+	iface string
+	rules map[ruleKeyHash]uint32
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NodeRouter manages the node-level TC program lifecycle.
+//
+// Like TCFirewall, it owns only its filters and BPF object handles, not the
+// interface's clsact qdisc.
 type NodeRouter struct {
-	objs      nodeRouterObjects
-	ingressFD int
-	egressFD  int
-	iface     string
-	qdisc     *netlink.GenericQdisc
-	rules     map[ruleKeyHash]uint32
+	objs nodeRouterObjects
+
+	ingressFilter *netlink.BpfFilter
+	egressFilter  *netlink.BpfFilter
+
+	iface string
+	rules map[ruleKeyHash]uint32
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 var tcLoadMu sync.Mutex
 
-var tcPodIDsShared struct {
-	mu    sync.Mutex
-	mapFD *ebpf.Map
-}
-
-func getOrCreateSharedTcPodIDsMap() (*ebpf.Map, error) {
-	tcPodIDsShared.mu.Lock()
-	defer tcPodIDsShared.mu.Unlock()
-
-	if tcPodIDsShared.mapFD != nil {
-		return tcPodIDsShared.mapFD, nil
-	}
-
-	m, err := ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
-	if err == nil {
-		tcPodIDsShared.mapFD = m
-		return m, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("open pinned map %s: %w", tcPodIDsMapPath, err)
-	}
-
-	m, err = ebpf.NewMap(&ebpf.MapSpec{
+func tcPodIDsMapSpec() *ebpf.MapSpec {
+	return &ebpf.MapSpec{
 		Name:       "tc_podIDs",
 		Type:       ebpf.Hash,
 		KeySize:    4,
 		ValueSize:  tcPodIDsValueSize,
-		MaxEntries: 256,
-	})
+		MaxEntries: tcPodIDsMaxEntries,
+	}
+}
+
+// prepareTcCollectionSpec validates the one node-wide shared map and makes
+// all other TC maps private to the loaded program instance.
+func prepareTcCollectionSpec(
+	spec *ebpf.CollectionSpec,
+	programName string,
+) error {
+	mapSpec, ok := spec.Maps["tc_podIDs"]
+	if !ok || mapSpec == nil {
+		return fmt.Errorf(
+			"%s: tc_podIDs map is missing from collection spec",
+			programName,
+		)
+	}
+
+	want := tcPodIDsMapSpec()
+	if mapSpec.Type != want.Type ||
+		mapSpec.KeySize != want.KeySize ||
+		mapSpec.ValueSize != want.ValueSize ||
+		mapSpec.MaxEntries != want.MaxEntries ||
+		mapSpec.Flags != want.Flags {
+		return fmt.Errorf(
+			"%s: tc_podIDs map is incompatible: got %s, want %s",
+			programName,
+			mapSpec,
+			want,
+		)
+	}
+
+	// tc_podIDs is injected explicitly through MapReplacements. Disable the
+	// ELF's pin-by-name behavior for this map so there is exactly one
+	// ownership path for the shared map.
+	mapSpec.Pinning = ebpf.PinNone
+
+	// These maps are program-instance state. Do not let their ELF
+	// LIBBPF_PIN_BY_NAME declarations accidentally make them node-global.
+	for _, name := range []string{"tc_iface_cfg", "tc_stats"} {
+		if privateMap := spec.Maps[name]; privateMap != nil {
+			privateMap.Pinning = ebpf.PinNone
+		}
+	}
+
+	return nil
+}
+
+func openOrCreateSharedTcPodIDsMap() (*ebpf.Map, error) {
+	if err := ensureBPFFSMounted("/sys/fs/bpf"); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(tcPinRoot, 0755); err != nil {
+		return nil, fmt.Errorf(
+			"create TC pin directory %s: %w",
+			tcPinRoot,
+			err,
+		)
+	}
+
+	m, err := ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
+	if err == nil {
+		if err := tcPodIDsMapSpec().Compatible(m); err != nil {
+			m.Close()
+			return nil, fmt.Errorf(
+				"pinned tc_podIDs map %s is incompatible: %w",
+				tcPodIDsMapPath,
+				err,
+			)
+		}
+		return m, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) &&
+		!errors.Is(err, unix.ENOENT) {
+		return nil, fmt.Errorf(
+			"open pinned tc_podIDs map %s: %w",
+			tcPodIDsMapPath,
+			err,
+		)
+	}
+
+	m, err = ebpf.NewMap(tcPodIDsMapSpec())
 	if err != nil {
 		return nil, fmt.Errorf("create shared tc_podIDs map: %w", err)
 	}
-	if err := m.Pin(tcPodIDsMapPath); err != nil {
-		if !errors.Is(err, os.ErrExist) {
-			m.Close()
-			return nil, fmt.Errorf("pin shared tc_podIDs map: %w", err)
-		}
+
+	if err := m.Pin(tcPodIDsMapPath); err == nil {
+		return m, nil
+	} else if !errors.Is(err, os.ErrExist) && !errors.Is(err, unix.EEXIST) {
 		m.Close()
-		m, err = ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
-		if err != nil {
-			return nil, fmt.Errorf("reopen shared tc_podIDs map: %w", err)
-		}
+		return nil, fmt.Errorf(
+			"pin shared tc_podIDs map %s: %w",
+			tcPodIDsMapPath,
+			err,
+		)
 	}
 
-	tcPodIDsShared.mapFD = m
+	// Another goroutine/process won the create-and-pin race. Reopen the map
+	// that is now pinned and use that canonical kernel object.
+	m.Close()
+
+	m, err = ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"reopen shared tc_podIDs map %s: %w",
+			tcPodIDsMapPath,
+			err,
+		)
+	}
+	if err := tcPodIDsMapSpec().Compatible(m); err != nil {
+		m.Close()
+		return nil, fmt.Errorf(
+			"reopened tc_podIDs map %s is incompatible: %w",
+			tcPodIDsMapPath,
+			err,
+		)
+	}
+
 	return m, nil
 }
 
-func loadTcFirewallObjectsWithSharedPodMap(obj interface{}, opts *ebpf.CollectionOptions) error {
-	return loadTcFirewallObjectsWithTenant(obj, opts, "")
+func verifySameKernelMap(
+	expected *ebpf.Map,
+	actual *ebpf.Map,
+) error {
+	if expected == nil || actual == nil {
+		return fmt.Errorf("cannot verify nil tc_podIDs map")
+	}
+
+	expectedInfo, err := expected.Info()
+	if err != nil {
+		return fmt.Errorf("read expected tc_podIDs map info: %w", err)
+	}
+	actualInfo, err := actual.Info()
+	if err != nil {
+		return fmt.Errorf("read loaded tc_podIDs map info: %w", err)
+	}
+
+	expectedID, ok := expectedInfo.ID()
+	if !ok {
+		return fmt.Errorf("kernel did not expose expected tc_podIDs map ID")
+	}
+	actualID, ok := actualInfo.ID()
+	if !ok {
+		return fmt.Errorf("kernel did not expose loaded tc_podIDs map ID")
+	}
+
+	if expectedID != actualID {
+		return fmt.Errorf(
+			"tc_podIDs map is not shared: expected map ID %d, loaded map ID %d",
+			expectedID,
+			actualID,
+		)
+	}
+
+	return nil
 }
 
 func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptions, tenant string) error {
@@ -187,9 +317,8 @@ func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err != nil {
 		return err
 	}
-	if ms, ok := spec.Maps["tc_podIDs"]; ok && ms != nil {
-		// Map is always injected via replacement, so don't attempt pin-by-name for this map.
-		ms.Pinning = ebpf.PinNone
+	if err := prepareTcCollectionSpec(spec, "tc router"); err != nil {
+		return err
 	}
 	if tenant != "" {
 		if len(tenant) > 63 {
@@ -211,8 +340,8 @@ func loadNodeRouterObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err != nil {
 		return err
 	}
-	if ms, ok := spec.Maps["tc_podIDs"]; ok && ms != nil {
-		ms.Pinning = ebpf.PinNone
+	if err := prepareTcCollectionSpec(spec, "node router"); err != nil {
+		return err
 	}
 	if tenant != "" {
 		if len(tenant) > 63 {
@@ -340,155 +469,132 @@ func (fw *XDPFirewall) Close() error {
 	return fw.objs.Close()
 }
 
-// NewTCFirewall loads and attaches the TC firewall to the given interface
-// (both ingress and egress).
+// NewTCFirewall loads and attaches the Pod TC program to the given interface
+// on both ingress and egress.
+//
+// The returned object owns only the two filters it attaches and its BPF object
+// handles. It deliberately leaves clsact in place on Close.
 func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) {
 	tcLoadMu.Lock()
 	defer tcLoadMu.Unlock()
 
-	link, err := netlink.LinkByName(ifaceName)
+	nlLink, err := netlink.LinkByName(ifaceName)
 	if err != nil {
 		return nil, fmt.Errorf("lookup netlink %q: %w", ifaceName, err)
 	}
 
-	fmt.Printf("Attaching TC firewall to interface %q (index %d)\n", ifaceName, link.Attrs().Index)
-
 	var objs tcFirewallObjects
 
-	const pinRoot = "/sys/fs/bpf/setera/tc"
-	if err := ensureBPFFSMounted("/sys/fs/bpf"); err != nil {
-		return nil, err
-	}
-
-	if err := os.MkdirAll(pinRoot, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create pin directory: %w", err)
-	}
-
-	sharedPodIDs, err := getOrCreateSharedTcPodIDsMap()
+	sharedPodIDs, err := openOrCreateSharedTcPodIDsMap()
 	if err != nil {
 		return nil, err
 	}
+	defer sharedPodIDs.Close()
 
 	opts := &ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{
-			PinPath: pinRoot,
-		},
 		MapReplacements: map[string]*ebpf.Map{
 			"tc_podIDs": sharedPodIDs,
 		},
 	}
-
-	//fmt.Printf("Loading TC firewall BPF objects (pinning under %s)\n", opts.Maps.PinPath)
 
 	tenant := ""
 	if len(tenantName) > 0 {
 		tenant = tenantName[0]
 	}
 
-	if err := loadTcFirewallObjectsWithTenant(&objs, opts, tenant); err != nil {
-		fmt.Printf("loadTcFirewallObjects failed (pinPath=%s): %v\n", opts.Maps.PinPath, err)
-		return nil, fmt.Errorf("load TC objects: %w", err)
-	}
-	if objs.TcPodIDs != nil {
-		fmt.Printf("TC router loaded with tc_podIDs map\n")
-	}
-
-	// Add clsact qdisc (required for TC BPF)
-	qdisc := &netlink.GenericQdisc{
-		QdiscAttrs: netlink.QdiscAttrs{
-			LinkIndex: link.Attrs().Index,
-			Handle:    netlink.MakeHandle(0xffff, 0),
-			Parent:    netlink.HANDLE_CLSACT,
-		},
-		QdiscType: "clsact",
-	}
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		// Ignore "already exists"
-		if err.Error() != "file exists" {
-			objs.Close()
-			return nil, fmt.Errorf("add clsact qdisc: %w", err)
-		}
+	if err := loadTcFirewallObjectsWithTenant(
+		&objs,
+		opts,
+		tenant,
+	); err != nil {
+		return nil, fmt.Errorf("load Pod TC objects: %w", err)
 	}
 
-	// Attach ingress filter
-	ingressFilter := &netlink.BpfFilter{
-		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: link.Attrs().Index,
-			Parent:    netlink.HANDLE_MIN_INGRESS,
-			Handle:    1,
-			Protocol:  0x0003, // ETH_P_ALL
-			Priority:  1,
-		},
-		Fd:           objs.TcFirewallIngress.FD(),
-		Name:         "setera_tc_ingress",
-		DirectAction: true,
+	if err := verifySameKernelMap(
+		sharedPodIDs,
+		objs.TcPodIDs,
+	); err != nil {
+		objs.Close()
+		return nil, fmt.Errorf(
+			"verify Pod TC shared tc_podIDs map: %w",
+			err,
+		)
 	}
+
+	if err := ensureClsact(nlLink.Attrs().Index); err != nil {
+		objs.Close()
+		return nil, err
+	}
+
+	ingressFilter := newTCBpfFilter(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_INGRESS,
+		objs.TcFirewallIngress.FD(),
+		"setera_tc_ingress",
+	)
 	if err := netlink.FilterReplace(ingressFilter); err != nil {
 		objs.Close()
-		return nil, fmt.Errorf("attach TC ingress: %w", err)
+		return nil, fmt.Errorf("attach Pod TC ingress: %w", err)
 	}
 
-	// Attach egress filter
-	egressFilter := &netlink.BpfFilter{
-		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: link.Attrs().Index,
-			Parent:    netlink.HANDLE_MIN_EGRESS,
-			Handle:    1,
-			Protocol:  0x0003,
-			Priority:  1,
-		},
-		Fd:           objs.TcFirewallEgress.FD(),
-		Name:         "setera_tc_egress",
-		DirectAction: true,
-	}
+	egressFilter := newTCBpfFilter(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_EGRESS,
+		objs.TcFirewallEgress.FD(),
+		"setera_tc_egress",
+	)
 	if err := netlink.FilterReplace(egressFilter); err != nil {
-		objs.Close()
-		return nil, fmt.Errorf("attach TC egress: %w", err)
+		cleanupErr := deleteTCFilter(
+			ingressFilter,
+			netlink.FilterDel,
+		)
+		objsErr := objs.Close()
+
+		return nil, errors.Join(
+			fmt.Errorf("attach Pod TC egress: %w", err),
+			wrapTCleanupError(
+				"rollback Pod TC ingress",
+				cleanupErr,
+			),
+			wrapTCleanupError(
+				"close Pod TC objects",
+				objsErr,
+			),
+		)
 	}
 
 	return &TCFirewall{
-		objs:      objs,
-		ingressFD: objs.TcFirewallIngress.FD(),
-		egressFD:  objs.TcFirewallEgress.FD(),
-		iface:     ifaceName,
-		qdisc:     qdisc,
-		rules:     make(map[ruleKeyHash]uint32),
+		objs:          objs,
+		ingressFilter: ingressFilter,
+		egressFilter:  egressFilter,
+		iface:         ifaceName,
+		rules:         make(map[ruleKeyHash]uint32),
 	}, nil
 }
 
 // NewNodeRouter loads and attaches the node router to the given interface
-// (both ingress and egress).
+// on both ingress and egress.
+//
+// The returned object owns only the two filters it attaches and its BPF object
+// handles. It deliberately leaves clsact in place on Close.
 func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) {
 	tcLoadMu.Lock()
 	defer tcLoadMu.Unlock()
 
-	link, err := netlink.LinkByName(ifaceName)
+	nlLink, err := netlink.LinkByName(ifaceName)
 	if err != nil {
 		return nil, fmt.Errorf("lookup netlink %q: %w", ifaceName, err)
 	}
 
-	fmt.Printf("Attaching node router to interface %q (index %d)\n", ifaceName, link.Attrs().Index)
-
 	var objs nodeRouterObjects
 
-	const pinRoot = "/sys/fs/bpf/setera/tc"
-	if err := ensureBPFFSMounted("/sys/fs/bpf"); err != nil {
-		return nil, err
-	}
-
-	if err := os.MkdirAll(pinRoot, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create pin directory: %w", err)
-	}
-
-	sharedPodIDs, err := getOrCreateSharedTcPodIDsMap()
+	sharedPodIDs, err := openOrCreateSharedTcPodIDsMap()
 	if err != nil {
 		return nil, err
 	}
+	defer sharedPodIDs.Close()
 
 	opts := &ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{
-			PinPath: pinRoot,
-		},
 		MapReplacements: map[string]*ebpf.Map{
 			"tc_podIDs": sharedPodIDs,
 		},
@@ -499,71 +605,151 @@ func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) 
 		tenant = tenantName[0]
 	}
 
-	if err := loadNodeRouterObjectsWithTenant(&objs, opts, tenant); err != nil {
-		fmt.Printf("loadNodeRouterObjects failed (pinPath=%s): %v\n", opts.Maps.PinPath, err)
+	if err := loadNodeRouterObjectsWithTenant(
+		&objs,
+		opts,
+		tenant,
+	); err != nil {
 		return nil, fmt.Errorf("load node router objects: %w", err)
 	}
-	if objs.TcPodIDs != nil {
-		fmt.Printf("node router loaded with tc_podIDs map\n")
+
+	if err := verifySameKernelMap(
+		sharedPodIDs,
+		objs.TcPodIDs,
+	); err != nil {
+		objs.Close()
+		return nil, fmt.Errorf(
+			"verify node router shared tc_podIDs map: %w",
+			err,
+		)
 	}
 
-	qdisc := &netlink.GenericQdisc{
-		QdiscAttrs: netlink.QdiscAttrs{
-			LinkIndex: link.Attrs().Index,
-			Handle:    netlink.MakeHandle(0xffff, 0),
-			Parent:    netlink.HANDLE_CLSACT,
-		},
-		QdiscType: "clsact",
-	}
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		if err.Error() != "file exists" {
-			objs.Close()
-			return nil, fmt.Errorf("add clsact qdisc: %w", err)
-		}
+	if err := ensureClsact(nlLink.Attrs().Index); err != nil {
+		objs.Close()
+		return nil, err
 	}
 
-	ingressFilter := &netlink.BpfFilter{
-		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: link.Attrs().Index,
-			Parent:    netlink.HANDLE_MIN_INGRESS,
-			Handle:    1,
-			Protocol:  0x0003,
-			Priority:  1,
-		},
-		Fd:           objs.TcNodeIngress.FD(),
-		Name:         "setera_node_ingress",
-		DirectAction: true,
-	}
+	ingressFilter := newTCBpfFilter(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_INGRESS,
+		objs.TcNodeIngress.FD(),
+		"setera_node_ingress",
+	)
 	if err := netlink.FilterReplace(ingressFilter); err != nil {
 		objs.Close()
 		return nil, fmt.Errorf("attach node ingress: %w", err)
 	}
 
-	egressFilter := &netlink.BpfFilter{
-		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: link.Attrs().Index,
-			Parent:    netlink.HANDLE_MIN_EGRESS,
-			Handle:    1,
-			Protocol:  0x0003,
-			Priority:  1,
-		},
-		Fd:           objs.TcNodeEgress.FD(),
-		Name:         "setera_node_egress",
-		DirectAction: true,
-	}
+	egressFilter := newTCBpfFilter(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_EGRESS,
+		objs.TcNodeEgress.FD(),
+		"setera_node_egress",
+	)
 	if err := netlink.FilterReplace(egressFilter); err != nil {
-		objs.Close()
-		return nil, fmt.Errorf("attach node egress: %w", err)
+		cleanupErr := deleteTCFilter(
+			ingressFilter,
+			netlink.FilterDel,
+		)
+		objsErr := objs.Close()
+
+		return nil, errors.Join(
+			fmt.Errorf("attach node egress: %w", err),
+			wrapTCleanupError(
+				"rollback node ingress",
+				cleanupErr,
+			),
+			wrapTCleanupError(
+				"close node router objects",
+				objsErr,
+			),
+		)
 	}
 
 	return &NodeRouter{
-		objs:      objs,
-		ingressFD: objs.TcNodeIngress.FD(),
-		egressFD:  objs.TcNodeEgress.FD(),
-		iface:     ifaceName,
-		qdisc:     qdisc,
-		rules:     make(map[ruleKeyHash]uint32),
+		objs:          objs,
+		ingressFilter: ingressFilter,
+		egressFilter:  egressFilter,
+		iface:         ifaceName,
+		rules:         make(map[ruleKeyHash]uint32),
 	}, nil
+}
+
+func ensureClsact(linkIndex int) error {
+	qdisc := &netlink.GenericQdisc{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: linkIndex,
+			Handle:    netlink.MakeHandle(0xffff, 0),
+			Parent:    netlink.HANDLE_CLSACT,
+		},
+		QdiscType: "clsact",
+	}
+
+	if err := netlink.QdiscAdd(qdisc); err != nil &&
+		!errors.Is(err, unix.EEXIST) &&
+		!errors.Is(err, os.ErrExist) {
+		return fmt.Errorf(
+			"ensure clsact qdisc on ifindex %d: %w",
+			linkIndex,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func newTCBpfFilter(
+	linkIndex int,
+	parent uint32,
+	programFD int,
+	name string,
+) *netlink.BpfFilter {
+	return &netlink.BpfFilter{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: linkIndex,
+			Parent:    parent,
+			Handle:    1,
+			Protocol:  0x0003, // ETH_P_ALL
+			Priority:  1,
+		},
+		Fd:           programFD,
+		Name:         name,
+		DirectAction: true,
+	}
+}
+
+type tcFilterDeleter func(netlink.Filter) error
+
+func deleteTCFilter(
+	filter netlink.Filter,
+	deleteFn tcFilterDeleter,
+) error {
+	if filter == nil {
+		return nil
+	}
+	if deleteFn == nil {
+		return fmt.Errorf("TC filter deleter is nil")
+	}
+
+	if err := deleteFn(filter); err != nil {
+		// If the interface or filter disappeared first, the desired detached
+		// state has already been reached.
+		if errors.Is(err, unix.ENOENT) ||
+			errors.Is(err, unix.ENODEV) ||
+			errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+func wrapTCleanupError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 func ensureBPFFSMounted(path string) error {
@@ -631,9 +817,6 @@ func WritePodTenantVeth(ip net.IP, tenant string, ifindex int) error {
 	if err != nil {
 		return err
 	}
-	if m == nil {
-		return nil
-	}
 	defer m.Close()
 
 	key := ipToU32(ip)
@@ -662,9 +845,6 @@ func DeletePodTenantVeth(ip net.IP) error {
 	if err != nil {
 		return err
 	}
-	if m == nil {
-		return nil
-	}
 	defer m.Close()
 
 	key := ipToU32(ip)
@@ -684,9 +864,6 @@ func ClearPodTenantVethMap() error {
 	if err != nil {
 		return err
 	}
-	if m == nil {
-		return nil
-	}
 	defer m.Close()
 
 	it := m.Iterate()
@@ -702,14 +879,7 @@ func ClearPodTenantVethMap() error {
 }
 
 func openTcPodIDsMap() (*ebpf.Map, error) {
-	m, err := ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return getOrCreateSharedTcPodIDsMap()
-		}
-		return nil, err
-	}
-	return m, nil
+	return openOrCreateSharedTcPodIDsMap()
 }
 
 /* AddRule inserts a firewall rule into the TC BPF map.
@@ -825,20 +995,70 @@ func (fw *TCFirewall) GetEgressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 1)
 }
 
-// Close detaches TC programs and cleans up.
+// Close detaches only the Pod TC filters owned by this object and releases
+// its BPF resources. The interface's clsact qdisc is intentionally preserved.
 func (fw *TCFirewall) Close() error {
-	if fw.qdisc != nil {
-		netlink.QdiscDel(fw.qdisc)
+	if fw == nil {
+		return nil
 	}
-	return fw.objs.Close()
+
+	fw.closeOnce.Do(func() {
+		fw.closeErr = errors.Join(
+			wrapTCleanupError(
+				"delete Pod TC egress filter",
+				deleteTCFilter(
+					fw.egressFilter,
+					netlink.FilterDel,
+				),
+			),
+			wrapTCleanupError(
+				"delete Pod TC ingress filter",
+				deleteTCFilter(
+					fw.ingressFilter,
+					netlink.FilterDel,
+				),
+			),
+			wrapTCleanupError(
+				"close Pod TC objects",
+				fw.objs.Close(),
+			),
+		)
+	})
+
+	return fw.closeErr
 }
 
-// Close detaches node router programs and cleans up.
+// Close detaches only the node-router filters owned by this object and releases
+// its BPF resources. The interface's clsact qdisc is intentionally preserved.
 func (fw *NodeRouter) Close() error {
-	if fw.qdisc != nil {
-		netlink.QdiscDel(fw.qdisc)
+	if fw == nil {
+		return nil
 	}
-	return fw.objs.Close()
+
+	fw.closeOnce.Do(func() {
+		fw.closeErr = errors.Join(
+			wrapTCleanupError(
+				"delete node egress filter",
+				deleteTCFilter(
+					fw.egressFilter,
+					netlink.FilterDel,
+				),
+			),
+			wrapTCleanupError(
+				"delete node ingress filter",
+				deleteTCFilter(
+					fw.ingressFilter,
+					netlink.FilterDel,
+				),
+			),
+			wrapTCleanupError(
+				"close node router objects",
+				fw.objs.Close(),
+			),
+		)
+	})
+
+	return fw.closeErr
 }
 
 // ---- Shared helpers ----

@@ -1,37 +1,70 @@
 package ebpfmanager
 
 import (
-	"fmt"
-	"net"
+	"errors"
+	"net/netip"
+	"sync"
 
-	"github/setera/pkg/network/policy"
-	_ "github/setera/pkg/network/policy/pod"
-	_ "github/setera/pkg/network/policy/tenant"
+	"github/setera/pkg/ebpf"
 )
 
-func NewEbpfManager(rootCIDR *net.IPNet, nodeName string) (*EbpfManagerImpl, error) {
-	return NewEbpfManagerWithDeps(rootCIDR, nodeName, Deps{})
+var (
+	ErrInvalidLocalPod  = errors.New("ebpfmanager: invalid local pod")
+	ErrLocalPodConflict = errors.New("ebpfmanager: local pod conflict")
+)
+
+// Manager owns Setera's node-local eBPF lifecycle state.
+//
+// The first implementation intentionally manages local Pods only. Kubernetes
+// watches, remote Pods, and restart reconciliation are added separately so
+// this package keeps one clear responsibility at each stage of the refactor.
+type Manager struct {
+	mu sync.Mutex
+
+	local map[netip.Addr]localPodState
+	deps  dependencies
 }
 
-func NewEbpfManagerWithDeps(rootCIDR *net.IPNet, nodeName string, d Deps) (*EbpfManagerImpl, error) {
-	if d.TenantPolicy == nil {
-		d.TenantPolicy = policy.Manager()
-	}
-	if d.PodPolicy == nil {
-		d.PodPolicy = policy.PodManager()
-	}
-	if d.PodPolicy == nil {
-		return nil, fmt.Errorf("pod policy manager not registered")
-	}
+// New returns a concrete Setera eBPF manager.
+func New() *Manager {
+	return newWithDependencies(defaultDependencies())
+}
 
-	em := &EbpfManagerImpl{
-		RootCIDR:      rootCIDR,
-		NodeName:      nodeName,
-		TenantRecords: make(map[string]*TenantRecord),
-		TP:            d.TenantPolicy,
-		PP:            d.PodPolicy,
-	}
-	em.defaultPodIfName = func(_ string, podName string) string { return podName }
+type localPodState struct {
+	pod     localPodRecord
+	program podProgram
+}
 
-	return em, nil
+type localPodRecord struct {
+	PodUID          string
+	TenantID        string
+	HostVethName    string
+	HostVethIfIndex int
+}
+
+type podProgram interface {
+	Close() error
+}
+
+type dependencies struct {
+	attachPodProgram func(ifName, tenant string) (podProgram, error)
+	upsertEndpoint   func(ip netip.Addr, tenant string, ifIndex int) error
+	deleteEndpoint   func(ip netip.Addr) error
+}
+
+func defaultDependencies() dependencies {
+	return dependencies{
+		attachPodProgram: func(ifName, tenant string) (podProgram, error) {
+			return ebpf.AttachPodProgram(ifName, tenant)
+		},
+		upsertEndpoint: ebpf.UpsertPodEndpoint,
+		deleteEndpoint: ebpf.DeletePodEndpoint,
+	}
+}
+
+func newWithDependencies(deps dependencies) *Manager {
+	return &Manager{
+		local: make(map[netip.Addr]localPodState),
+		deps:  deps,
+	}
 }

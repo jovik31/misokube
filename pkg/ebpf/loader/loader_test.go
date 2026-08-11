@@ -1,0 +1,218 @@
+package loader
+
+import (
+	"encoding/binary"
+	"errors"
+	"testing"
+
+	"github.com/cilium/ebpf"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+)
+
+func TestTcPodIDsGoValueSizeMatchesBPFMapValueSize(t *testing.T) {
+	got := binary.Size(tcPodIDValue{})
+	if got < 0 {
+		t.Fatal("binary.Size(tcPodIDValue{}) returned a negative size")
+	}
+
+	if uint32(got) != tcPodIDsValueSize {
+		t.Fatalf(
+			"tcPodIDValue size = %d, want %d",
+			got,
+			tcPodIDsValueSize,
+		)
+	}
+}
+
+func TestTcProgramsDeclareCompatibleSharedPodMap(t *testing.T) {
+	tcSpec, err := loadTcFirewall()
+	if err != nil {
+		t.Fatalf("load TC router spec: %v", err)
+	}
+
+	nodeSpec, err := loadNodeRouter()
+	if err != nil {
+		t.Fatalf("load node router spec: %v", err)
+	}
+
+	tcMap := tcSpec.Maps["tc_podIDs"]
+	if tcMap == nil {
+		t.Fatal("TC router does not declare tc_podIDs")
+	}
+
+	nodeMap := nodeSpec.Maps["tc_podIDs"]
+	if nodeMap == nil {
+		t.Fatal("node router does not declare tc_podIDs")
+	}
+
+	assertTcPodIDsMapSpec(t, "TC router", tcMap)
+	assertTcPodIDsMapSpec(t, "node router", nodeMap)
+
+	if tcMap.Type != nodeMap.Type ||
+		tcMap.KeySize != nodeMap.KeySize ||
+		tcMap.ValueSize != nodeMap.ValueSize ||
+		tcMap.MaxEntries != nodeMap.MaxEntries ||
+		tcMap.Flags != nodeMap.Flags {
+		t.Fatalf(
+			"tc_podIDs specs differ: TC=%s node=%s",
+			tcMap,
+			nodeMap,
+		)
+	}
+}
+
+func TestEnsureTcPodIDsSpecDisablesELFPinning(t *testing.T) {
+	spec, err := loadTcFirewall()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := prepareTcCollectionSpec(spec, "tc router"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{
+		"tc_podIDs",
+		"tc_iface_cfg",
+		"tc_stats",
+	} {
+		mapSpec := spec.Maps[name]
+		if mapSpec == nil {
+			t.Fatalf("map %s is missing", name)
+		}
+		if got := mapSpec.Pinning; got != ebpf.PinNone {
+			t.Fatalf(
+				"%s pinning = %v, want PinNone",
+				name,
+				got,
+			)
+		}
+	}
+}
+
+func TestDeleteTCFilterDeletesOnlyGivenFilter(t *testing.T) {
+	want := &netlink.BpfFilter{}
+
+	var got netlink.Filter
+	err := deleteTCFilter(
+		want,
+		func(filter netlink.Filter) error {
+			got = filter
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got != want {
+		t.Fatalf(
+			"deleted filter = %T %v, want supplied filter %p",
+			got,
+			got,
+			want,
+		)
+	}
+}
+
+func TestDeleteTCFilterTreatsMissingFilterAsDetached(t *testing.T) {
+	tests := []error{
+		unix.ENOENT,
+		unix.ENODEV,
+	}
+
+	for _, wantErr := range tests {
+		t.Run(wantErr.Error(), func(t *testing.T) {
+			err := deleteTCFilter(
+				&netlink.BpfFilter{},
+				func(netlink.Filter) error {
+					return wantErr
+				},
+			)
+			if err != nil {
+				t.Fatalf(
+					"deleteTCFilter() error = %v, want nil",
+					err,
+				)
+			}
+		})
+	}
+}
+
+func TestDeleteTCFilterReturnsUnexpectedError(t *testing.T) {
+	wantErr := errors.New("filter delete failed")
+
+	err := deleteTCFilter(
+		&netlink.BpfFilter{},
+		func(netlink.Filter) error {
+			return wantErr
+		},
+	)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf(
+			"deleteTCFilter() error = %v, want wrapped %v",
+			err,
+			wantErr,
+		)
+	}
+}
+
+func TestNewTCBpfFilter(t *testing.T) {
+	filter := newTCBpfFilter(
+		42,
+		netlink.HANDLE_MIN_INGRESS,
+		100,
+		"setera_test",
+	)
+
+	if filter.Attrs().LinkIndex != 42 {
+		t.Fatalf(
+			"LinkIndex = %d, want 42",
+			filter.Attrs().LinkIndex,
+		)
+	}
+	if filter.Attrs().Parent != netlink.HANDLE_MIN_INGRESS {
+		t.Fatalf(
+			"Parent = %#x, want %#x",
+			filter.Attrs().Parent,
+			netlink.HANDLE_MIN_INGRESS,
+		)
+	}
+	if filter.Fd != 100 {
+		t.Fatalf("Fd = %d, want 100", filter.Fd)
+	}
+	if filter.Name != "setera_test" {
+		t.Fatalf(
+			"Name = %q, want %q",
+			filter.Name,
+			"setera_test",
+		)
+	}
+	if !filter.DirectAction {
+		t.Fatal("DirectAction = false, want true")
+	}
+}
+
+func assertTcPodIDsMapSpec(
+	t *testing.T,
+	name string,
+	got *ebpf.MapSpec,
+) {
+	t.Helper()
+
+	want := tcPodIDsMapSpec()
+
+	if got.Type != want.Type ||
+		got.KeySize != want.KeySize ||
+		got.ValueSize != want.ValueSize ||
+		got.MaxEntries != want.MaxEntries ||
+		got.Flags != want.Flags {
+		t.Fatalf(
+			"%s tc_podIDs = %s, want %s",
+			name,
+			got,
+			want,
+		)
+	}
+}
