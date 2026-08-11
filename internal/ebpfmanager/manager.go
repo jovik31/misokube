@@ -9,20 +9,22 @@ import (
 )
 
 var (
-	ErrInvalidLocalPod  = errors.New("ebpfmanager: invalid local pod")
-	ErrLocalPodConflict = errors.New("ebpfmanager: local pod conflict")
+	ErrInvalidLocalPod   = errors.New("ebpfmanager: invalid local pod")
+	ErrLocalPodConflict  = errors.New("ebpfmanager: local pod conflict")
+	ErrInvalidRemotePod  = errors.New("ebpfmanager: invalid remote pod")
+	ErrRemotePodConflict = errors.New("ebpfmanager: remote pod conflict")
 )
 
 // Manager owns Setera's node-local eBPF lifecycle state.
 //
-// The first implementation intentionally manages local Pods only. Kubernetes
-// watches, remote Pods, and restart reconciliation are added separately so
-// this package keeps one clear responsibility at each stage of the refactor.
+// It tracks local and remote Pod ownership for the shared tc_podIDs keyspace.
+// Kubernetes watches and routing remain outside this package.
 type Manager struct {
 	mu sync.Mutex
 
-	local map[netip.Addr]localPodState
-	deps  dependencies
+	local  map[netip.Addr]localPodState
+	remote map[netip.Addr]remotePodRecord
+	deps   dependencies
 }
 
 // New returns a concrete Setera eBPF manager.
@@ -40,6 +42,11 @@ type localPodRecord struct {
 	TenantID        string
 	HostVethName    string
 	HostVethIfIndex int
+}
+
+type remotePodRecord struct {
+	PodUID   string
+	TenantID string
 }
 
 type podProgram interface {
@@ -64,7 +71,8 @@ func defaultDependencies() dependencies {
 
 func newWithDependencies(deps dependencies) *Manager {
 	return &Manager{
-		local: make(map[netip.Addr]localPodState),
-		deps:  deps,
+		local:  make(map[netip.Addr]localPodState),
+		remote: make(map[netip.Addr]remotePodRecord),
+		deps:   deps,
 	}
 }

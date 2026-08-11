@@ -19,7 +19,7 @@ var allocationPrefix = []byte{allocationKeyPrefix}
 type allocationRecord struct {
 	Version     int    `json:"version"`
 	ContainerID string `json:"container_id"`
-	IfName      string `json:"if_name"` // NOTE: host side interface needs to be stored
+	IfName      string `json:"if_name"`
 	PodUID      string `json:"pod_uid"`
 	TenantID    string `json:"tenant_id"`
 }

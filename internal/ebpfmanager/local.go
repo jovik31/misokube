@@ -30,6 +30,16 @@ func (m *Manager) AddLocalPod(ctx context.Context, pod podnetwork.LocalPod) erro
 		return err
 	}
 
+	if remote, ok := m.remote[pod.IP]; ok {
+		return fmt.Errorf(
+			"%w: IP %s is already owned by remote pod UID %q tenant %q",
+			ErrLocalPodConflict,
+			pod.IP,
+			remote.PodUID,
+			remote.TenantID,
+		)
+	}
+
 	if existing, ok := m.local[pod.IP]; ok {
 		if !sameLocalPod(existing.pod, pod) {
 			return fmt.Errorf(
@@ -99,6 +109,10 @@ func (m *Manager) AddLocalPod(ctx context.Context, pod podnetwork.LocalPod) erro
 // down. A missing in-memory record is valid after a daemon restart: deleting
 // the map entry is still useful and the veth deletion performed by podnetwork
 // removes any TC filters that remain attached to that interface.
+//
+// If the same IP is currently tracked as remote, this method refuses to touch
+// the shared map entry. This protects a newly reused remote IP from a late CNI
+// DEL for an older local Pod.
 func (m *Manager) DeleteLocalPod(ctx context.Context, ip netip.Addr) error {
 	ip = ip.Unmap()
 	if err := validateLocalPodIP(ip); err != nil {
@@ -113,6 +127,16 @@ func (m *Manager) DeleteLocalPod(ctx context.Context, ip netip.Addr) error {
 
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+
+	if remote, ok := m.remote[ip]; ok {
+		return fmt.Errorf(
+			"%w: IP %s is currently owned by remote pod UID %q tenant %q",
+			ErrLocalPodConflict,
+			ip,
+			remote.PodUID,
+			remote.TenantID,
+		)
 	}
 
 	state, tracked := m.local[ip]
