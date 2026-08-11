@@ -52,7 +52,7 @@ help:
 
 ##@ Code generation
 
-.PHONY: generate-code 
+.PHONY: generate-code
 generate-code: ## Generate api code for the Tenant and Nodestore CRDs
 	export GOFLAGS="-mod=mod"
 	hack/codegen.sh
@@ -116,7 +116,7 @@ webhook-ssl: ## Generate new webhook certificates
 
 .PHONY: bpf-generate
 bpf-generate: ## Generate Go bindings for TC/XDP eBPF programs
-	go generate ./pkg/network/policy/loader
+	go generate ./pkg/ebpf/loader
 
 .PHONY: build-orchestrator
 build-orchestrator: ## Build orchestrator docker image
@@ -160,11 +160,11 @@ run-orchestrator:  ## run orchestrator binary from ouside of the cluster
 
 .PHONY: kind-cluster-dev
 kind-cluster: ## Create kind cluster
-	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml 
+	kind create cluster --name=setera-cluster --config=config/cluster/kind_cluster_deployment.yaml
 
 .PHONY: kind-cluster-orch-dev
 kind-cluster-dev: ## Create kind cluster for orchestrator development
-	kind create cluster --name=setera-cluster-orch-dev --config=config/cluster/kind_cluster_orch_dev.yaml 
+	kind create cluster --name=setera-cluster-orch-dev --config=config/cluster/kind_cluster_orch_dev.yaml
 
 .PHONY: kind-cluster-delete
 kind-cluster-delete: ## Delete kind cluster
@@ -280,7 +280,7 @@ ENVTEST_VERSION ?= release-0.19
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-$(CONTROLLER_GEN): $(LOCALBIN)	
+$(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: envtest
