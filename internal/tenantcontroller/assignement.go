@@ -15,10 +15,9 @@ import (
 )
 
 type assignmentResult struct {
-	nodes   []*corev1.Node
-	reason  string
-	ready   bool
-	changed bool
+	nodes  []*corev1.Node
+	reason string
+	ready  bool
 }
 
 func (c *Controller) reconcileAssignments(
@@ -36,7 +35,6 @@ func (c *Controller) reconcileAssignments(
 		return assignmentResult{}, fmt.Errorf("list nodes: %w", err)
 	}
 
-	// This is the assignment currently observed by the Node informer.
 	assigned := assignedNodes(nodes, tenant)
 	desired := max(zones, 0)
 
@@ -48,22 +46,26 @@ func (c *Controller) reconcileAssignments(
 			need = len(candidates)
 		}
 
-		if need > 0 {
-			for _, node := range candidates[:need] {
-				if err := c.patchNodeTenantLabel(
-					ctx,
-					node.Name,
-					labelKey,
-					true,
-				); err != nil {
-					return assignmentResult{}, err
-				}
+		for _, node := range candidates[:need] {
+			if err := c.patchNodeTenantLabel(
+				ctx,
+				node.Name,
+				labelKey,
+				true,
+			); err != nil {
+				return assignmentResult{}, err
 			}
 
-			// Do not synthesize Tenant status from the patches we just issued.
-			// Wait for the Node informer to observe the labels, then reconcile
-			// again using the observed Node state.
-			return assignmentResult{changed: true}, nil
+			c.logger.Info(
+				"assigned tenant to node",
+				"tenant", tenant,
+				"node", node.Name,
+			)
+
+			// Patch succeeded, so reflect the post-patch desired assignment in
+			// this reconciliation. A later Node informer event will reconcile
+			// again and verify the observed state.
+			assigned = append(assigned, node)
 		}
 	}
 
@@ -80,21 +82,38 @@ func (c *Controller) reconcileAssignments(
 			removeCount = len(removable)
 		}
 
-		if removeCount > 0 {
-			for _, node := range removable[:removeCount] {
-				if err := c.patchNodeTenantLabel(
-					ctx,
-					node.Name,
-					labelKey,
-					false,
-				); err != nil {
-					return assignmentResult{}, err
-				}
+		remove := make(map[string]struct{}, removeCount)
+
+		for _, node := range removable[:removeCount] {
+			if err := c.patchNodeTenantLabel(
+				ctx,
+				node.Name,
+				labelKey,
+				false,
+			); err != nil {
+				return assignmentResult{}, err
 			}
 
-			// As with scale-up, status is written only after the informer has
-			// observed the Node label removals.
-			return assignmentResult{changed: true}, nil
+			c.logger.Info(
+				"removed tenant from node",
+				"tenant", tenant,
+				"node", node.Name,
+			)
+
+			remove[node.Name] = struct{}{}
+		}
+
+		if len(remove) != 0 {
+			remaining := make([]*corev1.Node, 0, len(assigned)-len(remove))
+
+			for _, node := range assigned {
+				if _, removed := remove[node.Name]; removed {
+					continue
+				}
+				remaining = append(remaining, node)
+			}
+
+			assigned = remaining
 		}
 	}
 
@@ -145,6 +164,7 @@ func scaleUpCandidates(nodes []*corev1.Node, tenant string) []*corev1.Node {
 		if tenantmeta.HasTenant(node.Labels, tenant) || !nodeEligible(node) {
 			continue
 		}
+
 		out = append(out, node)
 	}
 
@@ -172,6 +192,7 @@ func scaleDownCandidates(
 		if _, hasPods := activePodNodes[node.Name]; hasPods {
 			continue
 		}
+
 		out = append(out, node)
 	}
 

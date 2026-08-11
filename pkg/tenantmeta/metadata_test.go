@@ -7,6 +7,69 @@ import (
 	"testing"
 )
 
+func TestResolvePodTenant(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace string
+		labels    map[string]string
+		want      string
+	}{
+		{
+			name:      "explicit tenant",
+			namespace: "application",
+			labels: map[string]string{
+				PodTenantLabel: "tenant-a",
+			},
+			want: "tenant-a",
+		},
+		{
+			name:      "unlabeled pod uses default tenant",
+			namespace: "application",
+			labels:    nil,
+			want:      DefaultTenant,
+		},
+		{
+			name:      "empty tenant label uses default tenant",
+			namespace: "application",
+			labels: map[string]string{
+				PodTenantLabel: "",
+			},
+			want: DefaultTenant,
+		},
+		{
+			name:      "kube-system pod uses default tenant",
+			namespace: "kube-system",
+			labels:    nil,
+			want:      DefaultTenant,
+		},
+		{
+			name:      "kube-system overrides explicit tenant label",
+			namespace: "kube-system",
+			labels: map[string]string{
+				PodTenantLabel: "tenant-a",
+			},
+			want: DefaultTenant,
+		},
+		{
+			name:      "tenant label is trimmed",
+			namespace: "application",
+			labels: map[string]string{
+				PodTenantLabel: "  tenant-a  ",
+			},
+			want: "tenant-a",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolvePodTenant(tt.namespace, tt.labels)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNodeTenantLabel(t *testing.T) {
 	got, err := NodeTenantLabel("tenant-a")
 	if err != nil {

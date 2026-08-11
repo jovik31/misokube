@@ -102,7 +102,7 @@ func TestHandleAddRejectsPodUIDMismatch(t *testing.T) {
 	}
 }
 
-func TestHandleAddRejectsMissingTenantLabel(t *testing.T) {
+func TestHandleAddUsesDefaultTenantForUnlabeledPod(t *testing.T) {
 	pods := newPodLister(t, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -110,11 +110,18 @@ func TestHandleAddRejectsMissingTenantLabel(t *testing.T) {
 			UID:       "pod-uid-a",
 		},
 	})
-	podNetwork := &fakePodNetwork{}
+	podNetwork := &fakePodNetwork{
+		addResult: podnetwork.Result{
+			IP:              netip.MustParseAddr("10.244.0.10"),
+			HostVethName:    "veth1234",
+			HostVethIfIndex: 42,
+		},
+	}
 	server := newTestServer(t, pods, podNetwork)
 
 	response := server.handleRequest(context.Background(), &wire.Request{
 		Cmd:          wire.CmdADD,
+		CNIVersion:   "1.1.0",
 		ContainerID:  "container-a",
 		NetNS:        "/var/run/netns/pod-a",
 		IfName:       "eth0",
@@ -123,11 +130,64 @@ func TestHandleAddRejectsMissingTenantLabel(t *testing.T) {
 		PodUID:       "pod-uid-a",
 	})
 
-	if response.OK {
-		t.Fatal("expected ADD failure")
+	if !response.OK {
+		t.Fatalf("ADD failed: %s", response.Message)
 	}
-	if podNetwork.addCalls != 0 {
-		t.Fatalf("got %d AddPod calls, want 0", podNetwork.addCalls)
+	if podNetwork.addCalls != 1 {
+		t.Fatalf("got %d AddPod calls, want 1", podNetwork.addCalls)
+	}
+	if podNetwork.addReq.TenantID != tenantmeta.DefaultTenant {
+		t.Fatalf(
+			"got tenant %q, want %q",
+			podNetwork.addReq.TenantID,
+			tenantmeta.DefaultTenant,
+		)
+	}
+}
+
+func TestHandleAddUsesDefaultTenantForKubeSystemPod(t *testing.T) {
+	pods := newPodLister(t, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "kube-system",
+			Name:      "coredns-a",
+			UID:       "coredns-uid-a",
+			Labels: map[string]string{
+				tenantmeta.PodTenantLabel: "tenant-a",
+			},
+		},
+	})
+	podNetwork := &fakePodNetwork{
+		addResult: podnetwork.Result{
+			IP:              netip.MustParseAddr("10.244.0.53"),
+			HostVethName:    "vethdns",
+			HostVethIfIndex: 53,
+		},
+	}
+	server := newTestServer(t, pods, podNetwork)
+
+	response := server.handleRequest(context.Background(), &wire.Request{
+		Cmd:          wire.CmdADD,
+		CNIVersion:   "1.1.0",
+		ContainerID:  "container-dns",
+		NetNS:        "/var/run/netns/coredns-a",
+		IfName:       "eth0",
+		PodNamespace: "kube-system",
+		PodName:      "coredns-a",
+		PodUID:       "coredns-uid-a",
+	})
+
+	if !response.OK {
+		t.Fatalf("ADD failed: %s", response.Message)
+	}
+	if podNetwork.addCalls != 1 {
+		t.Fatalf("got %d AddPod calls, want 1", podNetwork.addCalls)
+	}
+	if podNetwork.addReq.TenantID != tenantmeta.DefaultTenant {
+		t.Fatalf(
+			"got tenant %q, want %q",
+			podNetwork.addReq.TenantID,
+			tenantmeta.DefaultTenant,
+		)
 	}
 }
 

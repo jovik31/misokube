@@ -28,13 +28,25 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 		return c.reconcileDelete(ctx, tenant)
 	}
 
-	// Adding the finalizer changes resourceVersion. Stop here and wait for the
-	// Tenant informer to observe the new object before doing more work.
+	// Adding the finalizer changes resourceVersion. Do not continue with the
+	// stale informer object: fetch the current Tenant and keep reconciling in
+	// this same pass.
 	if !slices.Contains(tenant.Finalizers, tenantFinalizer) {
 		if err := c.ensureFinalizer(ctx, tenant); err != nil {
 			return err
 		}
-		return nil
+
+		tenant, err = c.setera.
+			SeteraV1().
+			Tenants().
+			Get(ctx, tenant.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf(
+				"get tenant %s after adding finalizer: %w",
+				key,
+				err,
+			)
+		}
 	}
 
 	assignment, err := c.reconcileAssignments(
@@ -44,14 +56,6 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 	)
 	if err != nil {
 		return err
-	}
-
-	// Node labels are the assignment source of truth. If we changed any label,
-	// wait for the Node informer to observe those changes. onNodeUpdate will
-	// enqueue the Tenant again and the next reconcile will calculate status
-	// from the observed Node state.
-	if assignment.changed {
-		return nil
 	}
 
 	if err := c.updateTenantStatus(ctx, tenant, assignment); err != nil {
@@ -101,7 +105,17 @@ func (c *Controller) reconcileDelete(
 		)
 	}
 
-	nodes, err := c.nodeLister.List(labels.Everything())
+	// Deletion is uncommon and must be authoritative. Query the API directly
+	// instead of depending on the Node informer cache before removing the
+	// finalizer.
+	nodes, err := c.kube.
+		CoreV1().
+		Nodes().
+		List(ctx, metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(labels.Set{
+				labelKey: "true",
+			}).String(),
+		})
 	if err != nil {
 		return fmt.Errorf(
 			"list nodes for tenant %s cleanup: %w",
@@ -110,12 +124,8 @@ func (c *Controller) reconcileDelete(
 		)
 	}
 
-	changed := false
-
-	for _, node := range nodes {
-		if node.Labels[labelKey] != "true" {
-			continue
-		}
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
 
 		if err := c.patchNodeTenantLabel(
 			ctx,
@@ -125,15 +135,6 @@ func (c *Controller) reconcileDelete(
 		); err != nil {
 			return err
 		}
-
-		changed = true
-	}
-
-	// The Node informer will enqueue reconciliation after observing the label
-	// removals. Only remove the finalizer once no Node still advertises this
-	// Tenant in the informer cache.
-	if changed {
-		return nil
 	}
 
 	return c.removeFinalizer(ctx, tenant)

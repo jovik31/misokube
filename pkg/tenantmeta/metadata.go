@@ -11,6 +11,10 @@ import (
 )
 
 const (
+	// DefaultTenant is the shared tenant used by system Pods and Pods that do
+	// not explicitly declare a tenant.
+	DefaultTenant = "default"
+
 	// PodTenantLabel identifies the tenant that owns a Pod.
 	PodTenantLabel = "setera.com/tenant"
 
@@ -33,6 +37,23 @@ const (
 type VTEP struct {
 	IP  netip.Addr
 	MAC net.HardwareAddr
+}
+
+// ResolvePodTenant returns the effective tenant identity for a Pod.
+//
+// Pods in kube-system always belong to the default tenant, even if they carry
+// an explicit tenant label. Pods outside kube-system use their tenant label
+// when present; unlabeled Pods belong to the default tenant.
+func ResolvePodTenant(namespace string, labels map[string]string) string {
+	if namespace == "kube-system" {
+		return DefaultTenant
+	}
+
+	if tenant := strings.TrimSpace(labels[PodTenantLabel]); tenant != "" {
+		return tenant
+	}
+
+	return DefaultTenant
 }
 
 // NodeTenantLabel returns the Node label key used to represent membership of

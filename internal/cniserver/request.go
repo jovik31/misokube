@@ -53,15 +53,10 @@ func (s *Server) handleAdd(ctx context.Context, req *wire.Request) *wire.Respons
 		))
 	}
 
-	tenantID := pod.Labels[tenantmeta.PodTenantLabel]
-	if tenantID == "" {
-		return failure(fmt.Sprintf(
-			"pod %s/%s is missing tenant label %q",
-			req.PodNamespace,
-			req.PodName,
-			tenantmeta.PodTenantLabel,
-		))
-	}
+	tenantID := tenantmeta.ResolvePodTenant(
+		pod.Namespace,
+		pod.Labels,
+	)
 
 	result, err := s.podNetwork.AddPod(ctx, podnetwork.Request{
 		ContainerID: req.ContainerID,
