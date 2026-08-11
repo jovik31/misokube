@@ -93,7 +93,6 @@ type nodeRouterMapSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type nodeRouterVariableSpecs struct {
-	MyTenant *ebpf.VariableSpec `ebpf:"my_tenant"`
 }
 
 // nodeRouterObjects contains all objects after they have been loaded into the kernel.
@@ -133,7 +132,6 @@ func (m *nodeRouterMaps) Close() error {
 //
 // It can be passed to loadNodeRouterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type nodeRouterVariables struct {
-	MyTenant *ebpf.Variable `ebpf:"my_tenant"`
 }
 
 // nodeRouterPrograms contains all programs after they have been loaded into the kernel.

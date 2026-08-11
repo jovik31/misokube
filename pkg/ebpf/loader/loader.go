@@ -111,16 +111,15 @@ type XDPFirewall struct {
 	rules map[ruleKeyHash]uint32
 }
 
-// TCFirewall manages the Pod TC program lifecycle.
+// TCFirewall manages the Pod TC ingress program lifecycle.
 //
-// It owns the ingress and egress filters it attaches, but it does not own the
-// interface's clsact qdisc. clsact is shared TC infrastructure and may be used
-// by other programs on the same interface.
+// It owns the ingress filter it attaches, but it does not own the interface's
+// clsact qdisc. clsact is shared TC infrastructure and may be used by other
+// programs on the same interface.
 type TCFirewall struct {
 	objs tcFirewallObjects
 
 	ingressFilter *netlink.BpfFilter
-	egressFilter  *netlink.BpfFilter
 
 	iface string
 	rules map[ruleKeyHash]uint32
@@ -129,15 +128,14 @@ type TCFirewall struct {
 	closeErr  error
 }
 
-// NodeRouter manages the node-level TC program lifecycle.
+// NodeRouter manages the node-level TC ingress program lifecycle.
 //
-// Like TCFirewall, it owns only its filters and BPF object handles, not the
-// interface's clsact qdisc.
+// Like TCFirewall, it owns only its ingress filter and BPF object handles, not
+// the interface's clsact qdisc.
 type NodeRouter struct {
 	objs nodeRouterObjects
 
 	ingressFilter *netlink.BpfFilter
-	egressFilter  *netlink.BpfFilter
 
 	iface string
 	rules map[ruleKeyHash]uint32
@@ -437,25 +435,16 @@ func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	return spec.LoadAndAssign(obj, opts)
 }
 
-func loadNodeRouterObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptions, tenant string) error {
+func loadPreparedNodeRouterObjects(
+	obj interface{},
+	opts *ebpf.CollectionOptions,
+) error {
 	spec, err := loadNodeRouter()
 	if err != nil {
 		return err
 	}
 	if err := prepareTcCollectionSpec(spec, "node router", false); err != nil {
 		return err
-	}
-	if tenant != "" {
-		if len(tenant) > 63 {
-			tenant = tenant[:63]
-		}
-		if vs, ok := spec.Variables["my_tenant"]; ok && vs != nil {
-			var t [64]byte
-			copy(t[:], tenant)
-			if err := vs.Set(t); err != nil {
-				return fmt.Errorf("set node router variable my_tenant: %w", err)
-			}
-		}
 	}
 	return spec.LoadAndAssign(obj, opts)
 }
@@ -571,11 +560,15 @@ func (fw *XDPFirewall) Close() error {
 	return fw.objs.Close()
 }
 
-// NewTCFirewall loads and attaches the Pod TC program to the given interface
-// on both ingress and egress.
+// NewTCFirewall loads and attaches the Pod TC program to ingress on the given
+// host-side veth.
 //
-// The returned object owns only the two filters it attaches and its BPF object
-// handles. It deliberately leaves clsact in place on Close.
+// Setera makes all Pod routing/isolation decisions on ingress. No Setera egress
+// program is attached. Any legacy Setera egress filter from an older daemon is
+// removed during attach.
+//
+// The returned object owns only its ingress filter and BPF object handles. It
+// deliberately leaves clsact in place on Close.
 func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) {
 	tcLoadMu.Lock()
 	defer tcLoadMu.Unlock()
@@ -635,6 +628,15 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 		return nil, err
 	}
 
+	if err := deleteNamedTCBpfFilters(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_EGRESS,
+		"setera_tc_egress",
+	); err != nil {
+		objs.Close()
+		return nil, fmt.Errorf("remove legacy Pod TC egress filter: %w", err)
+	}
+
 	ingressFilter := newTCBpfFilter(
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_INGRESS,
@@ -646,47 +648,23 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 		return nil, fmt.Errorf("attach Pod TC ingress: %w", err)
 	}
 
-	egressFilter := newTCBpfFilter(
-		nlLink.Attrs().Index,
-		netlink.HANDLE_MIN_EGRESS,
-		objs.TcFirewallEgress.FD(),
-		"setera_tc_egress",
-	)
-	if err := netlink.FilterReplace(egressFilter); err != nil {
-		cleanupErr := deleteTCFilter(
-			ingressFilter,
-			netlink.FilterDel,
-		)
-		objsErr := objs.Close()
-
-		return nil, errors.Join(
-			fmt.Errorf("attach Pod TC egress: %w", err),
-			wrapTCleanupError(
-				"rollback Pod TC ingress",
-				cleanupErr,
-			),
-			wrapTCleanupError(
-				"close Pod TC objects",
-				objsErr,
-			),
-		)
-	}
-
 	return &TCFirewall{
 		objs:          objs,
 		ingressFilter: ingressFilter,
-		egressFilter:  egressFilter,
 		iface:         ifaceName,
 		rules:         make(map[ruleKeyHash]uint32),
 	}, nil
 }
 
-// NewNodeRouter loads and attaches the node router to the given interface
-// on both ingress and egress.
+// NewNodeRouter loads and attaches the forwarding-only node router to ingress
+// on the given VXLAN interface.
 //
-// The returned object owns only the two filters it attaches and its BPF object
-// handles. It deliberately leaves clsact in place on Close.
-func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) {
+// No Setera node-router egress program is attached. Any legacy Setera node
+// egress filter from an older daemon is removed during attach.
+//
+// The returned object owns only its ingress filter and BPF object handles. It
+// deliberately leaves clsact in place on Close.
+func NewNodeRouter(ifaceName string) (*NodeRouter, error) {
 	tcLoadMu.Lock()
 	defer tcLoadMu.Unlock()
 
@@ -709,15 +687,9 @@ func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) 
 		},
 	}
 
-	tenant := "default"
-	if len(tenantName) > 0 {
-		tenant = tenantName[0]
-	}
-
-	if err := loadNodeRouterObjectsWithTenant(
+	if err := loadPreparedNodeRouterObjects(
 		&objs,
 		opts,
-		tenant,
 	); err != nil {
 		return nil, fmt.Errorf("load node router objects: %w", err)
 	}
@@ -738,6 +710,15 @@ func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) 
 		return nil, err
 	}
 
+	if err := deleteNamedTCBpfFilters(
+		nlLink.Attrs().Index,
+		netlink.HANDLE_MIN_EGRESS,
+		"setera_node_egress",
+	); err != nil {
+		objs.Close()
+		return nil, fmt.Errorf("remove legacy node TC egress filter: %w", err)
+	}
+
 	ingressFilter := newTCBpfFilter(
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_INGRESS,
@@ -749,36 +730,9 @@ func NewNodeRouter(ifaceName string, tenantName ...string) (*NodeRouter, error) 
 		return nil, fmt.Errorf("attach node ingress: %w", err)
 	}
 
-	egressFilter := newTCBpfFilter(
-		nlLink.Attrs().Index,
-		netlink.HANDLE_MIN_EGRESS,
-		objs.TcNodeEgress.FD(),
-		"setera_node_egress",
-	)
-	if err := netlink.FilterReplace(egressFilter); err != nil {
-		cleanupErr := deleteTCFilter(
-			ingressFilter,
-			netlink.FilterDel,
-		)
-		objsErr := objs.Close()
-
-		return nil, errors.Join(
-			fmt.Errorf("attach node egress: %w", err),
-			wrapTCleanupError(
-				"rollback node ingress",
-				cleanupErr,
-			),
-			wrapTCleanupError(
-				"close node router objects",
-				objsErr,
-			),
-		)
-	}
-
 	return &NodeRouter{
 		objs:          objs,
 		ingressFilter: ingressFilter,
-		egressFilter:  egressFilter,
 		iface:         ifaceName,
 		rules:         make(map[ruleKeyHash]uint32),
 	}, nil
@@ -849,6 +803,48 @@ func deleteTCFilter(
 			return nil
 		}
 		return err
+	}
+
+	return nil
+}
+
+// deleteNamedTCBpfFilters removes Setera filters left by older daemon versions.
+// It makes the ingress-only attachment model effective across an in-place
+// daemon upgrade without deleting shared clsact state.
+func deleteNamedTCBpfFilters(
+	linkIndex int,
+	parent uint32,
+	name string,
+) error {
+	nlLink, err := netlink.LinkByIndex(linkIndex)
+	if err != nil {
+		if errors.Is(err, unix.ENODEV) || errors.Is(err, unix.ENOENT) {
+			return nil
+		}
+		return fmt.Errorf("lookup link %d: %w", linkIndex, err)
+	}
+
+	filters, err := netlink.FilterList(nlLink, parent)
+	if err != nil {
+		if errors.Is(err, unix.ENODEV) || errors.Is(err, unix.ENOENT) {
+			return nil
+		}
+		return fmt.Errorf(
+			"list TC filters on ifindex %d parent %#x: %w",
+			linkIndex,
+			parent,
+			err,
+		)
+	}
+
+	for _, filter := range filters {
+		bpfFilter, ok := filter.(*netlink.BpfFilter)
+		if !ok || bpfFilter.Name != name {
+			continue
+		}
+		if err := deleteTCFilter(filter, netlink.FilterDel); err != nil {
+			return fmt.Errorf("delete TC filter %q: %w", name, err)
+		}
 	}
 
 	return nil
@@ -1099,12 +1095,13 @@ func (fw *TCFirewall) GetIngressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 0)
 }
 
-// GetEgressStats returns aggregated egress packet statistics.
+// GetEgressStats is retained for API compatibility. Setera no longer attaches
+// the TC egress program, so this counter normally remains zero.
 func (fw *TCFirewall) GetEgressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 1)
 }
 
-// Close detaches only the Pod TC filters owned by this object and releases
+// Close detaches the Pod TC ingress filter owned by this object and releases
 // its BPF resources. The interface's clsact qdisc is intentionally preserved.
 func (fw *TCFirewall) Close() error {
 	if fw == nil {
@@ -1113,13 +1110,6 @@ func (fw *TCFirewall) Close() error {
 
 	fw.closeOnce.Do(func() {
 		fw.closeErr = errors.Join(
-			wrapTCleanupError(
-				"delete Pod TC egress filter",
-				deleteTCFilter(
-					fw.egressFilter,
-					netlink.FilterDel,
-				),
-			),
 			wrapTCleanupError(
 				"delete Pod TC ingress filter",
 				deleteTCFilter(
@@ -1137,8 +1127,9 @@ func (fw *TCFirewall) Close() error {
 	return fw.closeErr
 }
 
-// Close detaches only the node-router filters owned by this object and releases
-// its BPF resources. The interface's clsact qdisc is intentionally preserved.
+// Close detaches the node-router ingress filter owned by this object and
+// releases its BPF resources. The interface's clsact qdisc is intentionally
+// preserved.
 func (fw *NodeRouter) Close() error {
 	if fw == nil {
 		return nil
@@ -1146,13 +1137,6 @@ func (fw *NodeRouter) Close() error {
 
 	fw.closeOnce.Do(func() {
 		fw.closeErr = errors.Join(
-			wrapTCleanupError(
-				"delete node egress filter",
-				deleteTCFilter(
-					fw.egressFilter,
-					netlink.FilterDel,
-				),
-			),
 			wrapTCleanupError(
 				"delete node ingress filter",
 				deleteTCFilter(

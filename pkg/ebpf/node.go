@@ -20,10 +20,9 @@ type NodeProgram struct {
 	handle nodeProgramHandle
 }
 
-// AttachNodeProgram loads and attaches the Setera node router to ifaceName.
-//
-// The underlying BPF node router uses the default identity so the node-level
-// forwarding path does not apply a single tenant identity to all traffic.
+// AttachNodeProgram loads and attaches the forwarding-only Setera node router
+// to ifaceName. Tenant isolation is enforced at the source Pod veth; the node
+// router only delivers decapsulated traffic to a local Pod.
 func AttachNodeProgram(ifName string) (*NodeProgram, error) {
 	return attachNodeProgram(
 		ifName,

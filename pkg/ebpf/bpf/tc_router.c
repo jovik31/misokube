@@ -13,7 +13,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __uint(max_entries, 2);
-    __type(key, __u32); //IP address
+    __type(key, __u32); // direction index
     __type(value, struct pkt_stats);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_stats SEC(".maps");
@@ -21,8 +21,8 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 256);
-    __type(key, __u32);      // IP address of a pod
-    __type(value, struct veth_tenant); // tenant name + veth ifindex
+    __type(key, __u32);              // Pod IPv4 address
+    __type(value, struct veth_tenant); // tenant + local veth ifindex / remote marker
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_podIDs SEC(".maps");
 
@@ -49,7 +49,7 @@ static __always_inline int is_default_tenant(char *name)
     return 1;
 }
 
-static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb)
+static __always_inline int redirect_offnode_neigh(void)
 {
     __u32 key = 0;
     __u32 *vx_ifindex = bpf_map_lookup_elem(&tc_vxlan_ifindex, &key);
@@ -59,27 +59,23 @@ static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb)
     return bpf_redirect_neigh(*vx_ifindex, NULL, 0, 0);
 }
 
-static __always_inline int redirect_local_peer(struct __sk_buff *skb, __u32 dst_ifindex)
+static __always_inline int redirect_local_peer(__u32 dst_ifindex)
 {
-    (void)skb;
     return bpf_redirect_peer(dst_ifindex, 0);
 }
 
-static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 direction)
+static __always_inline int tc_firewall_core(struct __sk_buff *skb)
 {
     void *data     = (void *)(long)skb->data;
     void *data_end = (void *)(long)skb->data_end;
 
-    // Parse Ethernet header
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end)
         return TC_ACT_OK;
 
-    // Only handle IPv4
     if (eth->h_proto != bpf_htons(ETH_P_IP))
         return TC_ACT_OK;
 
-    // Parse IP header
     struct iphdr *iph = (void *)(eth + 1);
     if ((void *)(iph + 1) > data_end)
         return TC_ACT_OK;
@@ -87,66 +83,56 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
     if (iph->ihl < 5)
         return TC_ACT_OK;
 
-    // Parse L4
-    __u16 src_port = 0, dst_port = 0;
-    if (parse_l4(data, data_end, iph, &src_port, &dst_port) < 0)
-        return TC_ACT_OK;
+    // Current Setera routing/isolation depends only on destination IPv4 and
+    // tenant identity. Avoid parsing TCP/UDP/ICMP on every packet.
 
+    __u32 stats_key = DIR_INGRESS;
     __u32 pkt_len = data_end - data;
-
-    // Update stats
-    struct pkt_stats *stats = bpf_map_lookup_elem(&tc_stats, &direction);
+    struct pkt_stats *stats = bpf_map_lookup_elem(&tc_stats, &stats_key);
     if (stats) {
-        if (direction == DIR_INGRESS) {
-            stats->rx_packets++;
-            stats->rx_bytes += pkt_len;
-        } else {
-            stats->tx_packets++;
-            stats->tx_bytes += pkt_len;
-        }
+        stats->rx_packets++;
+        stats->rx_bytes += pkt_len;
     }
 
-     // Load interface config
-    __u32 cfg_key = 0;
-    struct iface_config *cfg = bpf_map_lookup_elem(&tc_iface_cfg, &cfg_key);
-    int conntrack_enabled = cfg && (cfg->flags & 1);
+    // tc_iface_cfg is intentionally not consulted on the hot path. Its
+    // current conntrack/default-action values do not participate in Setera's
+    // identity routing decision.
 
     struct veth_tenant *dst_info = bpf_map_lookup_elem(&tc_podIDs, &iph->daddr);
+    if (!dst_info)
+        return TC_ACT_OK;
 
-    if (dst_info) {
-        if (!is_default_tenant((char *)my_tenant) && !is_default_tenant(dst_info->tenant)) {
-            for (int i = 0; i < 64; i++) {
-                if (dst_info->tenant[i] != my_tenant[i]) {
-                    if (stats)
-                        stats->dropped++;
-                    return TC_ACT_SHOT;
-                }
-                if (dst_info->tenant[i] == '\0')
-                    break;
+    if (!is_default_tenant((char *)my_tenant) &&
+        !is_default_tenant(dst_info->tenant)) {
+        for (int i = 0; i < 64; i++) {
+            if (dst_info->tenant[i] != my_tenant[i]) {
+                if (stats)
+                    stats->dropped++;
+                return TC_ACT_SHOT;
             }
+            if (dst_info->tenant[i] == '\0')
+                break;
         }
-        if (dst_info->veth_ifindex == (__u32)-1) {
-            return redirect_offnode_neigh(skb);
-        }
-        return redirect_local_peer(skb, dst_info->veth_ifindex);
     }
 
-    return TC_ACT_OK;
+    if (dst_info->veth_ifindex == (__u32)-1)
+        return redirect_offnode_neigh();
 
+    return redirect_local_peer(dst_info->veth_ifindex);
 }
-
 
 SEC("tc/ingress")
 int tc_firewall_ingress(struct __sk_buff *skb)
 {
-    return tc_firewall_core(skb, DIR_INGRESS);
+    return tc_firewall_core(skb);
 }
 
+// Kept in the ELF for compatibility with existing generated bindings, but the
+// loader no longer attaches an egress TC filter. This program therefore has no
+// packet-path cost.
 SEC("tc/egress")
 int tc_firewall_egress(struct __sk_buff *skb)
 {
-    // Routing/isolation decisions are enforced on ingress.
-    // Keeping egress passive avoids veth recirculation artifacts.
     (void)skb;
     return TC_ACT_OK;
 }

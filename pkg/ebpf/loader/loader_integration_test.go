@@ -52,6 +52,9 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 		}
 	}()
 
+	requireSeteraIngressOnly(t, podLink, "setera_tc_ingress")
+	requireSeteraIngressOnly(t, nodeLink, "setera_node_ingress")
+
 	podMapID := requireMapID(t, podProgram.objs.TcPodIDs)
 	nodeMapID := requireMapID(t, nodeProgram.objs.TcPodIDs)
 
@@ -120,6 +123,74 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	requireNoSeteraFilters(t, nodeLink)
 	requireClsact(t, podLink)
 	requireClsact(t, nodeLink)
+}
+
+func requireSeteraIngressOnly(
+	t *testing.T,
+	link netlink.Link,
+	wantIngressName string,
+) {
+	t.Helper()
+
+	ingressFilters, err := netlink.FilterList(
+		link,
+		netlink.HANDLE_MIN_INGRESS,
+	)
+	if err != nil {
+		t.Fatalf(
+			"list ingress filters on %s: %v",
+			link.Attrs().Name,
+			err,
+		)
+	}
+
+	foundIngress := false
+	for _, filter := range ingressFilters {
+		bpfFilter, ok := filter.(*netlink.BpfFilter)
+		if !ok || !strings.HasPrefix(bpfFilter.Name, "setera_") {
+			continue
+		}
+		if bpfFilter.Name != wantIngressName {
+			t.Fatalf(
+				"unexpected Setera ingress filter %q on %s",
+				bpfFilter.Name,
+				link.Attrs().Name,
+			)
+		}
+		foundIngress = true
+	}
+	if !foundIngress {
+		t.Fatalf(
+			"Setera ingress filter %q not attached to %s",
+			wantIngressName,
+			link.Attrs().Name,
+		)
+	}
+
+	egressFilters, err := netlink.FilterList(
+		link,
+		netlink.HANDLE_MIN_EGRESS,
+	)
+	if err != nil {
+		t.Fatalf(
+			"list egress filters on %s: %v",
+			link.Attrs().Name,
+			err,
+		)
+	}
+	for _, filter := range egressFilters {
+		bpfFilter, ok := filter.(*netlink.BpfFilter)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(bpfFilter.Name, "setera_") {
+			t.Fatalf(
+				"Setera egress filter %q unexpectedly attached to %s",
+				bpfFilter.Name,
+				link.Attrs().Name,
+			)
+		}
+	}
 }
 
 func requireNoSeteraFilters(
