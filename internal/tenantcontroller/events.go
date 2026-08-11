@@ -37,7 +37,8 @@ func (c *Controller) onTenantUpdate(oldObj, newObj any) {
 	}
 
 	if oldTenant.Generation != newTenant.Generation ||
-		!reflect.DeepEqual(oldTenant.DeletionTimestamp, newTenant.DeletionTimestamp) {
+		!reflect.DeepEqual(oldTenant.DeletionTimestamp, newTenant.DeletionTimestamp) ||
+		!reflect.DeepEqual(oldTenant.Finalizers, newTenant.Finalizers) {
 		c.enqueueTenant(newTenant)
 	}
 }
@@ -46,6 +47,8 @@ func (c *Controller) onTenantDelete(obj any) {
 	c.enqueueTenant(obj)
 }
 
+// A new Node may satisfy an existing Tenant that was previously short of its
+// requested zone count, so every Tenant must be reconsidered.
 func (c *Controller) onNodeAdd(_ any) {
 	c.enqueueAllTenants()
 }
@@ -57,11 +60,18 @@ func (c *Controller) onNodeUpdate(oldObj, newObj any) {
 		return
 	}
 
+	// Tenant assignment is derived from Node state. Reconcile whenever the
+	// fields that can affect assignment change:
+	//   - schedulability
+	//   - Ready state
+	//   - Setera tenant membership labels
 	if nodeAssignmentStateChanged(oldNode, newNode) {
 		c.enqueueAllTenants()
 	}
 }
 
+// Removing a Node can make an existing Tenant under-assigned, so all Tenants
+// must be reconsidered.
 func (c *Controller) onNodeDelete(_ any) {
 	c.enqueueAllTenants()
 }
@@ -72,11 +82,12 @@ func (c *Controller) enqueueTenant(obj any) {
 		return
 	}
 
-	key, err := cache.MetaNamespaceKeyFunc(tenant)
-	if err != nil || key == "" {
+	// Tenant is cluster-scoped, therefore the queue key is simply its name.
+	if tenant.Name == "" {
 		return
 	}
-	c.queue.Add(key)
+
+	c.queue.Add(tenant.Name)
 }
 
 func (c *Controller) enqueueAllTenants() {
@@ -87,7 +98,10 @@ func (c *Controller) enqueueAllTenants() {
 	}
 
 	for _, tenant := range tenants {
-		c.enqueueTenant(tenant)
+		if tenant == nil || tenant.Name == "" {
+			continue
+		}
+		c.queue.Add(tenant.Name)
 	}
 }
 
@@ -95,9 +109,11 @@ func tenantFromObject(obj any) (*seterav1.Tenant, bool) {
 	switch value := obj.(type) {
 	case *seterav1.Tenant:
 		return value, value != nil
+
 	case cache.DeletedFinalStateUnknown:
 		tenant, ok := value.Obj.(*seterav1.Tenant)
 		return tenant, ok && tenant != nil
+
 	default:
 		return nil, false
 	}
@@ -107,9 +123,11 @@ func nodeFromObject(obj any) (*corev1.Node, bool) {
 	switch value := obj.(type) {
 	case *corev1.Node:
 		return value, value != nil
+
 	case cache.DeletedFinalStateUnknown:
 		node, ok := value.Obj.(*corev1.Node)
 		return node, ok && node != nil
+
 	default:
 		return nil, false
 	}

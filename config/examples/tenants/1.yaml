@@ -1,9 +1,7 @@
 apiVersion: setera.com/v1
 kind: Tenant
 metadata:
-  name: one
+  name: tenant-a
 spec:
-  # logical name of this Tenant
-  name: one
   # number of nodes/zones you want allocated
   zones: 2

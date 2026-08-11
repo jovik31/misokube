@@ -20,22 +20,13 @@ package v1
 // TenantSpecApplyConfiguration represents a declarative configuration of the TenantSpec type for use
 // with apply.
 type TenantSpecApplyConfiguration struct {
-	Name  *string `json:"name,omitempty"`
-	Zones *int    `json:"zones,omitempty"`
+	Zones *int `json:"zones,omitempty"`
 }
 
 // TenantSpecApplyConfiguration constructs a declarative configuration of the TenantSpec type for use with
 // apply.
 func TenantSpec() *TenantSpecApplyConfiguration {
 	return &TenantSpecApplyConfiguration{}
-}
-
-// WithName sets the Name field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Name field is set to the value of the last call.
-func (b *TenantSpecApplyConfiguration) WithName(value string) *TenantSpecApplyConfiguration {
-	b.Name = &value
-	return b
 }
 
 // WithZones sets the Zones field in the declarative configuration to the given value

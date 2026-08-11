@@ -28,13 +28,30 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 		return c.reconcileDelete(ctx, tenant)
 	}
 
-	if err := c.ensureFinalizer(ctx, tenant); err != nil {
+	// Adding the finalizer changes resourceVersion. Stop here and wait for the
+	// Tenant informer to observe the new object before doing more work.
+	if !slices.Contains(tenant.Finalizers, tenantFinalizer) {
+		if err := c.ensureFinalizer(ctx, tenant); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	assignment, err := c.reconcileAssignments(
+		ctx,
+		tenant.Name,
+		tenant.Spec.Zones,
+	)
+	if err != nil {
 		return err
 	}
 
-	assignment, err := c.reconcileAssignments(ctx, tenant.Name, tenant.Spec.Zones)
-	if err != nil {
-		return err
+	// Node labels are the assignment source of truth. If we changed any label,
+	// wait for the Node informer to observe those changes. onNodeUpdate will
+	// enqueue the Tenant again and the next reconcile will calculate status
+	// from the observed Node state.
+	if assignment.changed {
+		return nil
 	}
 
 	if err := c.updateTenantStatus(ctx, tenant, assignment); err != nil {
@@ -48,14 +65,21 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *Controller) reconcileDelete(ctx context.Context, tenant *seterav1.Tenant) error {
+func (c *Controller) reconcileDelete(
+	ctx context.Context,
+	tenant *seterav1.Tenant,
+) error {
 	if !slices.Contains(tenant.Finalizers, tenantFinalizer) {
 		return nil
 	}
 
 	activeNodes, err := c.pods.ActiveTenantPodNodes(ctx, tenant.Name)
 	if err != nil {
-		return fmt.Errorf("list active pods for tenant %s: %w", tenant.Name, err)
+		return fmt.Errorf(
+			"list active pods for tenant %s: %w",
+			tenant.Name,
+			err,
+		)
 	}
 
 	if len(activeNodes) != 0 {
@@ -70,13 +94,23 @@ func (c *Controller) reconcileDelete(ctx context.Context, tenant *seterav1.Tenan
 
 	labelKey, err := tenantmeta.NodeTenantLabel(tenant.Name)
 	if err != nil {
-		return fmt.Errorf("build tenant label for %s: %w", tenant.Name, err)
+		return fmt.Errorf(
+			"build tenant label for %s: %w",
+			tenant.Name,
+			err,
+		)
 	}
 
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("list nodes for tenant %s cleanup: %w", tenant.Name, err)
+		return fmt.Errorf(
+			"list nodes for tenant %s cleanup: %w",
+			tenant.Name,
+			err,
+		)
 	}
+
+	changed := false
 
 	for _, node := range nodes {
 		if node.Labels[labelKey] != "true" {
@@ -91,6 +125,15 @@ func (c *Controller) reconcileDelete(ctx context.Context, tenant *seterav1.Tenan
 		); err != nil {
 			return err
 		}
+
+		changed = true
+	}
+
+	// The Node informer will enqueue reconciliation after observing the label
+	// removals. Only remove the finalizer once no Node still advertises this
+	// Tenant in the informer cache.
+	if changed {
+		return nil
 	}
 
 	return c.removeFinalizer(ctx, tenant)
@@ -122,6 +165,7 @@ func (c *Controller) removeFinalizer(
 		if finalizer == tenantFinalizer {
 			continue
 		}
+
 		finalizers = append(finalizers, finalizer)
 	}
 

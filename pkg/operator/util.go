@@ -36,23 +36,6 @@ func IsFinalizerRvUpdate_tenant(old, new *seterav1.Tenant) bool {
 	return equality.Semantic.DeepEqual(oldCopy, newCopy)
 
 }
-
-func IsFinalizerRvUpdate_nodestore(old, new *seterav1.NodeStore) bool {
-
-	// Check if only finalizers are updated
-	oldCopy := old.DeepCopy()
-	newCopy := new.DeepCopy()
-
-	// remove the finalizers for comparison
-	oldCopy.Finalizers = nil
-	newCopy.Finalizers = nil
-
-	oldCopy.ObjectMeta.ResourceVersion = ""
-	newCopy.ObjectMeta.ResourceVersion = ""
-
-	return equality.Semantic.DeepEqual(oldCopy, newCopy)
-}
-
 func RemoveIndex[T comparable](slice []T, val T) []T {
 	idx := -1
 	for i, v := range slice {

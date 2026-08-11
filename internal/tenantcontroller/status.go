@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 )
 
 const assignedCondition = "Assigned"
@@ -20,44 +21,61 @@ func (c *Controller) updateTenantStatus(
 	tenant *seterav1.Tenant,
 	assignment assignmentResult,
 ) error {
-	mod := tenant.DeepCopy()
-	mod.Status.AssignedNodes = assignedNodeNames(assignment.nodes)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := c.setera.
+			SeteraV1().
+			Tenants().
+			Get(ctx, tenant.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get current tenant %s: %w", tenant.Name, err)
+		}
 
-	status := metav1.ConditionFalse
-	message := fmt.Sprintf(
-		"tenant is assigned to %d of %d requested nodes",
-		len(assignment.nodes),
-		tenant.Spec.Zones,
-	)
+		// The desired state changed while this reconciliation was running.
+		// Do not write status calculated from the old generation. The informer
+		// will enqueue the new generation for a fresh reconciliation.
+		if current.Generation != tenant.Generation {
+			return nil
+		}
 
-	if assignment.ready {
-		status = metav1.ConditionTrue
-		message = fmt.Sprintf(
-			"tenant is assigned to %d nodes",
+		mod := current.DeepCopy()
+		mod.Status.AssignedNodes = assignedNodeNames(assignment.nodes)
+
+		status := metav1.ConditionFalse
+		message := fmt.Sprintf(
+			"tenant is assigned to %d of %d requested nodes",
 			len(assignment.nodes),
+			current.Spec.Zones,
 		)
-	}
 
-	apimeta.SetStatusCondition(&mod.Status.Conditions, metav1.Condition{
-		Type:               assignedCondition,
-		Status:             status,
-		ObservedGeneration: tenant.Generation,
-		Reason:             assignment.reason,
-		Message:            message,
-	})
+		if assignment.ready {
+			status = metav1.ConditionTrue
+			message = fmt.Sprintf(
+				"tenant is assigned to %d nodes",
+				len(assignment.nodes),
+			)
+		}
 
-	if reflect.DeepEqual(tenant.Status, mod.Status) {
+		apimeta.SetStatusCondition(&mod.Status.Conditions, metav1.Condition{
+			Type:               assignedCondition,
+			Status:             status,
+			ObservedGeneration: current.Generation,
+			Reason:             assignment.reason,
+			Message:            message,
+		})
+
+		if reflect.DeepEqual(current.Status, mod.Status) {
+			return nil
+		}
+
+		if _, err := c.setera.
+			SeteraV1().
+			Tenants().
+			UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+
 		return nil
-	}
-
-	if _, err := c.setera.
-		SeteraV1().
-		Tenants().
-		UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update tenant %s status: %w", tenant.Name, err)
-	}
-
-	return nil
+	})
 }
 
 func assignedNodeNames(nodes []*corev1.Node) []string {

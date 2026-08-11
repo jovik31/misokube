@@ -29,7 +29,7 @@ func (ws *WebhookServer) validatePod(admissionRequest *admissionv1.AdmissionRequ
 	}
 
 	// Fetch tenant list, since tenants are cluster scoped we use "" as the namespace
-	tenantList, err := ws.seterav1Clientset.SeteraV1().Tenants("").List(context.TODO(), metav1.ListOptions{})
+	tenantList, err := ws.seterav1Clientset.SeteraV1().Tenants().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.Info(fmt.Printf("Error in fetching tenant list: %v", err))
 

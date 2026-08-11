@@ -15,7 +15,6 @@ import (
 // +kubebuilder:resource:shortName=tn
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="oldSelf == null || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
 // Tenant is a specification for a Tenant resource
 type Tenant struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -26,9 +25,6 @@ type Tenant struct {
 }
 
 type TenantSpec struct {
-
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"` //Tenant Name
 
 	// +kubebuilder:validation:Minimum=1
 	Zones int `json:"zones"` //Number of nodes where the tenant is to be deployed
