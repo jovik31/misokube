@@ -18,8 +18,7 @@ var (
 	// veth that Setera created for the Pod.
 	ErrPodVethNotFound = errors.New("network: Pod veth not found")
 
-	routeListFiltered = netlink.RouteListFiltered
-	linkByIndex       = netlink.LinkByIndex
+	linkByIndex = netlink.LinkByIndex
 )
 
 // FindPodVeth rediscovers the host side of an existing local Pod veth from the

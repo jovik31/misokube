@@ -147,9 +147,8 @@ func TestSetupVethReturnsHostIfIndex(t *testing.T) {
 		return nil
 	}
 
-	var hostAddress string
-	addrReplace = func(_ netlink.Link, addr *netlink.Addr) error {
-		hostAddress = addr.IPNet.String()
+	addrReplace = func(_ netlink.Link, _ *netlink.Addr) error {
+		t.Fatal("host veth must not receive an IPv4 address")
 		return nil
 	}
 
@@ -198,9 +197,6 @@ func TestSetupVethReturnsHostIfIndex(t *testing.T) {
 	}
 	if podAddress != "10.244.0.10/32" {
 		t.Fatalf("pod address = %s, want 10.244.0.10/32", podAddress)
-	}
-	if hostAddress != "169.254.1.1/32" {
-		t.Fatalf("host address = %s, want 169.254.1.1/32", hostAddress)
 	}
 	if len(routes) != 3 {
 		t.Fatalf("route count = %d, want 3", len(routes))

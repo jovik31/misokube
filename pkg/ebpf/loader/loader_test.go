@@ -25,6 +25,26 @@ func TestTcPodIDsGoValueSizeMatchesBPFMapValueSize(t *testing.T) {
 	}
 }
 
+func TestTcRouterDeclaresSharedVXLANIfIndexMap(t *testing.T) {
+	spec, err := loadTcFirewall()
+	if err != nil {
+		t.Fatalf("load TC router spec: %v", err)
+	}
+
+	got := spec.Maps["tc_vxlan_ifindex"]
+	if got == nil {
+		t.Fatal("TC router does not declare tc_vxlan_ifindex")
+	}
+	want := tcVXLANIfIndexMapSpec()
+	if got.Type != want.Type ||
+		got.KeySize != want.KeySize ||
+		got.ValueSize != want.ValueSize ||
+		got.MaxEntries != want.MaxEntries ||
+		got.Flags != want.Flags {
+		t.Fatalf("tc_vxlan_ifindex = %s, want %s", got, want)
+	}
+}
+
 func TestTcProgramsDeclareCompatibleSharedPodMap(t *testing.T) {
 	tcSpec, err := loadTcFirewall()
 	if err != nil {
@@ -68,12 +88,13 @@ func TestEnsureTcPodIDsSpecDisablesELFPinning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := prepareTcCollectionSpec(spec, "tc router"); err != nil {
+	if err := prepareTcCollectionSpec(spec, "tc router", true); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, name := range []string{
 		"tc_podIDs",
+		"tc_vxlan_ifindex",
 		"tc_iface_cfg",
 		"tc_stats",
 	} {

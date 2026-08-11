@@ -15,6 +15,10 @@ var (
 	ErrInvalidConfig     = errors.New("podnetwork: invalid config")
 	ErrInvalidRequest    = errors.New("podnetwork: invalid request")
 	ErrAllocationMissing = errors.New("podnetwork: allocation not found")
+
+	// podLinkGateway is a synthetic next-hop visible only inside each Pod
+	// network namespace. The host veth does not own this address.
+	podLinkGateway = netip.MustParseAddr("169.254.1.1")
 )
 
 // nodeIPAM is the part of NodeIPAM used by the pod network configurator.
@@ -53,8 +57,8 @@ type Configurator struct {
 	network  networkOps
 	datapath localDatapath
 
-	hostGateway netip.Addr
-	mtu         int
+	podGateway netip.Addr
+	mtu        int
 }
 
 // New creates a local pod network configurator.
@@ -62,7 +66,6 @@ func New(
 	ipam nodeIPAM,
 	network networkOps,
 	datapath localDatapath,
-	hostGateway netip.Addr,
 	mtu int,
 ) (*Configurator, error) {
 	if ipam == nil {
@@ -74,19 +77,16 @@ func New(
 	if datapath == nil {
 		return nil, fmt.Errorf("%w: datapath is nil", ErrInvalidDependency)
 	}
-	if !hostGateway.IsValid() || !hostGateway.Is4() || hostGateway.IsUnspecified() {
-		return nil, fmt.Errorf("%w: invalid IPv4 host gateway %s", ErrInvalidConfig, hostGateway)
-	}
 	if mtu <= 0 {
 		return nil, fmt.Errorf("%w: invalid MTU %d", ErrInvalidConfig, mtu)
 	}
 
 	return &Configurator{
-		ipam:        ipam,
-		network:     network,
-		datapath:    datapath,
-		hostGateway: hostGateway.Unmap(),
-		mtu:         mtu,
+		ipam:       ipam,
+		network:    network,
+		datapath:   datapath,
+		podGateway: podLinkGateway,
+		mtu:        mtu,
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func (c *Configurator) AddPod(ctx context.Context, req Request) (Result, error) 
 		req.NetNS,
 		req.IfName,
 		allocation.IP,
-		c.hostGateway,
+		c.podGateway,
 		c.mtu,
 	)
 	if err != nil {
@@ -149,7 +149,7 @@ func (c *Configurator) AddPod(ctx context.Context, req Request) (Result, error) 
 
 	return Result{
 		IP:              allocation.IP,
-		Gateway:         c.hostGateway,
+		Gateway:         c.podGateway,
 		HostVethName:    veth.HostName,
 		HostVethIfIndex: veth.HostIfIndex,
 	}, nil

@@ -40,9 +40,8 @@ func TestNodeIPv4PodCIDRFallsBackToPodCIDR(t *testing.T) {
 
 func TestReservedNodeAddresses(t *testing.T) {
 	prefix := netip.MustParsePrefix("10.244.1.0/24")
-	gateway := netip.MustParseAddr("10.244.1.1")
 
-	got := reservedNodeAddresses(prefix, gateway)
+	got := reservedNodeAddresses(prefix)
 	set := make(map[netip.Addr]struct{}, len(got))
 	for _, addr := range got {
 		set[addr] = struct{}{}
@@ -59,15 +58,16 @@ func TestReservedNodeAddresses(t *testing.T) {
 	}
 }
 
-func TestReservedNodeAddressesDoesNotReserveExternalGateway(t *testing.T) {
+func TestReservedNodeAddressesAlwaysReservesVTEP(t *testing.T) {
 	got := reservedNodeAddresses(
 		netip.MustParsePrefix("10.244.1.0/24"),
-		netip.MustParseAddr("169.254.1.1"),
 	)
 
+	want := netip.MustParseAddr("10.244.1.1")
 	for _, addr := range got {
-		if addr == netip.MustParseAddr("169.254.1.1") {
-			t.Fatal("external gateway was incorrectly reserved in PodCIDR")
+		if addr == want {
+			return
 		}
 	}
+	t.Fatalf("reserved addresses %v do not contain VTEP %s", got, want)
 }

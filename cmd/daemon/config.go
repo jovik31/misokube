@@ -11,20 +11,18 @@ import (
 )
 
 const (
-	defaultSocketPath  = "/var/run/setera/setera.sock"
-	defaultStateDir    = "/var/lib/cni/tenantcni/ipam"
-	defaultHostGateway = "169.254.1.1"
-	defaultMTU         = 1500
+	defaultSocketPath = "/var/run/setera/setera.sock"
+	defaultStateDir   = "/var/lib/cni/tenantcni/ipam"
+	defaultMTU        = 1450
 )
 
 type config struct {
 	kubeconfig string
 	nodeName   string
 
-	socketPath  string
-	stateDir    string
-	hostGateway string
-	mtu         int
+	socketPath string
+	stateDir   string
+	mtu        int
 
 	// Optional for now. When set, the daemon installs Pod egress
 	// masquerading for traffic leaving the cluster-wide Pod CIDR.
@@ -60,17 +58,11 @@ func parseConfig() config {
 		defaultStateDir,
 		"node-local durable IPAM state directory",
 	)
-	flag.StringVar(
-		&cfg.hostGateway,
-		"host-gateway",
-		defaultHostGateway,
-		"IPv4 gateway address presented to Pod veth interfaces",
-	)
 	flag.IntVar(
 		&cfg.mtu,
 		"mtu",
 		defaultMTU,
-		"Pod veth MTU",
+		"Pod veth and VXLAN MTU",
 	)
 	flag.StringVar(
 		&cfg.clusterPodCIDR,

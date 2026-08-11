@@ -26,6 +26,14 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_podIDs SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u32); // node-wide VXLAN ifindex
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} tc_vxlan_ifindex SEC(".maps");
+
 static __always_inline int is_default_tenant(char *name)
 {
     if (!name)
@@ -41,30 +49,14 @@ static __always_inline int is_default_tenant(char *name)
     return 1;
 }
 
-static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb, struct iphdr *iph)
+static __always_inline int redirect_offnode_neigh(struct __sk_buff *skb)
 {
-    struct bpf_fib_lookup fib = {};
+    __u32 key = 0;
+    __u32 *vx_ifindex = bpf_map_lookup_elem(&tc_vxlan_ifindex, &key);
+    if (!vx_ifindex || *vx_ifindex == 0)
+        return TC_ACT_SHOT;
 
-    fib.family = 2; // AF_INET
-    // Let the kernel select the egress device for this destination.
-    fib.ifindex = 0;
-    // Let kernel routing choose the egress source address for lookup.
-    // With direct-veth /32 pod addressing, using pod IP here can make
-    // FIB resolution fail as "network unreachable".
-    fib.ipv4_src = 0;
-    fib.ipv4_dst = iph->daddr;
-    fib.tos = iph->tos;
-    fib.l4_protocol = iph->protocol;
-    fib.tot_len = bpf_ntohs(iph->tot_len);
-
-    long rc = bpf_fib_lookup(skb, &fib, sizeof(fib), 0);
-    if (rc == BPF_FIB_LKUP_RET_SUCCESS) {
-        return bpf_redirect_neigh(fib.ifindex, NULL, 0, 0);
-    }
-
-    // Fall back to the kernel routing/bridge path when FIB lookup cannot
-    // resolve directly in BPF (e.g. unresolved neighbor while control-plane converges).
-    return TC_ACT_OK;
+    return bpf_redirect_neigh(*vx_ifindex, NULL, 0, 0);
 }
 
 static __always_inline int redirect_local_peer(struct __sk_buff *skb, __u32 dst_ifindex)
@@ -134,7 +126,7 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb, __u32 directi
             }
         }
         if (dst_info->veth_ifindex == (__u32)-1) {
-            return redirect_offnode_neigh(skb, iph);
+            return redirect_offnode_neigh(skb);
         }
         return redirect_local_peer(skb, dst_info->veth_ifindex);
     }

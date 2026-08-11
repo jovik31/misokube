@@ -10,6 +10,8 @@ import (
 	"github/setera/internal/cniserver"
 	"github/setera/internal/ebpfmanager"
 	"github/setera/internal/nodeipam"
+	"github/setera/internal/noderouting"
+	"github/setera/internal/nodewatcher"
 	"github/setera/internal/podnetwork"
 	"github/setera/internal/podwatcher"
 	"github/setera/pkg/ipam/bitmap"
@@ -37,15 +39,6 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		return fmt.Errorf("invalid MTU %d", cfg.mtu)
 	}
 
-	hostGateway, err := netip.ParseAddr(cfg.hostGateway)
-	if err != nil {
-		return fmt.Errorf("parse host gateway %q: %w", cfg.hostGateway, err)
-	}
-	hostGateway = hostGateway.Unmap()
-	if !hostGateway.Is4() || hostGateway.IsUnspecified() {
-		return fmt.Errorf("invalid IPv4 host gateway %s", hostGateway)
-	}
-
 	restConfig, err := buildRESTConfig(cfg)
 	if err != nil {
 		return err
@@ -69,11 +62,14 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if _, err := noderouting.VTEPAddress(nodePodCIDR); err != nil {
+		return fmt.Errorf("derive local VTEP address: %w", err)
+	}
 
 	allocator, err := bitmap.New(
 		nodePodCIDR,
 		bitmap.WithReserved(
-			reservedNodeAddresses(nodePodCIDR, hostGateway)...,
+			reservedNodeAddresses(nodePodCIDR)...,
 		),
 	)
 	if err != nil {
@@ -130,7 +126,6 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		ipam,
 		networkOps,
 		datapath,
-		hostGateway,
 		cfg.mtu,
 	)
 	if err != nil {
@@ -151,6 +146,14 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		"missingVeth", recovery.MissingVeth,
 	)
 
+	nodeRouting, err := noderouting.New(
+		networkOps,
+		noderouting.DefaultConfig(cfg.mtu),
+	)
+	if err != nil {
+		return fmt.Errorf("create node routing: %w", err)
+	}
+
 	coreFactory := informers.NewSharedInformerFactory(
 		kubeClient,
 		cfg.resyncPeriod,
@@ -158,7 +161,7 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	podInformer := coreFactory.Core().V1().Pods()
 	nodeInformer := coreFactory.Core().V1().Nodes()
 
-	remoteWatcher, err := podwatcher.New(
+	remotePodWatcher, err := podwatcher.New(
 		logger,
 		cfg.nodeName,
 		podInformer.Informer(),
@@ -169,6 +172,19 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	)
 	if err != nil {
 		return fmt.Errorf("create Pod watcher: %w", err)
+	}
+
+	routingWatcher, err := nodewatcher.New(
+		logger,
+		cfg.nodeName,
+		nodePodCIDR,
+		nodeInformer.Informer(),
+		nodeInformer.Lister(),
+		kubeClient.CoreV1().Nodes(),
+		nodeRouting,
+	)
+	if err != nil {
+		return fmt.Errorf("create Node watcher: %w", err)
 	}
 
 	cniServer, err := cniserver.New(
@@ -184,28 +200,53 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// podwatcher.New requested the Pod and Node informers and registered its
-	// handlers before the factory starts.
+	// Both watchers registered their handlers before the shared informer
+	// factory starts.
 	coreFactory.Start(runCtx.Done())
 
-	watcherErr := make(chan error, 1)
+	podWatcherErr := make(chan error, 1)
 	go func() {
-		watcherErr <- remoteWatcher.Run(runCtx)
+		podWatcherErr <- remotePodWatcher.Run(runCtx)
 	}()
 
-	// Do not expose the CNI socket until informer caches are synchronized and
-	// the remote portion of tc_podIDs has completed its authoritative startup
-	// reconciliation.
-	select {
-	case <-remoteWatcher.Ready():
-		logger.Info("remote Pod state reconciled")
-	case err := <-watcherErr:
-		if err == nil && runCtx.Err() != nil {
+	nodeWatcherErr := make(chan error, 1)
+	go func() {
+		nodeWatcherErr <- routingWatcher.Run(runCtx)
+	}()
+
+	// Do not expose the CNI socket until both identity state and node routing
+	// have completed their authoritative startup reconciliation.
+	podReady := false
+	nodeReady := false
+	for !podReady || !nodeReady {
+		select {
+		case <-remotePodWatcher.Ready():
+			if !podReady {
+				podReady = true
+				logger.Info("remote Pod state reconciled")
+			}
+
+		case <-routingWatcher.Ready():
+			if !nodeReady {
+				nodeReady = true
+				logger.Info("node routing reconciled")
+			}
+
+		case err := <-podWatcherErr:
+			if err == nil && runCtx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("Pod watcher stopped before readiness: %w", err)
+
+		case err := <-nodeWatcherErr:
+			if err == nil && runCtx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("Node watcher stopped before readiness: %w", err)
+
+		case <-runCtx.Done():
 			return nil
 		}
-		return fmt.Errorf("Pod watcher stopped before readiness: %w", err)
-	case <-runCtx.Done():
-		return nil
 	}
 
 	cniErr := make(chan error, 1)
@@ -213,10 +254,12 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		cniErr <- cniServer.Run(runCtx)
 	}()
 
+	vtep, _ := noderouting.VTEPAddress(nodePodCIDR)
 	logger.Info(
 		"daemon started",
 		"node", cfg.nodeName,
 		"podCIDR", nodePodCIDR.String(),
+		"vtepIP", vtep.String(),
 		"socket", cfg.socketPath,
 	)
 	defer logger.Info("daemon stopped", "node", cfg.nodeName)
@@ -225,7 +268,7 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	case <-runCtx.Done():
 		return nil
 
-	case err := <-watcherErr:
+	case err := <-podWatcherErr:
 		cancel()
 		if err == nil || errors.Is(err, context.Canceled) {
 			if ctx.Err() != nil {
@@ -234,6 +277,16 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 			return fmt.Errorf("Pod watcher stopped unexpectedly")
 		}
 		return fmt.Errorf("Pod watcher stopped: %w", err)
+
+	case err := <-nodeWatcherErr:
+		cancel()
+		if err == nil || errors.Is(err, context.Canceled) {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("Node watcher stopped unexpectedly")
+		}
+		return fmt.Errorf("Node watcher stopped: %w", err)
 
 	case err := <-cniErr:
 		cancel()
@@ -284,22 +337,18 @@ func nodeIPv4PodCIDR(node *corev1.Node) (netip.Prefix, error) {
 	)
 }
 
-func reservedNodeAddresses(
-	prefix netip.Prefix,
-	hostGateway netip.Addr,
-) []netip.Addr {
+func reservedNodeAddresses(prefix netip.Prefix) []netip.Addr {
 	prefix = prefix.Masked()
 	if !prefix.IsValid() || !prefix.Addr().Is4() {
 		return nil
 	}
 
-	reserved := make(map[netip.Addr]struct{}, 3)
+	reserved := make(map[netip.Addr]struct{}, 4)
 	reserved[prefix.Addr()] = struct{}{}
 	reserved[ipv4LastAddr(prefix)] = struct{}{}
 
-	hostGateway = hostGateway.Unmap()
-	if hostGateway.Is4() && prefix.Contains(hostGateway) {
-		reserved[hostGateway] = struct{}{}
+	if vtep, err := noderouting.VTEPAddress(prefix); err == nil {
+		reserved[vtep.Addr()] = struct{}{}
 	}
 
 	out := make([]netip.Addr, 0, len(reserved))

@@ -45,13 +45,17 @@ var (
 //   - is named ifName;
 //   - receives podIP/32;
 //   - receives an on-link route to gateway;
+//   - receives a permanent gateway neighbor pointing at the host-veth MAC;
 //   - receives a default route through gateway.
 //
 // The host side:
 //   - stays in the host network namespace;
-//   - receives gateway/32;
-//   - receives a host route to podIP;
+//   - has no IPv4 address;
+//   - receives a host route to podIP for host reachability and restart recovery;
 //   - is returned with its host-side ifindex for datapath attachment.
+//
+// The gateway is synthetic. It exists only as a Pod-side route/neighbor
+// next-hop and is never assigned to the host veth.
 func (n *Linux) SetupVeth(
 	netnsPath string,
 	ifName string,
@@ -136,10 +140,6 @@ func (n *Linux) SetupVeth(
 		return Veth{}, cleanupVeth(hostName, fmt.Errorf("set host veth MTU: %w", err))
 	}
 
-	if err := addrReplace(hostLink, &netlink.Addr{IPNet: gatewayNet}); err != nil {
-		return Veth{}, cleanupVeth(hostName, fmt.Errorf("set host gateway %s: %w", gateway, err))
-	}
-
 	if err := linkSetUp(hostLink); err != nil {
 		return Veth{}, cleanupVeth(hostName, fmt.Errorf("bring host veth up: %w", err))
 	}
@@ -152,28 +152,32 @@ func (n *Linux) SetupVeth(
 		return Veth{}, cleanupVeth(hostName, fmt.Errorf("set host route to pod %s: %w", podIP, err))
 	}
 
-	if len(hostLink.Attrs().HardwareAddr) > 0 {
-		hostMAC := append(net.HardwareAddr(nil), hostLink.Attrs().HardwareAddr...)
+	if len(hostLink.Attrs().HardwareAddr) == 0 {
+		return Veth{}, cleanupVeth(
+			hostName,
+			fmt.Errorf("host veth %q has no MAC address for synthetic gateway neighbor", hostName),
+		)
+	}
+	hostMAC := append(net.HardwareAddr(nil), hostLink.Attrs().HardwareAddr...)
 
-		if err := netnsHandle.Do(func(_ ns.NetNS) error {
-			containerLink, err := linkByName(ifName)
-			if err != nil {
-				return fmt.Errorf("lookup container veth %q for neighbor: %w", ifName, err)
-			}
-
-			if err := neighborSet(&netlink.Neigh{
-				LinkIndex:    containerLink.Attrs().Index,
-				IP:           addrToNetIP(gateway),
-				HardwareAddr: hostMAC,
-				State:        netlink.NUD_PERMANENT,
-			}); err != nil {
-				return fmt.Errorf("set static gateway neighbor %s: %w", gateway, err)
-			}
-
-			return nil
-		}); err != nil {
-			return Veth{}, cleanupVeth(hostName, err)
+	if err := netnsHandle.Do(func(_ ns.NetNS) error {
+		containerLink, err := linkByName(ifName)
+		if err != nil {
+			return fmt.Errorf("lookup container veth %q for neighbor: %w", ifName, err)
 		}
+
+		if err := neighborSet(&netlink.Neigh{
+			LinkIndex:    containerLink.Attrs().Index,
+			IP:           addrToNetIP(gateway),
+			HardwareAddr: hostMAC,
+			State:        netlink.NUD_PERMANENT,
+		}); err != nil {
+			return fmt.Errorf("set static gateway neighbor %s: %w", gateway, err)
+		}
+
+		return nil
+	}); err != nil {
+		return Veth{}, cleanupVeth(hostName, err)
 	}
 
 	return Veth{

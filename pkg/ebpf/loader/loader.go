@@ -16,14 +16,15 @@ import (
 
 // Action constants matching the BPF program defines.
 const (
-	tcPinRoot                 = "/sys/fs/bpf/setera/tc"
-	tcPodIDsMapPath           = tcPinRoot + "/tc_podIDs"
-	tcPodIDsMaxEntries uint32 = 256
-	ActionDrop         uint32 = 0
-	ActionAllow        uint32 = 1
-	ActionLog          uint32 = 2
-	tcFlagConntrack    uint32 = 1 << 0
-	tcPodIDsValueSize  uint32 = 68
+	tcPinRoot                    = "/sys/fs/bpf/setera/tc"
+	tcPodIDsMapPath              = tcPinRoot + "/tc_podIDs"
+	tcVXLANIfIndexMapPath        = tcPinRoot + "/tc_vxlan_ifindex"
+	tcPodIDsMaxEntries    uint32 = 256
+	ActionDrop            uint32 = 0
+	ActionAllow           uint32 = 1
+	ActionLog             uint32 = 2
+	tcFlagConntrack       uint32 = 1 << 0
+	tcPodIDsValueSize     uint32 = 68
 )
 
 type tcPodIDValue struct {
@@ -157,11 +158,25 @@ func tcPodIDsMapSpec() *ebpf.MapSpec {
 	}
 }
 
-// prepareTcCollectionSpec validates the one node-wide shared map and makes
-// all other TC maps private to the loaded program instance.
+func tcVXLANIfIndexMapSpec() *ebpf.MapSpec {
+	return &ebpf.MapSpec{
+		// Kernel BPF object names are shorter than our descriptive bpffs pin
+		// path. Map replacement is keyed by the ELF symbol, not this kernel
+		// object name.
+		Name:       "tc_vxlan_ifidx",
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}
+}
+
+// prepareTcCollectionSpec validates the node-wide shared maps used by the TC
+// datapath and keeps program-instance maps private to each loaded program.
 func prepareTcCollectionSpec(
 	spec *ebpf.CollectionSpec,
 	programName string,
+	requireVXLANIfIndex bool,
 ) error {
 	mapSpec, ok := spec.Maps["tc_podIDs"]
 	if !ok || mapSpec == nil {
@@ -189,6 +204,29 @@ func prepareTcCollectionSpec(
 	// ELF's pin-by-name behavior for this map so there is exactly one
 	// ownership path for the shared map.
 	mapSpec.Pinning = ebpf.PinNone
+
+	if requireVXLANIfIndex {
+		vxlanMapSpec, ok := spec.Maps["tc_vxlan_ifindex"]
+		if !ok || vxlanMapSpec == nil {
+			return fmt.Errorf("%s: tc_vxlan_ifindex map is missing from collection spec", programName)
+		}
+
+		wantVXLAN := tcVXLANIfIndexMapSpec()
+		if vxlanMapSpec.Type != wantVXLAN.Type ||
+			vxlanMapSpec.KeySize != wantVXLAN.KeySize ||
+			vxlanMapSpec.ValueSize != wantVXLAN.ValueSize ||
+			vxlanMapSpec.MaxEntries != wantVXLAN.MaxEntries ||
+			vxlanMapSpec.Flags != wantVXLAN.Flags {
+			return fmt.Errorf(
+				"%s: tc_vxlan_ifindex map is incompatible: got %s, want %s",
+				programName,
+				vxlanMapSpec,
+				wantVXLAN,
+			)
+		}
+
+		vxlanMapSpec.Pinning = ebpf.PinNone
+	}
 
 	// These maps are program-instance state. Do not let their ELF
 	// LIBBPF_PIN_BY_NAME declarations accidentally make them node-global.
@@ -275,6 +313,70 @@ func openOrCreateSharedTcPodIDsMap() (*ebpf.Map, error) {
 	return m, nil
 }
 
+func openOrCreateSharedTcVXLANIfIndexMap() (*ebpf.Map, error) {
+	if err := ensureBPFFSMounted("/sys/fs/bpf"); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(tcPinRoot, 0755); err != nil {
+		return nil, fmt.Errorf("create TC pin directory %s: %w", tcPinRoot, err)
+	}
+
+	m, err := ebpf.LoadPinnedMap(tcVXLANIfIndexMapPath, nil)
+	if err == nil {
+		if err := tcVXLANIfIndexMapSpec().Compatible(m); err != nil {
+			m.Close()
+			return nil, fmt.Errorf("pinned tc_vxlan_ifindex map %s is incompatible: %w", tcVXLANIfIndexMapPath, err)
+		}
+		return m, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENOENT) {
+		return nil, fmt.Errorf("open pinned tc_vxlan_ifindex map %s: %w", tcVXLANIfIndexMapPath, err)
+	}
+
+	m, err = ebpf.NewMap(tcVXLANIfIndexMapSpec())
+	if err != nil {
+		return nil, fmt.Errorf("create shared tc_vxlan_ifindex map: %w", err)
+	}
+	if err := m.Pin(tcVXLANIfIndexMapPath); err == nil {
+		return m, nil
+	} else if !errors.Is(err, os.ErrExist) && !errors.Is(err, unix.EEXIST) {
+		m.Close()
+		return nil, fmt.Errorf("pin shared tc_vxlan_ifindex map %s: %w", tcVXLANIfIndexMapPath, err)
+	}
+
+	m.Close()
+	m, err = ebpf.LoadPinnedMap(tcVXLANIfIndexMapPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reopen shared tc_vxlan_ifindex map %s: %w", tcVXLANIfIndexMapPath, err)
+	}
+	if err := tcVXLANIfIndexMapSpec().Compatible(m); err != nil {
+		m.Close()
+		return nil, fmt.Errorf("reopened tc_vxlan_ifindex map %s is incompatible: %w", tcVXLANIfIndexMapPath, err)
+	}
+	return m, nil
+}
+
+// WriteVXLANIfIndex publishes the node-wide VXLAN interface used by Pod TC
+// programs for remote endpoint redirects.
+func WriteVXLANIfIndex(ifIndex int) error {
+	if ifIndex <= 0 {
+		return fmt.Errorf("invalid VXLAN ifindex %d", ifIndex)
+	}
+
+	m, err := openOrCreateSharedTcVXLANIfIndexMap()
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	key := uint32(0)
+	value := uint32(ifIndex)
+	if err := m.Update(key, value, ebpf.UpdateAny); err != nil {
+		return fmt.Errorf("update tc_vxlan_ifindex to %d: %w", ifIndex, err)
+	}
+	return nil
+}
+
 func verifySameKernelMap(
 	expected *ebpf.Map,
 	actual *ebpf.Map,
@@ -317,7 +419,7 @@ func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err != nil {
 		return err
 	}
-	if err := prepareTcCollectionSpec(spec, "tc router"); err != nil {
+	if err := prepareTcCollectionSpec(spec, "tc router", true); err != nil {
 		return err
 	}
 	if tenant != "" {
@@ -340,7 +442,7 @@ func loadNodeRouterObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err != nil {
 		return err
 	}
-	if err := prepareTcCollectionSpec(spec, "node router"); err != nil {
+	if err := prepareTcCollectionSpec(spec, "node router", false); err != nil {
 		return err
 	}
 	if tenant != "" {
@@ -491,9 +593,16 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 	}
 	defer sharedPodIDs.Close()
 
+	sharedVXLANIfIndex, err := openOrCreateSharedTcVXLANIfIndexMap()
+	if err != nil {
+		return nil, err
+	}
+	defer sharedVXLANIfIndex.Close()
+
 	opts := &ebpf.CollectionOptions{
 		MapReplacements: map[string]*ebpf.Map{
-			"tc_podIDs": sharedPodIDs,
+			"tc_podIDs":        sharedPodIDs,
+			"tc_vxlan_ifindex": sharedVXLANIfIndex,
 		},
 	}
 

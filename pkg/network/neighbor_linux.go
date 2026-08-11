@@ -12,7 +12,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-var neighborDelete = netlink.NeighDel
+var (
+	neighborDelete = netlink.NeighDel
+	neighborList   = netlink.NeighList
+)
 
 // Neighbor describes a permanent IP-to-MAC entry on one interface.
 type Neighbor struct {
@@ -46,6 +49,40 @@ func (n *Linux) DeleteNeighbor(neighbor Neighbor) error {
 		return fmt.Errorf("delete neighbor %s: %w", neighbor.IP, err)
 	}
 	return nil
+}
+
+// ListNeighbors returns IPv4 neighbors on IfIndex.
+func (n *Linux) ListNeighbors(ifIndex int) ([]Neighbor, error) {
+	if ifIndex <= 0 {
+		return nil, fmt.Errorf("network: invalid neighbor ifindex %d", ifIndex)
+	}
+
+	neighbors, err := neighborList(ifIndex, netlink.FAMILY_V4)
+	if err != nil {
+		return nil, fmt.Errorf("list neighbors for ifindex %d: %w", ifIndex, err)
+	}
+
+	out := make([]Neighbor, 0, len(neighbors))
+	for _, neighbor := range neighbors {
+		if neighbor.IP == nil {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(neighbor.IP)
+		if !ok {
+			continue
+		}
+		ip = ip.Unmap()
+		if !ip.Is4() || ip.Zone() != "" {
+			continue
+		}
+
+		out = append(out, Neighbor{
+			IfIndex: neighbor.LinkIndex,
+			IP:      ip,
+			MAC:     append(net.HardwareAddr(nil), neighbor.HardwareAddr...),
+		})
+	}
+	return out, nil
 }
 
 func validateNeighbor(neighbor Neighbor, requireMAC bool) error {

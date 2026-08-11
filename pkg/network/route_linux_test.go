@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 func TestReplaceRoute(t *testing.T) {
@@ -237,5 +238,30 @@ func TestDeleteFDBReturnsRealErrors(t *testing.T) {
 	})
 	if !errors.Is(err, want) {
 		t.Fatalf("got %v, want wrapped delete error", err)
+	}
+}
+
+func TestReplaceRouteWithOnLinkGateway(t *testing.T) {
+	oldReplace := routeReplace
+	defer func() { routeReplace = oldReplace }()
+
+	var got *netlink.Route
+	routeReplace = func(route *netlink.Route) error {
+		copy := *route
+		got = &copy
+		return nil
+	}
+
+	err := NewLinux().ReplaceRoute(Route{
+		Prefix:  netip.MustParsePrefix("10.244.2.0/24"),
+		IfIndex: 17,
+		Gateway: netip.MustParseAddr("10.244.2.1"),
+		OnLink:  true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Flags&unix.RTNH_F_ONLINK == 0 {
+		t.Fatalf("route flags = %#x, want RTNH_F_ONLINK", got.Flags)
 	}
 }

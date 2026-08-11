@@ -31,6 +31,9 @@ func TestAddPod(t *testing.T) {
 	if result.IP != allocation.IP {
 		t.Fatalf("got IP %s, want %s", result.IP, allocation.IP)
 	}
+	if result.Gateway != podLinkGateway {
+		t.Fatalf("got gateway %s, want %s", result.Gateway, podLinkGateway)
+	}
 	if result.HostVethName != "veth1234" {
 		t.Fatalf("got host veth %q, want veth1234", result.HostVethName)
 	}
@@ -240,7 +243,6 @@ func newTestConfigurator(
 		ipam,
 		network,
 		datapath,
-		netip.MustParseAddr("169.254.1.1"),
 		1500,
 	)
 	if err != nil {

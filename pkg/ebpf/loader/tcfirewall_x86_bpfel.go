@@ -84,9 +84,10 @@ type tcFirewallProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type tcFirewallMapSpecs struct {
-	TcIfaceCfg *ebpf.MapSpec `ebpf:"tc_iface_cfg"`
-	TcPodIDs   *ebpf.MapSpec `ebpf:"tc_podIDs"`
-	TcStats    *ebpf.MapSpec `ebpf:"tc_stats"`
+	TcIfaceCfg     *ebpf.MapSpec `ebpf:"tc_iface_cfg"`
+	TcPodIDs       *ebpf.MapSpec `ebpf:"tc_podIDs"`
+	TcStats        *ebpf.MapSpec `ebpf:"tc_stats"`
+	TcVxlanIfindex *ebpf.MapSpec `ebpf:"tc_vxlan_ifindex"`
 }
 
 // tcFirewallVariableSpecs contains global variables before they are loaded into the kernel.
@@ -116,9 +117,10 @@ func (o *tcFirewallObjects) Close() error {
 //
 // It can be passed to loadTcFirewallObjects or ebpf.CollectionSpec.LoadAndAssign.
 type tcFirewallMaps struct {
-	TcIfaceCfg *ebpf.Map `ebpf:"tc_iface_cfg"`
-	TcPodIDs   *ebpf.Map `ebpf:"tc_podIDs"`
-	TcStats    *ebpf.Map `ebpf:"tc_stats"`
+	TcIfaceCfg     *ebpf.Map `ebpf:"tc_iface_cfg"`
+	TcPodIDs       *ebpf.Map `ebpf:"tc_podIDs"`
+	TcStats        *ebpf.Map `ebpf:"tc_stats"`
+	TcVxlanIfindex *ebpf.Map `ebpf:"tc_vxlan_ifindex"`
 }
 
 func (m *tcFirewallMaps) Close() error {
@@ -126,6 +128,7 @@ func (m *tcFirewallMaps) Close() error {
 		m.TcIfaceCfg,
 		m.TcPodIDs,
 		m.TcStats,
+		m.TcVxlanIfindex,
 	)
 }
 
