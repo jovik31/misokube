@@ -14,6 +14,8 @@ import (
 	"github/setera/internal/nodewatcher"
 	"github/setera/internal/podnetwork"
 	"github/setera/internal/podwatcher"
+	"github/setera/internal/servicewatcher"
+	seteraebpf "github/setera/pkg/ebpf"
 	"github/setera/pkg/ipam/bitmap"
 	"github/setera/pkg/network"
 	filestore "github/setera/pkg/store/file"
@@ -34,6 +36,9 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	}
 	if cfg.socketPath == "" {
 		return fmt.Errorf("socket path is empty")
+	}
+	if cfg.cgroupRoot == "" {
+		return fmt.Errorf("cgroup root is empty")
 	}
 	if cfg.mtu <= 0 {
 		return fmt.Errorf("invalid MTU %d", cfg.mtu)
@@ -160,6 +165,18 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	)
 	podInformer := coreFactory.Core().V1().Pods()
 	nodeInformer := coreFactory.Core().V1().Nodes()
+	serviceInformer := coreFactory.Core().V1().Services()
+	endpointSliceInformer := coreFactory.Discovery().V1().EndpointSlices()
+
+	serviceMap, err := seteraebpf.OpenServiceMap()
+	if err != nil {
+		return fmt.Errorf("open Service eBPF maps: %w", err)
+	}
+	defer func() {
+		if err := serviceMap.Close(); err != nil {
+			logger.Error(err, "close Service eBPF maps")
+		}
+	}()
 
 	remotePodWatcher, err := podwatcher.New(
 		logger,
@@ -172,6 +189,20 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	)
 	if err != nil {
 		return fmt.Errorf("create Pod watcher: %w", err)
+	}
+
+	serviceWatcher, err := servicewatcher.New(
+		logger,
+		serviceInformer.Informer(),
+		serviceInformer.Lister(),
+		endpointSliceInformer.Informer(),
+		endpointSliceInformer.Lister(),
+		podInformer.Informer(),
+		podInformer.Lister(),
+		serviceMap,
+	)
+	if err != nil {
+		return fmt.Errorf("create Service watcher: %w", err)
 	}
 
 	routingWatcher, err := nodewatcher.New(
@@ -202,7 +233,7 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Both watchers registered their handlers before the shared informer
+	// All watchers registered their handlers before the shared informer
 	// factory starts.
 	coreFactory.Start(runCtx.Done())
 
@@ -216,11 +247,17 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		nodeWatcherErr <- routingWatcher.Run(runCtx)
 	}()
 
-	// Do not expose the CNI socket until both identity state and node routing
-	// have completed their authoritative startup reconciliation.
+	serviceWatcherErr := make(chan error, 1)
+	go func() {
+		serviceWatcherErr <- serviceWatcher.Run(runCtx)
+	}()
+
+	// Do not expose the CNI socket until Pod identity, node routing, and
+	// Service state have completed their authoritative startup reconciliation.
 	podReady := false
 	nodeReady := false
-	for !podReady || !nodeReady {
+	serviceReady := false
+	for !podReady || !nodeReady || !serviceReady {
 		select {
 		case <-remotePodWatcher.Ready():
 			if !podReady {
@@ -232,6 +269,12 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 			if !nodeReady {
 				nodeReady = true
 				logger.Info("node routing reconciled")
+			}
+
+		case <-serviceWatcher.Ready():
+			if !serviceReady {
+				serviceReady = true
+				logger.Info("Service state reconciled")
 			}
 
 		case err := <-podWatcherErr:
@@ -246,10 +289,32 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 			}
 			return fmt.Errorf("Node watcher stopped before readiness: %w", err)
 
+		case err := <-serviceWatcherErr:
+			if err == nil && runCtx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("Service watcher stopped before readiness: %w", err)
+
 		case <-runCtx.Done():
 			return nil
 		}
 	}
+
+	socketLB, err := seteraebpf.AttachSocketLB(cfg.cgroupRoot)
+	if err != nil {
+		cancel()
+		return fmt.Errorf("attach Service socket LB: %w", err)
+	}
+	defer func() {
+		if err := socketLB.Close(); err != nil {
+			logger.Error(err, "close Service socket LB")
+		}
+	}()
+
+	logger.Info(
+		"Service socket LB attached",
+		"cgroupRoot", cfg.cgroupRoot,
+	)
 
 	cniErr := make(chan error, 1)
 	go func() {
@@ -289,6 +354,16 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 			return fmt.Errorf("Node watcher stopped unexpectedly")
 		}
 		return fmt.Errorf("Node watcher stopped: %w", err)
+
+	case err := <-serviceWatcherErr:
+		cancel()
+		if err == nil || errors.Is(err, context.Canceled) {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("Service watcher stopped unexpectedly")
+		}
+		return fmt.Errorf("Service watcher stopped: %w", err)
 
 	case err := <-cniErr:
 		cancel()

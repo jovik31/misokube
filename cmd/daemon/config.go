@@ -13,6 +13,7 @@ import (
 const (
 	defaultSocketPath = "/var/run/setera/setera.sock"
 	defaultStateDir   = "/var/lib/cni/tenantcni/ipam"
+	defaultCgroupRoot = "/host/sys/fs/cgroup"
 	defaultMTU        = 1450
 )
 
@@ -22,6 +23,7 @@ type config struct {
 
 	socketPath string
 	stateDir   string
+	cgroupRoot string
 	mtu        int
 
 	// Optional for now. When set, the daemon installs Pod egress
@@ -57,6 +59,12 @@ func parseConfig() config {
 		"state-dir",
 		defaultStateDir,
 		"node-local durable IPAM state directory",
+	)
+	flag.StringVar(
+		&cfg.cgroupRoot,
+		"cgroup-root",
+		defaultCgroupRoot,
+		"host cgroup v2 root used by the Service socket load balancer",
 	)
 	flag.IntVar(
 		&cfg.mtu,

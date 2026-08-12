@@ -14,6 +14,9 @@ TENANT_LABEL="setera.com/tenant"
 SERVICE_A="setera-e2e-tenant-a"
 SERVICE_B="setera-e2e-tenant-b"
 
+SOCKET_LB_STATS_MAP="/sys/fs/bpf/setera/service/socket_stats"
+SOCKET_LB_TRANSLATIONS_KEY_HEX="03 00 00 00"
+
 log() {
     printf '\n==> %s\n' "$*"
 }
@@ -237,6 +240,57 @@ expect_exec_deny() {
     fi
 
     pass "$label"
+}
+
+socket_lb_translation_snapshot() {
+    local pod="$1"
+    local node
+
+    node="$(pod_node "$pod")"
+
+    docker exec "$node" \
+        bpftool map lookup pinned "$SOCKET_LB_STATS_MAP" \
+        key hex $SOCKET_LB_TRANSLATIONS_KEY_HEX \
+        2>/dev/null
+}
+
+expect_exec_allow_via_socket_lb() {
+    local label="$1"
+    local pod="$2"
+    local before
+    local after
+    local output=""
+    local attempt
+
+    shift 2
+
+    if ! before="$(socket_lb_translation_snapshot "$pod")"; then
+        fail "$label: cannot read socket LB translation counter"
+    fi
+
+    for attempt in $(seq 1 10); do
+        if output="$(
+            k exec "$pod" -- "$@" \
+                2>&1
+        )"; then
+            if ! after="$(socket_lb_translation_snapshot "$pod")"; then
+                fail "$label: cannot read socket LB translation counter"
+            fi
+
+            if [[ "$before" != "$after" ]]; then
+                pass "$label"
+                return 0
+            fi
+        fi
+
+        sleep 1
+    done
+
+    if [[ -n "$output" ]]; then
+        printf '%s\n' "$output" >&2
+    fi
+
+    fail "$label: socket LB translation counter did not change"
 }
 
 start_http_server() {
@@ -477,8 +531,8 @@ expect_exec_allow \
     kubernetes.default.svc.cluster.local \
     "$DNS_POD_IP"
 
-expect_exec_allow \
-    "$TENANT_A -> kube-dns Service" \
+expect_exec_allow_via_socket_lb \
+    "$TENANT_A -> kube-dns Service through socket LB" \
     "${A_PODS[0]}" \
     nslookup \
     kubernetes.default.svc.cluster.local
@@ -582,8 +636,8 @@ SERVICE_B_IP="$(
     fail \
         "$SERVICE_B ClusterIP is empty"
 
-expect_exec_allow \
-    "$TENANT_A -> $TENANT_A Service" \
+expect_exec_allow_via_socket_lb \
+    "$TENANT_A -> $TENANT_A Service through socket LB" \
     "${A_PODS[0]}" \
     wget \
     -qO- \

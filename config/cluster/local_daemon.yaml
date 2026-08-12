@@ -190,6 +190,10 @@ spec:
               mountPath: /var/run/netns
               mountPropagation: HostToContainer
 
+            - name: host-cgroup
+              mountPath: /host/sys/fs/cgroup
+              readOnly: true
+
       volumes:
         - name: cni-bin
           hostPath:
@@ -224,6 +228,11 @@ spec:
           hostPath:
             path: /var/run/netns
             type: DirectoryOrCreate
+
+        - name: host-cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
 
 ---
 apiVersion: v1
