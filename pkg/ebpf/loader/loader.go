@@ -25,6 +25,7 @@ const (
 	ActionLog             uint32 = 2
 	tcFlagConntrack       uint32 = 1 << 0
 	tcPodIDsValueSize     uint32 = 68
+	defaultTenantName            = "default"
 )
 
 type tcPodIDValue struct {
@@ -412,6 +413,22 @@ func verifySameKernelMap(
 	return nil
 }
 
+func tcFirewallTenantConstants(tenant string) ([64]byte, uint32) {
+	if len(tenant) > 63 {
+		tenant = tenant[:63]
+	}
+
+	var tenantBytes [64]byte
+	copy(tenantBytes[:], tenant)
+
+	var isDefault uint32
+	if tenant == defaultTenantName {
+		isDefault = 1
+	}
+
+	return tenantBytes, isDefault
+}
+
 func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptions, tenant string) error {
 	spec, err := loadTcFirewall()
 	if err != nil {
@@ -420,18 +437,27 @@ func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err := prepareTcCollectionSpec(spec, "tc router", true); err != nil {
 		return err
 	}
+
 	if tenant != "" {
-		if len(tenant) > 63 {
-			tenant = tenant[:63]
+		tenantBytes, isDefault := tcFirewallTenantConstants(tenant)
+
+		tenantVar, ok := spec.Variables["my_tenant"]
+		if !ok || tenantVar == nil {
+			return fmt.Errorf("tc router: my_tenant variable is missing from collection spec")
 		}
-		if vs, ok := spec.Variables["my_tenant"]; ok && vs != nil {
-			var t [64]byte
-			copy(t[:], tenant)
-			if err := vs.Set(t); err != nil {
-				return fmt.Errorf("set tc variable my_tenant: %w", err)
-			}
+		if err := tenantVar.Set(tenantBytes); err != nil {
+			return fmt.Errorf("set tc variable my_tenant: %w", err)
+		}
+
+		defaultVar, ok := spec.Variables["my_is_default"]
+		if !ok || defaultVar == nil {
+			return fmt.Errorf("tc router: my_is_default variable is missing from collection spec")
+		}
+		if err := defaultVar.Set(isDefault); err != nil {
+			return fmt.Errorf("set tc variable my_is_default: %w", err)
 		}
 	}
+
 	return spec.LoadAndAssign(obj, opts)
 }
 

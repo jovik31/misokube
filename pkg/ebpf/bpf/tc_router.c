@@ -1,6 +1,7 @@
 #include "common.h"
 
 volatile const char my_tenant[64];
+volatile const __u32 my_is_default;
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
@@ -102,8 +103,10 @@ static __always_inline int tc_firewall_core(struct __sk_buff *skb)
     if (!dst_info)
         return TC_ACT_OK;
 
-    if (!is_default_tenant((char *)my_tenant) &&
-        !is_default_tenant(dst_info->tenant)) {
+    // my_is_default is a loader-populated scalar. Keep the source-default
+    // decision as an explicit volatile load so Clang cannot constant-fold the
+    // source tenant check from the initial .rodata contents.
+    if (!my_is_default && !is_default_tenant(dst_info->tenant)) {
         for (int i = 0; i < 64; i++) {
             if (dst_info->tenant[i] != my_tenant[i]) {
                 if (stats)

@@ -4,7 +4,7 @@ metadata:
   name: ping-test4
   namespace: default
   annotations:
-    setera.com/tenant: "one"
+    setera.com/tenant: "tenant-b"
 spec:
   containers:
     - name: toolbox

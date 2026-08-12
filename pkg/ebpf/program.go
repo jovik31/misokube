@@ -25,7 +25,9 @@ type PodProgram struct {
 // identity, and attaches it to the given host-side veth.
 //
 // The tenant identity is stored in the BPF program's fixed char[64]
-// my_tenant variable, leaving one byte for the terminating zero.
+// my_tenant variable, leaving one byte for the terminating zero. The loader
+// also sets my_is_default so the hot path can identify the privileged default
+// source tenant with one scalar read instead of comparing the source string.
 func AttachPodProgram(
 	ifName string,
 	tenant string,

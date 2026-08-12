@@ -215,6 +215,56 @@ func TestNewTCBpfFilter(t *testing.T) {
 	}
 }
 
+func TestTcRouterDeclaresSourceDefaultVariable(t *testing.T) {
+	spec, err := loadTcFirewall()
+	if err != nil {
+		t.Fatalf("load TC router spec: %v", err)
+	}
+
+	if variable := spec.Variables["my_is_default"]; variable == nil {
+		t.Fatal("TC router does not declare my_is_default")
+	}
+}
+
+func TestTcFirewallTenantConstants(t *testing.T) {
+	tests := []struct {
+		name          string
+		tenant        string
+		wantTenant    string
+		wantIsDefault uint32
+	}{
+		{
+			name:          "default tenant",
+			tenant:        "default",
+			wantTenant:    "default",
+			wantIsDefault: 1,
+		},
+		{
+			name:          "explicit tenant",
+			tenant:        "tenant-a",
+			wantTenant:    "tenant-a",
+			wantIsDefault: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tenantBytes, isDefault := tcFirewallTenantConstants(tt.tenant)
+
+			gotTenant := string(tenantBytes[:len(tt.wantTenant)])
+			if gotTenant != tt.wantTenant {
+				t.Fatalf("tenant bytes = %q, want %q", gotTenant, tt.wantTenant)
+			}
+			if tenantBytes[len(tt.wantTenant)] != 0 {
+				t.Fatalf("tenant bytes are not NUL-terminated after %q", tt.wantTenant)
+			}
+			if isDefault != tt.wantIsDefault {
+				t.Fatalf("isDefault = %d, want %d", isDefault, tt.wantIsDefault)
+			}
+		})
+	}
+}
+
 func assertTcPodIDsMapSpec(
 	t *testing.T,
 	name string,

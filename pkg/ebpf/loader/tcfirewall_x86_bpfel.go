@@ -94,7 +94,8 @@ type tcFirewallMapSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type tcFirewallVariableSpecs struct {
-	MyTenant *ebpf.VariableSpec `ebpf:"my_tenant"`
+	MyIsDefault *ebpf.VariableSpec `ebpf:"my_is_default"`
+	MyTenant    *ebpf.VariableSpec `ebpf:"my_tenant"`
 }
 
 // tcFirewallObjects contains all objects after they have been loaded into the kernel.
@@ -136,7 +137,8 @@ func (m *tcFirewallMaps) Close() error {
 //
 // It can be passed to loadTcFirewallObjects or ebpf.CollectionSpec.LoadAndAssign.
 type tcFirewallVariables struct {
-	MyTenant *ebpf.Variable `ebpf:"my_tenant"`
+	MyIsDefault *ebpf.Variable `ebpf:"my_is_default"`
+	MyTenant    *ebpf.Variable `ebpf:"my_tenant"`
 }
 
 // tcFirewallPrograms contains all programs after they have been loaded into the kernel.
