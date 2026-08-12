@@ -15,22 +15,17 @@ KIND_NODE_IMG        ?= kind-node-nettool:v1.33.1
 KIND_NODE_DOCKERFILE ?= Dockerfile.kindnode
 
 # Local runtime image tags. These must match config/cluster/local_daemon.yaml.
-DAEMON_COMPONENT ?= daemon
-DAEMON_VERSION   ?= v0.1.0
-DAEMON_IMG       ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
+DAEMON_COMPONENT       ?= daemon
+DAEMON_VERSION         ?= v0.1.0
+DAEMON_IMG             ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
 
 ORCHESTRATOR_COMPONENT ?= orchestrator
 ORCHESTRATOR_VERSION   ?= v0.1.0
 ORCHESTRATOR_IMG       ?= setera-$(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
 
-CNI_COMPONENT ?= cni
-CNI_VERSION   ?= dev
-CNI_IMG       ?= cni-uds-stub:$(CNI_VERSION)
-
-# Legacy stub image is kept for the old stub-only development flow.
-STUB_DAEMON_COMPONENT ?= stub-daemon
-STUB_DAEMON_VERSION   ?= dev
-STUB_DAEMON_IMG       ?= daemon-uds-stub:$(STUB_DAEMON_VERSION)
+CNI_COMPONENT          ?= cni
+CNI_VERSION            ?= dev
+CNI_IMG                ?= cni-uds-stub:$(CNI_VERSION)
 
 # Local kind binaries and temporary runtime image contexts.
 KIND_BUILD_DIR ?= $(LOCALBIN)/kind
@@ -43,6 +38,13 @@ CRD_DIR               ?= config/crd/bases
 
 LOCAL_DEPLOYMENT      ?= config/cluster/local_daemon.yaml
 WEBHOOK_CONFIGURATION ?= setera-pod-admission
+
+# Local E2E fixtures and test runner.
+E2E_TENANT_A ?= config/examples/tenants/1.yaml
+E2E_TENANT_B ?= config/examples/tenants/2.yaml
+E2E_PODS     ?= config/cluster/pod_examples/total.yaml
+E2E_TEST     ?= hack/e2e/connectivity.sh
+E2E_TIMEOUT  ?= 180s
 
 
 ##@ Help
@@ -73,6 +75,9 @@ bpf-generate: ## Generate Go bindings for TC/XDP eBPF programs
 
 ##@ Standard Docker builds
 
+# These retain the repository's normal Dockerfile-based build path.
+# The kind-specific build targets below are intentionally separate.
+
 DOCKERFILE ?= Dockerfile
 
 .PHONY: build-orchestrator
@@ -96,15 +101,12 @@ build-cni: ## Build CNI installer image with the repository Dockerfile
 		-f $(DOCKERFILE) \
 		-t $(CNI_IMG) .
 
-.PHONY: build-stub-daemon
-build-stub-daemon: ## Build legacy stub daemon image
-	$(DOCKER) build \
-		--build-arg BINARY=$(STUB_DAEMON_COMPONENT) \
-		-f $(DOCKERFILE) \
-		-t $(STUB_DAEMON_IMG) .
-
-
 ##@ Local kind images
+
+# The current cmd/daemon and cmd/orchestrator are multi-file packages.
+# These local-kind targets therefore compile the whole package directly and
+# package the resulting Linux binaries into small runtime images. They do not
+# depend on the repository Dockerfile's single-main.go build command.
 
 .PHONY: kind-build-daemon-binary
 kind-build-daemon-binary: bpf-generate ## Build the Linux daemon binary for kind
@@ -248,6 +250,37 @@ kind-deploy: ## Build/load images and deploy daemon + orchestrator to the existi
 kind-e2e: ## Create cluster if needed, build/load images, and deploy complete local Setera E2E
 	$(MAKE) kind-cluster
 	$(MAKE) kind-deploy
+
+.PHONY: kind-e2e-fixtures
+kind-e2e-fixtures: kind-cluster-check ## Deploy E2E tenants and Pods, then wait until they are ready
+	kubectl --context $(KIND_CONTEXT) apply -f $(E2E_TENANT_A)
+	kubectl --context $(KIND_CONTEXT) apply -f $(E2E_TENANT_B)
+	kubectl --context $(KIND_CONTEXT) wait \
+		--for=condition=Assigned tenant/tenant-a \
+		--timeout=$(E2E_TIMEOUT)
+	kubectl --context $(KIND_CONTEXT) wait \
+		--for=condition=Assigned tenant/tenant-b \
+		--timeout=$(E2E_TIMEOUT)
+	kubectl --context $(KIND_CONTEXT) apply -f $(E2E_PODS)
+	kubectl --context $(KIND_CONTEXT) wait \
+		--for=condition=Ready pod \
+		-l setera.com/tenant=tenant-a \
+		--timeout=$(E2E_TIMEOUT)
+	kubectl --context $(KIND_CONTEXT) wait \
+		--for=condition=Ready pod \
+		-l setera.com/tenant=tenant-b \
+		--timeout=$(E2E_TIMEOUT)
+
+.PHONY: kind-connectivity-test
+kind-connectivity-test: kind-cluster-check ## Run connectivity tests against the current E2E Pods
+	KIND_CONTEXT=$(KIND_CONTEXT) bash $(E2E_TEST)
+
+.PHONY: kind-e2e-test
+kind-e2e-test: ## Recreate the cluster, deploy Setera and fixtures, then run the E2E test battery
+	-$(MAKE) kind-cluster-delete
+	$(MAKE) kind-e2e
+	$(MAKE) kind-e2e-fixtures
+	$(MAKE) kind-connectivity-test
 
 .PHONY: kind-redeploy
 kind-redeploy: ## Rebuild local images, reload them into kind, and restart Setera
