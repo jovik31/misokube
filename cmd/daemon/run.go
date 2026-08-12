@@ -189,7 +189,9 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 
 	cniServer, err := cniserver.New(
 		cfg.socketPath,
+		cfg.nodeName,
 		podInformer.Lister(),
+		nodeInformer.Lister(),
 		podNetwork,
 		"",
 	)

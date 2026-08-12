@@ -3,76 +3,120 @@ package webhook
 import (
 	"encoding/json"
 	"fmt"
-
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/klog/v2"
 )
 
-func (ws *WebhookServer) admissionValidationHandler(w http.ResponseWriter, r *http.Request) {
+func (ws *WebhookServer) admissionValidationHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	var requestAdmissionReview admissionv1.AdmissionReview
 
-	//decode request body
-	var requestAdmissionReview = admissionv1.AdmissionReview{}
-	if err := json.NewDecoder(r.Body).Decode(&requestAdmissionReview); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(
+		&requestAdmissionReview,
+	); err != nil {
+		http.Error(
+			w,
+			fmt.Sprintf(
+				"decode admission request: %v",
+				err,
+			),
+			http.StatusBadRequest,
+		)
 
-		http.Error(w, fmt.Sprintf("failed decoding admission request: %s", err), http.StatusBadRequest)
-		klog.Error(fmt.Sprintf(" error code: %d failed decoding admission request with error %s", http.StatusBadRequest, err))
 		return
 	}
 
-	// check if there is a request resource field so we can then read it
-	if requestAdmissionReview.Request.RequestKind == nil {
-		http.Error(w, "failed to extract resource from request", http.StatusBadRequest)
-		klog.Error(fmt.Sprintf(" error code: %d failed to extract resource from request", http.StatusBadRequest))
+	if requestAdmissionReview.Request == nil {
+		http.Error(
+			w,
+			"admission request is missing",
+			http.StatusBadRequest,
+		)
+
 		return
 	}
 
-	// declare variables for usage inside switch case
-	var admissionResponse = &admissionv1.AdmissionResponse{}
+	var admissionResponse *admissionv1.AdmissionResponse
 	var err error
 
-	//need to compare structs and not the pointer
-	switch *requestAdmissionReview.Request.RequestKind {
-
-	//daemonsets
+	switch requestAdmissionReview.Request.Kind {
 	case daemonsetGVK:
+		admissionResponse = createAdmissionResponse(
+			true,
+			"DaemonSet is valid",
+		)
 
-	//deployments
 	case deploymentGVK:
+		admissionResponse = createAdmissionResponse(
+			true,
+			"Deployment is valid",
+		)
 
-	//pods
 	case podGVK:
-		//call pod validation
-		if admissionResponse, err = ws.validatePod(requestAdmissionReview.Request); err != nil {
-			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
-			return
+		admissionResponse, err = ws.admitPod(
+			r.Context(),
+			requestAdmissionReview.Request,
+		)
 
-		}
-	//tenants
 	case tenantGVK:
-		//call tenant validation
-		if admissionResponse, err = ws.validateTenant(requestAdmissionReview.Request); err != nil {
-			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
-			return
-		}
+		admissionResponse, err = ws.validateTenant(
+			requestAdmissionReview.Request,
+		)
+
+	default:
+		admissionResponse = createAdmissionResponse(
+			true,
+			"resource is not managed by Setera",
+		)
 	}
 
-	//create new admission review with response
-	responseObj := newAdmissionReview(requestAdmissionReview, admissionResponse)
+	if err != nil {
+		http.Error(
+			w,
+			err.Error(),
+			http.StatusInternalServerError,
+		)
 
-	klog.Info("request ID ", requestAdmissionReview.Request.UID, " ", requestAdmissionReview.Request.Kind.Kind)
-
-	var respBytes []byte
-	if respBytes, err = json.Marshal(responseObj); err != nil {
-		klog.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-
 	}
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	if _, err := w.Write(respBytes); err != nil {
-		klog.Error(err)
 
+	response := newAdmissionReview(
+		requestAdmissionReview,
+		admissionResponse,
+	)
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		http.Error(
+			w,
+			"encode admission response",
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	klog.Info(
+		"processed admission request",
+		"uid",
+		requestAdmissionReview.Request.UID,
+		"kind",
+		requestAdmissionReview.Request.Kind.Kind,
+	)
+
+	w.Header().Set(
+		contentTypeHeader,
+		contentTypeJSON,
+	)
+
+	if _, err := w.Write(responseBytes); err != nil {
+		klog.ErrorS(
+			err,
+			"write admission response",
+		)
 	}
 }

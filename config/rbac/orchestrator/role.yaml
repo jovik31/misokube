@@ -20,6 +20,14 @@ rules:
   verbs:
   - list
 - apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - create
+  - get
+  - update
+- apiGroups:
   - setera.com
   resources:
   - tenants

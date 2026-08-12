@@ -8,11 +8,10 @@ import (
 	"github/setera/pkg/ebpf/loader"
 )
 
-// NodeProgram is the Setera TC router attached to a node-level interface.
+// NodeProgram is the Setera TC program attached to a node-level interface.
 //
-// The node program is node-wide and therefore has no tenant identity of its
-// own. Tenant isolation is enforced by the Pod programs attached to local
-// host-side veth interfaces.
+// The node program has no tenant identity.
+// Pod programs enforce tenant isolation.
 type NodeProgram struct {
 	closeOnce sync.Once
 	closeErr  error
@@ -20,19 +19,24 @@ type NodeProgram struct {
 	handle nodeProgramHandle
 }
 
-// AttachNodeProgram loads and attaches the forwarding-only Setera node router
-// to ifaceName. Tenant isolation is enforced at the source Pod veth; the node
-// router only delivers decapsulated traffic to a local Pod.
-func AttachNodeProgram(ifName string) (*NodeProgram, error) {
+// AttachNodeProgram loads and attaches the Setera node TC program.
+//
+// Linux routing and netfilter process traffic after VXLAN decapsulation.
+func AttachNodeProgram(
+	ifName string,
+) (*NodeProgram, error) {
 	return attachNodeProgram(
 		ifName,
-		func(ifName string) (nodeProgramHandle, error) {
+		func(
+			ifName string,
+		) (nodeProgramHandle, error) {
 			return loader.NewNodeRouter(ifName)
 		},
 	)
 }
 
-// Close detaches the node router and releases its eBPF resources.
+// Close detaches the node TC program and releases its eBPF resources.
+//
 // It is safe to call Close more than once.
 func (p *NodeProgram) Close() error {
 	if p == nil {
@@ -80,6 +84,7 @@ func attachNodeProgram(
 			err,
 		)
 	}
+
 	if handle == nil {
 		return nil, fmt.Errorf(
 			"ebpf: attach node program to %q returned nil handle",

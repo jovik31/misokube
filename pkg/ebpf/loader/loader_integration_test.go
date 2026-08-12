@@ -22,6 +22,7 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	if os.Getenv("SETERA_EBPF_INTEGRATION") != "1" {
 		t.Skip("set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests")
 	}
+
 	if os.Geteuid() != 0 {
 		t.Skip("requires root or equivalent eBPF/TC capabilities")
 	}
@@ -29,41 +30,74 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	podLink := addIntegrationDummy(t, "setera-pod0")
 	nodeLink := addIntegrationDummy(t, "setera-node0")
 
-	podProgram, err := NewTCFirewall(
+	podProgram, err := NewPodPolicy(
 		podLink.Attrs().Name,
 		"tenant-a",
 	)
 	if err != nil {
 		t.Fatalf("attach Pod TC program: %v", err)
 	}
+
 	defer func() {
 		if err := podProgram.Close(); err != nil {
 			t.Errorf("close Pod TC program: %v", err)
 		}
 	}()
 
-	nodeProgram, err := NewNodeRouter(nodeLink.Attrs().Name)
+	nodeProgram, err := NewNodeRouter(
+		nodeLink.Attrs().Name,
+	)
 	if err != nil {
 		t.Fatalf("attach node router: %v", err)
 	}
+
 	defer func() {
 		if err := nodeProgram.Close(); err != nil {
 			t.Errorf("close node router: %v", err)
 		}
 	}()
 
-	requireSeteraIngressOnly(t, podLink, "setera_tc_ingress")
-	requireSeteraIngressOnly(t, nodeLink, "setera_node_ingress")
+	requireSeteraPodPolicy(t, podLink)
+	requireSeteraIngressOnly(
+		t,
+		nodeLink,
+		"setera_node_ingress",
+	)
 
-	podMapID := requireMapID(t, podProgram.objs.TcPodIDs)
-	nodeMapID := requireMapID(t, nodeProgram.objs.TcPodIDs)
+	podMapID := requireMapID(
+		t,
+		podProgram.firewall.objs.TcPodIDs,
+	)
 
-	podConfigMapID := requireMapID(t, podProgram.objs.TcIfaceCfg)
-	nodeConfigMapID := requireMapID(t, nodeProgram.objs.TcIfaceCfg)
-	podStatsMapID := requireMapID(t, podProgram.objs.TcStats)
-	nodeStatsMapID := requireMapID(t, nodeProgram.objs.TcStats)
+	nodeMapID := requireMapID(
+		t,
+		nodeProgram.objs.TcPodIDs,
+	)
 
-	pinned, err := ebpf.LoadPinnedMap(tcPodIDsMapPath, nil)
+	podConfigMapID := requireMapID(
+		t,
+		podProgram.firewall.objs.TcIfaceCfg,
+	)
+
+	nodeConfigMapID := requireMapID(
+		t,
+		nodeProgram.objs.TcIfaceCfg,
+	)
+
+	podStatsMapID := requireMapID(
+		t,
+		podProgram.firewall.objs.TcStats,
+	)
+
+	nodeStatsMapID := requireMapID(
+		t,
+		nodeProgram.objs.TcStats,
+	)
+
+	pinned, err := ebpf.LoadPinnedMap(
+		tcPodIDsMapPath,
+		nil,
+	)
 	if err != nil {
 		t.Fatalf(
 			"open pinned tc_podIDs map %s: %v",
@@ -73,7 +107,10 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	}
 	defer pinned.Close()
 
-	pinnedMapID := requireMapID(t, pinned)
+	pinnedMapID := requireMapID(
+		t,
+		pinned,
+	)
 
 	if podMapID != pinnedMapID {
 		t.Fatalf(
@@ -82,6 +119,7 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 			pinnedMapID,
 		)
 	}
+
 	if nodeMapID != pinnedMapID {
 		t.Fatalf(
 			"node router tc_podIDs map ID = %d, pinned map ID = %d",
@@ -96,6 +134,7 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 			podConfigMapID,
 		)
 	}
+
 	if podStatsMapID == nodeStatsMapID {
 		t.Fatalf(
 			"tc_stats unexpectedly shared: map ID=%d",
@@ -113,16 +152,116 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	)
 
 	if err := podProgram.Close(); err != nil {
-		t.Fatalf("close Pod TC program: %v", err)
-	}
-	if err := nodeProgram.Close(); err != nil {
-		t.Fatalf("close node router: %v", err)
+		t.Fatalf(
+			"close Pod TC program: %v",
+			err,
+		)
 	}
 
-	requireNoSeteraFilters(t, podLink)
-	requireNoSeteraFilters(t, nodeLink)
-	requireClsact(t, podLink)
-	requireClsact(t, nodeLink)
+	if err := nodeProgram.Close(); err != nil {
+		t.Fatalf(
+			"close node router: %v",
+			err,
+		)
+	}
+
+	requireNoSeteraFilters(
+		t,
+		podLink,
+	)
+
+	requireNoSeteraFilters(
+		t,
+		nodeLink,
+	)
+
+	requireClsact(
+		t,
+		podLink,
+	)
+
+	requireClsact(
+		t,
+		nodeLink,
+	)
+}
+
+func requireSeteraPodPolicy(
+	t *testing.T,
+	link netlink.Link,
+) {
+	t.Helper()
+
+	requireNamedSeteraFilter(
+		t,
+		link,
+		netlink.HANDLE_MIN_INGRESS,
+		"setera_tc_ingress",
+	)
+
+	requireNamedSeteraFilter(
+		t,
+		link,
+		netlink.HANDLE_MIN_EGRESS,
+		"setera_tc_egress",
+	)
+}
+
+func requireNamedSeteraFilter(
+	t *testing.T,
+	link netlink.Link,
+	parent uint32,
+	wantName string,
+) {
+	t.Helper()
+
+	filters, err := netlink.FilterList(
+		link,
+		parent,
+	)
+	if err != nil {
+		t.Fatalf(
+			"list filters on %s parent %#x: %v",
+			link.Attrs().Name,
+			parent,
+			err,
+		)
+	}
+
+	found := false
+
+	for _, filter := range filters {
+		bpfFilter, ok :=
+			filter.(*netlink.BpfFilter)
+
+		if !ok ||
+			!strings.HasPrefix(
+				bpfFilter.Name,
+				"setera_",
+			) {
+			continue
+		}
+
+		if bpfFilter.Name != wantName {
+			t.Fatalf(
+				"unexpected Setera filter %q on %s parent %#x",
+				bpfFilter.Name,
+				link.Attrs().Name,
+				parent,
+			)
+		}
+
+		found = true
+	}
+
+	if !found {
+		t.Fatalf(
+			"Setera filter %q not attached to %s parent %#x",
+			wantName,
+			link.Attrs().Name,
+			parent,
+		)
+	}
 }
 
 func requireSeteraIngressOnly(
@@ -145,11 +284,19 @@ func requireSeteraIngressOnly(
 	}
 
 	foundIngress := false
+
 	for _, filter := range ingressFilters {
-		bpfFilter, ok := filter.(*netlink.BpfFilter)
-		if !ok || !strings.HasPrefix(bpfFilter.Name, "setera_") {
+		bpfFilter, ok :=
+			filter.(*netlink.BpfFilter)
+
+		if !ok ||
+			!strings.HasPrefix(
+				bpfFilter.Name,
+				"setera_",
+			) {
 			continue
 		}
+
 		if bpfFilter.Name != wantIngressName {
 			t.Fatalf(
 				"unexpected Setera ingress filter %q on %s",
@@ -157,8 +304,10 @@ func requireSeteraIngressOnly(
 				link.Attrs().Name,
 			)
 		}
+
 		foundIngress = true
 	}
+
 	if !foundIngress {
 		t.Fatalf(
 			"Setera ingress filter %q not attached to %s",
@@ -178,12 +327,19 @@ func requireSeteraIngressOnly(
 			err,
 		)
 	}
+
 	for _, filter := range egressFilters {
-		bpfFilter, ok := filter.(*netlink.BpfFilter)
+		bpfFilter, ok :=
+			filter.(*netlink.BpfFilter)
+
 		if !ok {
 			continue
 		}
-		if strings.HasPrefix(bpfFilter.Name, "setera_") {
+
+		if strings.HasPrefix(
+			bpfFilter.Name,
+			"setera_",
+		) {
 			t.Fatalf(
 				"Setera egress filter %q unexpectedly attached to %s",
 				bpfFilter.Name,
@@ -203,7 +359,10 @@ func requireNoSeteraFilters(
 		netlink.HANDLE_MIN_INGRESS,
 		netlink.HANDLE_MIN_EGRESS,
 	} {
-		filters, err := netlink.FilterList(link, parent)
+		filters, err := netlink.FilterList(
+			link,
+			parent,
+		)
 		if err != nil {
 			t.Fatalf(
 				"list filters on %s parent %#x: %v",
@@ -214,11 +373,17 @@ func requireNoSeteraFilters(
 		}
 
 		for _, filter := range filters {
-			bpfFilter, ok := filter.(*netlink.BpfFilter)
+			bpfFilter, ok :=
+				filter.(*netlink.BpfFilter)
+
 			if !ok {
 				continue
 			}
-			if strings.HasPrefix(bpfFilter.Name, "setera_") {
+
+			if strings.HasPrefix(
+				bpfFilter.Name,
+				"setera_",
+			) {
 				t.Fatalf(
 					"Setera filter %q still attached to %s",
 					bpfFilter.Name,
@@ -269,7 +434,11 @@ func addIntegrationDummy(
 	}
 
 	if err := netlink.LinkAdd(link); err != nil {
-		t.Fatalf("add dummy interface %s: %v", name, err)
+		t.Fatalf(
+			"add dummy interface %s: %v",
+			name,
+			err,
+		)
 	}
 
 	t.Cleanup(func() {
@@ -286,7 +455,11 @@ func addIntegrationDummy(
 	}
 
 	if err := netlink.LinkSetUp(created); err != nil {
-		t.Fatalf("set dummy interface %s up: %v", name, err)
+		t.Fatalf(
+			"set dummy interface %s up: %v",
+			name,
+			err,
+		)
 	}
 
 	return created
@@ -304,12 +477,17 @@ func requireMapID(
 
 	info, err := m.Info()
 	if err != nil {
-		t.Fatalf("read map info: %v", err)
+		t.Fatalf(
+			"read map info: %v",
+			err,
+		)
 	}
 
 	id, ok := info.ID()
 	if !ok {
-		t.Fatal("kernel did not expose map ID")
+		t.Fatal(
+			"kernel did not expose map ID",
+		)
 	}
 
 	return id

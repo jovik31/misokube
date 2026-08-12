@@ -2,99 +2,83 @@ package webhook
 
 import (
 	seterav1 "github/setera/pkg/api/setera.com/v1"
-	"github/setera/pkg/tenantmeta"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func isMapped[K, V comparable](target V, m map[K]V) bool {
-
-	for _, v := range m {
-		if v == target {
+func isMapped[K, V comparable](
+	target V,
+	values map[K]V,
+) bool {
+	for _, value := range values {
+		if value == target {
 			return true
 		}
 	}
+
 	return false
 }
 
-func isMapSubset[K, V comparable](m, sub map[K]V) bool {
-
-	// if zone requirements are larger than node labels
-	if len(sub) > len(m) {
+func isMapSubset[K, V comparable](
+	values map[K]V,
+	subset map[K]V,
+) bool {
+	if len(subset) > len(values) {
 		return false
 	}
 
-	for k, vsub := range sub {
-		// if value not found or different between nodes and zones
-		if vm, found := m[k]; !found || vm != vsub {
+	for key, expected := range subset {
+		value, found := values[key]
+
+		if !found || value != expected {
 			return false
 		}
 	}
+
 	return true
 }
 
-// check tenant should be a universal helper not bound to a k8s kind or resource
-func checkTenantLabel(labels map[string]string, tenantList *seterav1.TenantList) (bool, string) {
-
-	var allowed bool = true
-	// check if tenant label is present
-	tenant_label, ok := labels[tenantmeta.PodTenantLabel]
-	if !ok {
-		return !allowed, tenantLabelNotFound
+func checkNodeZones(
+	nodeList []corev1.Node,
+	status seterav1.TenantStatus,
+) (bool, string) {
+	if len(nodeList) <
+		len(status.AssignedNodes) {
+		return false, zonesAboveNodes
 	}
 
-	// check if tenant label is valid
-	for _, tenant := range tenantList.Items {
-
-		if tenant_label == tenant.Name {
-			return allowed, tenantIsValid
-		}
-	}
-
-	return !allowed, tenantNotFound
+	return true, tenantIsValid
 }
 
-func checkNodeZones(nodeList []corev1.Node, status seterav1.TenantStatus) (bool, string) {
-
-	zoneList := status.AssignedNodes
-
-	var allowed bool = true
-
-	//check number of nodes against number of zones
-	if len(nodeList) < len(zoneList) {
-
-		return !allowed, zonesAboveNodes
-	}
-
-	return allowed, tenantIsValid
-
-}
-
-// creates admission response
-func createAdmissionResponse(result bool, msg string) *admissionv1.AdmissionResponse {
-
-	admissionResponse := &admissionv1.AdmissionResponse{
-
-		Allowed: result,
+func createAdmissionResponse(
+	allowed bool,
+	message string,
+) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Allowed: allowed,
 		Result: &metav1.Status{
-			Message: msg,
+			Message: message,
 		},
 	}
-
-	return admissionResponse
 }
 
-// create admission review response with info for the respective request
-func newAdmissionReview(aReq admissionv1.AdmissionReview, aRes *admissionv1.AdmissionResponse) admissionv1.AdmissionReview {
+func newAdmissionReview(
+	requestReview admissionv1.AdmissionReview,
+	response *admissionv1.AdmissionResponse,
+) admissionv1.AdmissionReview {
+	responseReview :=
+		admissionv1.AdmissionReview{}
 
-	var responseAdmissionReview = admissionv1.AdmissionReview{}
+	responseReview.Response = response
 
-	responseAdmissionReview.Response = aRes
-	responseAdmissionReview.SetGroupVersionKind(aReq.GroupVersionKind())
-	responseAdmissionReview.Response.UID = aReq.Request.UID
+	responseReview.SetGroupVersionKind(
+		requestReview.GroupVersionKind(),
+	)
 
-	return responseAdmissionReview
+	responseReview.Response.UID =
+		requestReview.Request.UID
 
+	return responseReview
 }

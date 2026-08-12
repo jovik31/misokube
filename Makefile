@@ -15,17 +15,17 @@ KIND_NODE_IMG        ?= kind-node-nettool:v1.33.1
 KIND_NODE_DOCKERFILE ?= Dockerfile.kindnode
 
 # Local runtime image tags. These must match config/cluster/local_daemon.yaml.
-DAEMON_COMPONENT       ?= daemon
-DAEMON_VERSION         ?= v0.1.0
-DAEMON_IMG             ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
+DAEMON_COMPONENT ?= daemon
+DAEMON_VERSION   ?= v0.1.0
+DAEMON_IMG       ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
 
 ORCHESTRATOR_COMPONENT ?= orchestrator
 ORCHESTRATOR_VERSION   ?= v0.1.0
 ORCHESTRATOR_IMG       ?= setera-$(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
 
-CNI_COMPONENT          ?= cni
-CNI_VERSION            ?= dev
-CNI_IMG                ?= cni-uds-stub:$(CNI_VERSION)
+CNI_COMPONENT ?= cni
+CNI_VERSION   ?= dev
+CNI_IMG       ?= cni-uds-stub:$(CNI_VERSION)
 
 # Legacy stub image is kept for the old stub-only development flow.
 STUB_DAEMON_COMPONENT ?= stub-daemon
@@ -41,7 +41,8 @@ RBAC_ORCHESTRATOR_DIR ?= config/rbac/orchestrator
 RBAC_DAEMON_DIR       ?= config/rbac/daemon
 CRD_DIR               ?= config/crd/bases
 
-LOCAL_DEPLOYMENT ?= config/cluster/local_daemon.yaml
+LOCAL_DEPLOYMENT      ?= config/cluster/local_daemon.yaml
+WEBHOOK_CONFIGURATION ?= setera-pod-admission
 
 
 ##@ Help
@@ -71,9 +72,6 @@ bpf-generate: ## Generate Go bindings for TC/XDP eBPF programs
 
 
 ##@ Standard Docker builds
-
-# These retain the repository's normal Dockerfile-based build path.
-# The kind-specific build targets below are intentionally separate.
 
 DOCKERFILE ?= Dockerfile
 
@@ -107,11 +105,6 @@ build-stub-daemon: ## Build legacy stub daemon image
 
 
 ##@ Local kind images
-
-# The current cmd/daemon and cmd/orchestrator are multi-file packages.
-# These local-kind targets therefore compile the whole package directly and
-# package the resulting Linux binaries into small runtime images. They do not
-# depend on the repository Dockerfile's single-main.go build command.
 
 .PHONY: kind-build-daemon-binary
 kind-build-daemon-binary: bpf-generate ## Build the Linux daemon binary for kind
@@ -263,12 +256,15 @@ kind-redeploy: ## Rebuild local images, reload them into kind, and restart Seter
 .PHONY: kind-undeploy
 kind-undeploy: kind-cluster-check ## Remove daemon + orchestrator local E2E runtime objects
 	-kubectl --context $(KIND_CONTEXT) delete -f $(LOCAL_DEPLOYMENT)
+	-kubectl --context $(KIND_CONTEXT) delete mutatingwebhookconfiguration $(WEBHOOK_CONFIGURATION)
 
 .PHONY: kind-status
 kind-status: kind-cluster-check ## Show local Setera E2E status
 	kubectl --context $(KIND_CONTEXT) get nodes
 	kubectl --context $(KIND_CONTEXT) get daemonset daemon
 	kubectl --context $(KIND_CONTEXT) get deployment orchestrator
+	kubectl --context $(KIND_CONTEXT) get service setera-webhook
+	kubectl --context $(KIND_CONTEXT) get mutatingwebhookconfiguration $(WEBHOOK_CONFIGURATION)
 	kubectl --context $(KIND_CONTEXT) get pods -o wide
 
 .PHONY: kind-logs-daemon

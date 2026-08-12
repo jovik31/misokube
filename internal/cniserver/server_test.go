@@ -8,43 +8,74 @@ import (
 
 func TestNewValidatesDependencies(t *testing.T) {
 	pods := newPodLister(t)
+	nodes := newNodeLister(
+		t,
+		nodeWithTenants(t, "node-a", "tenant-a"),
+	)
 	network := &fakePodNetwork{}
 
 	tests := []struct {
 		name       string
 		socketPath string
+		nodeName   string
 		podsNil    bool
+		nodesNil   bool
 		networkNil bool
 	}{
 		{
 			name:       "missing socket",
 			socketPath: "",
+			nodeName:   "node-a",
+		},
+		{
+			name:       "missing node name",
+			socketPath: "/tmp/setera.sock",
 		},
 		{
 			name:       "missing pod lister",
 			socketPath: "/tmp/setera.sock",
+			nodeName:   "node-a",
 			podsNil:    true,
+		},
+		{
+			name:       "missing node lister",
+			socketPath: "/tmp/setera.sock",
+			nodeName:   "node-a",
+			nodesNil:   true,
 		},
 		{
 			name:       "missing pod network",
 			socketPath: "/tmp/setera.sock",
+			nodeName:   "node-a",
 			networkNil: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			gotPods := pods
-			if tt.podsNil {
+			if test.podsNil {
 				gotPods = nil
 			}
 
+			gotNodes := nodes
+			if test.nodesNil {
+				gotNodes = nil
+			}
+
 			var gotNetwork podNetwork = network
-			if tt.networkNil {
+			if test.networkNil {
 				gotNetwork = nil
 			}
 
-			if _, err := New(tt.socketPath, gotPods, gotNetwork, "1.1.0"); err == nil {
+			if _, err := New(
+				test.socketPath,
+				test.nodeName,
+				gotPods,
+				gotNodes,
+				gotNetwork,
+				"1.1.0",
+			); err == nil {
 				t.Fatal("expected constructor error")
 			}
 		})
@@ -54,7 +85,12 @@ func TestNewValidatesDependencies(t *testing.T) {
 func TestNewUsesFallbackCNIVersion(t *testing.T) {
 	server, err := New(
 		"/tmp/setera.sock",
+		"node-a",
 		newPodLister(t),
+		newNodeLister(
+			t,
+			nodeWithTenants(t, "node-a", "tenant-a"),
+		),
 		&fakePodNetwork{},
 		"",
 	)
@@ -74,7 +110,12 @@ func TestNewUsesFallbackCNIVersion(t *testing.T) {
 func TestRunRejectsCancelledContext(t *testing.T) {
 	server, err := New(
 		"/tmp/setera.sock",
+		"node-a",
 		newPodLister(t),
+		newNodeLister(
+			t,
+			nodeWithTenants(t, "node-a", "tenant-a"),
+		),
 		&fakePodNetwork{},
 		"1.1.0",
 	)
@@ -82,10 +123,18 @@ func TestRunRejectsCancelledContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(
+		context.Background(),
+	)
 	cancel()
 
-	if err := server.Run(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatalf("got %v, want context.Canceled", err)
+	if err := server.Run(ctx); !errors.Is(
+		err,
+		context.Canceled,
+	) {
+		t.Fatalf(
+			"got %v, want context.Canceled",
+			err,
+		)
 	}
 }

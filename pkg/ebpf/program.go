@@ -21,8 +21,8 @@ type PodProgram struct {
 	handle podProgramHandle
 }
 
-// AttachPodProgram loads the Setera Pod TC program, configures its tenant
-// identity, and attaches it to the given host-side veth.
+// AttachPodProgram loads the Setera Pod TC policy, configures its tenant
+// identity, and attaches it to ingress and egress on the host-side veth.
 //
 // The tenant identity is stored in the BPF program's fixed char[64]
 // my_tenant variable, leaving one byte for the terminating zero. The loader
@@ -33,7 +33,7 @@ func AttachPodProgram(
 	tenant string,
 ) (*PodProgram, error) {
 	return attachPodProgram(ifName, tenant, func(ifName, tenant string) (podProgramHandle, error) {
-		return loader.NewTCFirewall(ifName, tenant)
+		return loader.NewPodPolicy(ifName, tenant)
 	})
 }
 

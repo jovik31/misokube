@@ -10,7 +10,8 @@
 # This manifest installs:
 #   - the Setera CNI binary/config on every node;
 #   - one Setera daemon per Linux node;
-#   - one Setera orchestrator for Tenant -> Node assignment.
+#   - one Setera orchestrator for Tenant -> Node assignment;
+#   - one webhook Service for tenant Pod admission.
 #
 # The kind cluster used for this E2E deployment must have the default CNI
 # disabled so Setera can own Pod networking.
@@ -83,20 +84,23 @@ spec:
   selector:
     matchLabels:
       app: daemon
+
   updateStrategy:
     type: RollingUpdate
+
   template:
     metadata:
       labels:
         app: daemon
         tier: node
+
     spec:
       serviceAccountName: daemon-service-account
 
-      # The daemon manipulates the node network namespace directly:
-      # veths, routes, sysctls, TC and eBPF attachments.
+      # The daemon changes the node network namespace.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+
       priorityClassName: system-node-critical
       terminationGracePeriodSeconds: 10
 
@@ -110,27 +114,23 @@ spec:
                     values:
                       - linux
 
-      # Run on control-plane nodes as well as workers for local E2E clusters.
+      # Run on control-plane nodes and worker nodes.
       tolerations:
         - operator: Exists
           effect: NoSchedule
 
       initContainers:
-        # The CNI image is produced by:
-        #
-        #   make build-cni
-        #
-        # The image binary is /cni. Kubernetes selects a CNI executable by the
-        # "type" field, so install it on the host as "tenantcni".
         - name: install-cni-plugin
           image: cni-uds-stub:dev
           imagePullPolicy: IfNotPresent
+
           command:
             - /bin/sh
             - -ec
             - |
               cp -f /cni /host/opt/cni/bin/tenantcni
               chmod 0755 /host/opt/cni/bin/tenantcni
+
           volumeMounts:
             - name: cni-bin
               mountPath: /host/opt/cni/bin
@@ -138,6 +138,7 @@ spec:
         - name: install-cni-config
           image: cni-uds-stub:dev
           imagePullPolicy: IfNotPresent
+
           command:
             - /bin/sh
             - -ec
@@ -145,9 +146,11 @@ spec:
               mkdir -p /host/etc/cni/net.d
               cp -f /config/10-tenantcni.conf \
                 /host/etc/cni/net.d/10-tenantcni.conf
+
           volumeMounts:
             - name: cni-net-dir
               mountPath: /host/etc/cni/net.d
+
             - name: cni-config
               mountPath: /config
               readOnly: true
@@ -156,38 +159,30 @@ spec:
         - name: daemon
           image: setera-daemon:v0.1.0
           imagePullPolicy: IfNotPresent
+
           command:
             - /daemon
 
           env:
-            # cmd/daemon/config.go uses NODE_NAME as the default --node-name.
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
 
-            # kind's default IPv4 Pod subnet. This must match the cluster's
-            # cluster-wide Pod CIDR, not the individual Node.spec.podCIDR.
             - name: CLUSTER_POD_CIDR
               value: "10.244.0.0/16"
 
-          # KISS for the first E2E deployment. Once the full datapath works,
-          # reduce this to the exact capabilities required by TC/eBPF/netlink.
           securityContext:
             privileged: true
 
           volumeMounts:
-            # Shared pinned BPF maps, including tc_podIDs.
             - name: bpffs
               mountPath: /sys/fs/bpf
               mountPropagation: Bidirectional
 
-            # The host CNI binary connects to the daemon through:
-            # /var/run/setera/setera.sock
             - name: setera-run
               mountPath: /var/run/setera
 
-            # Durable node-local IPAM allocation state.
             - name: ipam-state
               mountPath: /var/lib/cni/tenantcni/ipam
 
@@ -231,6 +226,22 @@ spec:
             type: DirectoryOrCreate
 
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: setera-webhook
+  namespace: default
+spec:
+  selector:
+    app: orchestrator
+
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -238,22 +249,47 @@ metadata:
   namespace: default
   labels:
     app: orchestrator
+
 spec:
   replicas: 1
+
+  strategy:
+    type: Recreate
+
   selector:
     matchLabels:
       app: orchestrator
+
   template:
     metadata:
       labels:
         app: orchestrator
+
     spec:
       serviceAccountName: orchestrator-service-account
+
+      # The admission webhook must be reachable before tenant Pod
+      # networking is available. Do not depend on the Setera CNI.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
       terminationGracePeriodSeconds: 10
 
       containers:
         - name: orchestrator
           image: setera-orchestrator:v0.1.0
           imagePullPolicy: IfNotPresent
+
           command:
             - /orchestrator
+
+          ports:
+            - name: webhook
+              containerPort: 8443
+              protocol: TCP
+
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
