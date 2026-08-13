@@ -28,6 +28,72 @@ type tcFirewallPktStats struct {
 	Dropped   uint64
 }
 
+type tcFirewallServiceBackendKey struct {
+	_        structs.HostLayout
+	Frontend tcFirewallServiceFrontendKey
+	Slot     uint32
+}
+
+type tcFirewallServiceBackendValue struct {
+	_       structs.HostLayout
+	Address uint32
+	Port    uint16
+	Flags   uint8
+	Pad     uint8
+	Tenant  [64]int8
+}
+
+type tcFirewallServiceFrontendKey struct {
+	_        structs.HostLayout
+	Address  uint32
+	Port     uint16
+	Protocol uint8
+	Pad      uint8
+}
+
+type tcFirewallServiceFrontendValue struct {
+	_            structs.HostLayout
+	BackendCount uint32
+	Flags        uint32
+}
+
+type tcFirewallServicePacketFlowKey struct {
+	_               structs.HostLayout
+	ClientAddress   uint32
+	FrontendAddress uint32
+	ClientPort      uint16
+	FrontendPort    uint16
+	Protocol        uint8
+	Pad             [3]uint8
+}
+
+type tcFirewallServicePacketFlowValue struct {
+	_              structs.HostLayout
+	BackendAddress uint32
+	BackendPort    uint16
+	BackendFlags   uint8
+	Pad            uint8
+	LastSeenNs     uint64
+}
+
+type tcFirewallServicePacketRevnatKey struct {
+	_              structs.HostLayout
+	BackendAddress uint32
+	ClientAddress  uint32
+	BackendPort    uint16
+	ClientPort     uint16
+	Protocol       uint8
+	Pad            [3]uint8
+}
+
+type tcFirewallServicePacketRevnatValue struct {
+	_               structs.HostLayout
+	FrontendAddress uint32
+	FrontendPort    uint16
+	Pad             uint16
+	LastSeenNs      uint64
+}
+
 type tcFirewallVethTenant struct {
 	_           structs.HostLayout
 	Tenant      [64]int8
@@ -84,6 +150,11 @@ type tcFirewallProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type tcFirewallMapSpecs struct {
+	SvcBackend     *ebpf.MapSpec `ebpf:"svc_backend"`
+	SvcFrontend    *ebpf.MapSpec `ebpf:"svc_frontend"`
+	SvcPktFlow     *ebpf.MapSpec `ebpf:"svc_pkt_flow"`
+	SvcPktRevnat   *ebpf.MapSpec `ebpf:"svc_pkt_revnat"`
+	SvcPktStats    *ebpf.MapSpec `ebpf:"svc_pkt_stats"`
 	TcIfaceCfg     *ebpf.MapSpec `ebpf:"tc_iface_cfg"`
 	TcPodIDs       *ebpf.MapSpec `ebpf:"tc_podIDs"`
 	TcStats        *ebpf.MapSpec `ebpf:"tc_stats"`
@@ -118,6 +189,11 @@ func (o *tcFirewallObjects) Close() error {
 //
 // It can be passed to loadTcFirewallObjects or ebpf.CollectionSpec.LoadAndAssign.
 type tcFirewallMaps struct {
+	SvcBackend     *ebpf.Map `ebpf:"svc_backend"`
+	SvcFrontend    *ebpf.Map `ebpf:"svc_frontend"`
+	SvcPktFlow     *ebpf.Map `ebpf:"svc_pkt_flow"`
+	SvcPktRevnat   *ebpf.Map `ebpf:"svc_pkt_revnat"`
+	SvcPktStats    *ebpf.Map `ebpf:"svc_pkt_stats"`
 	TcIfaceCfg     *ebpf.Map `ebpf:"tc_iface_cfg"`
 	TcPodIDs       *ebpf.Map `ebpf:"tc_podIDs"`
 	TcStats        *ebpf.Map `ebpf:"tc_stats"`
@@ -126,6 +202,11 @@ type tcFirewallMaps struct {
 
 func (m *tcFirewallMaps) Close() error {
 	return _TcFirewallClose(
+		m.SvcBackend,
+		m.SvcFrontend,
+		m.SvcPktFlow,
+		m.SvcPktRevnat,
+		m.SvcPktStats,
 		m.TcIfaceCfg,
 		m.TcPodIDs,
 		m.TcStats,

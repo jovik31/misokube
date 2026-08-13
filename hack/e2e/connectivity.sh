@@ -5,6 +5,7 @@ set -Eeuo pipefail
 KIND_CONTEXT="${KIND_CONTEXT:-kind-setera-cluster}"
 EXTERNAL_IP="${SETERA_E2E_EXTERNAL_IP:-1.1.1.1}"
 HTTP_PORT="${SETERA_E2E_HTTP_PORT:-18080}"
+SERVICE_DATAPATH="${SETERA_E2E_SERVICE_DATAPATH:-socket}"
 
 TENANT_A="tenant-a"
 TENANT_B="tenant-b"
@@ -16,6 +17,22 @@ SERVICE_B="setera-e2e-tenant-b"
 
 SOCKET_LB_STATS_MAP="/sys/fs/bpf/setera/service/socket_stats"
 SOCKET_LB_TRANSLATIONS_KEY_HEX="03 00 00 00"
+PACKET_LB_STATS_MAP="/sys/fs/bpf/setera/service/packet_stats"
+PACKET_LB_TRANSLATIONS_KEY_HEX="03 00 00 00"
+
+case "$SERVICE_DATAPATH" in
+    socket)
+        SERVICE_DATAPATH_LABEL="socket LB"
+        ;;
+    packet)
+        SERVICE_DATAPATH_LABEL="TC packet LB"
+        ;;
+    *)
+        printf 'FAIL: unsupported SETERA_E2E_SERVICE_DATAPATH=%q; use socket or packet\n' \
+            "$SERVICE_DATAPATH" >&2
+        exit 1
+        ;;
+esac
 
 log() {
     printf '\n==> %s\n' "$*"
@@ -242,19 +259,32 @@ expect_exec_deny() {
     pass "$label"
 }
 
-socket_lb_translation_snapshot() {
+service_translation_snapshot() {
     local pod="$1"
     local node
+    local map_path
+    local key_hex
 
     node="$(pod_node "$pod")"
 
+    case "$SERVICE_DATAPATH" in
+        socket)
+            map_path="$SOCKET_LB_STATS_MAP"
+            key_hex="$SOCKET_LB_TRANSLATIONS_KEY_HEX"
+            ;;
+        packet)
+            map_path="$PACKET_LB_STATS_MAP"
+            key_hex="$PACKET_LB_TRANSLATIONS_KEY_HEX"
+            ;;
+    esac
+
     docker exec "$node" \
-        bpftool map lookup pinned "$SOCKET_LB_STATS_MAP" \
-        key hex $SOCKET_LB_TRANSLATIONS_KEY_HEX \
+        bpftool map lookup pinned "$map_path" \
+        key hex $key_hex \
         2>/dev/null
 }
 
-expect_exec_allow_via_socket_lb() {
+expect_exec_allow_via_service_datapath() {
     local label="$1"
     local pod="$2"
     local before
@@ -264,8 +294,8 @@ expect_exec_allow_via_socket_lb() {
 
     shift 2
 
-    if ! before="$(socket_lb_translation_snapshot "$pod")"; then
-        fail "$label: cannot read socket LB translation counter"
+    if ! before="$(service_translation_snapshot "$pod")"; then
+        fail "$label: cannot read $SERVICE_DATAPATH_LABEL translation counter"
     fi
 
     for attempt in $(seq 1 10); do
@@ -273,8 +303,8 @@ expect_exec_allow_via_socket_lb() {
             k exec "$pod" -- "$@" \
                 2>&1
         )"; then
-            if ! after="$(socket_lb_translation_snapshot "$pod")"; then
-                fail "$label: cannot read socket LB translation counter"
+            if ! after="$(service_translation_snapshot "$pod")"; then
+                fail "$label: cannot read $SERVICE_DATAPATH_LABEL translation counter"
             fi
 
             if [[ "$before" != "$after" ]]; then
@@ -290,7 +320,7 @@ expect_exec_allow_via_socket_lb() {
         printf '%s\n' "$output" >&2
     fi
 
-    fail "$label: socket LB translation counter did not change"
+    fail "$label: $SERVICE_DATAPATH_LABEL translation counter did not change"
 }
 
 start_http_server() {
@@ -531,8 +561,8 @@ expect_exec_allow \
     kubernetes.default.svc.cluster.local \
     "$DNS_POD_IP"
 
-expect_exec_allow_via_socket_lb \
-    "$TENANT_A -> kube-dns Service through socket LB" \
+expect_exec_allow_via_service_datapath \
+    "$TENANT_A -> kube-dns Service through $SERVICE_DATAPATH_LABEL" \
     "${A_PODS[0]}" \
     nslookup \
     kubernetes.default.svc.cluster.local
@@ -636,8 +666,8 @@ SERVICE_B_IP="$(
     fail \
         "$SERVICE_B ClusterIP is empty"
 
-expect_exec_allow_via_socket_lb \
-    "$TENANT_A -> $TENANT_A Service through socket LB" \
+expect_exec_allow_via_service_datapath \
+    "$TENANT_A -> $TENANT_A Service through $SERVICE_DATAPATH_LABEL" \
     "${A_PODS[0]}" \
     wget \
     -qO- \

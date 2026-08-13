@@ -2,10 +2,7 @@
 #include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 
-#define SERVICE_FRONTEND_MAX_ENTRIES 16384
-#define SERVICE_BACKEND_MAX_ENTRIES 131072
-#define SERVICE_REVNAT_MAX_ENTRIES 262144
-#define SERVICE_STATS_MAX_ENTRIES 6
+#include "service_types.h"
 
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
@@ -18,52 +15,6 @@ enum service_stat_key {
     SERVICE_STAT_REVNAT_HITS = 4,
     SERVICE_STAT_REVNAT_MISSES = 5,
 };
-
-struct service_frontend_key {
-    __u32 address;
-    __u16 port;
-    __u8 protocol;
-    __u8 pad;
-};
-
-struct service_frontend_value {
-    __u32 backend_count;
-    __u32 flags;
-};
-
-struct service_backend_key {
-    struct service_frontend_key frontend;
-    __u32 slot;
-};
-
-struct service_backend_value {
-    __u32 address;
-    __u16 port;
-    __u8 flags;
-    __u8 pad;
-    char tenant[64];
-};
-
-struct service_revnat_key {
-    __u64 socket_cookie;
-    __u32 backend_address;
-    __u16 backend_port;
-    __u16 pad;
-};
-
-struct service_revnat_value {
-    __u32 frontend_address;
-    __u16 frontend_port;
-    __u8 protocol;
-    __u8 pad;
-};
-
-_Static_assert(sizeof(struct service_frontend_key) == 8, "frontend key ABI");
-_Static_assert(sizeof(struct service_frontend_value) == 8, "frontend value ABI");
-_Static_assert(sizeof(struct service_backend_key) == 12, "backend key ABI");
-_Static_assert(sizeof(struct service_backend_value) == 72, "backend value ABI");
-_Static_assert(sizeof(struct service_revnat_key) == 16, "socket revnat key ABI");
-_Static_assert(sizeof(struct service_revnat_value) == 8, "socket revnat value ABI");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -81,14 +32,14 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, SERVICE_REVNAT_MAX_ENTRIES);
-    __type(key, struct service_revnat_key);
-    __type(value, struct service_revnat_value);
+    __uint(max_entries, SERVICE_SOCKET_REVNAT_MAX_ENTRIES);
+    __type(key, struct service_socket_revnat_key);
+    __type(value, struct service_socket_revnat_value);
 } svc_sock_revnat SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __uint(max_entries, SERVICE_STATS_MAX_ENTRIES);
+    __uint(max_entries, SERVICE_SOCKET_STATS_MAX_ENTRIES);
     __type(key, __u32);
     __type(value, __u64);
 } svc_sock_stats SEC(".maps");
@@ -133,13 +84,13 @@ static __always_inline int remember_translation(
     if (cookie == 0)
         return 0;
 
-    struct service_revnat_key key = {
+    struct service_socket_revnat_key key = {
         .socket_cookie = cookie,
         .backend_address = backend_address,
         .backend_port = backend_port,
     };
 
-    struct service_revnat_value value = {
+    struct service_socket_revnat_value value = {
         .frontend_address = frontend->address,
         .frontend_port = frontend->port,
         .protocol = frontend->protocol,
@@ -209,13 +160,13 @@ static __always_inline int reverse_translate(
         return 1;
     }
 
-    struct service_revnat_key key = {
+    struct service_socket_revnat_key key = {
         .socket_cookie = cookie,
         .backend_address = ctx->user_ip4,
         .backend_port = (__u16)ctx->user_port,
     };
 
-    struct service_revnat_value *value = bpf_map_lookup_elem(
+    struct service_socket_revnat_value *value = bpf_map_lookup_elem(
         &svc_sock_revnat,
         &key);
     if (!value || value->protocol != protocol) {

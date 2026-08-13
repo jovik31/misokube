@@ -37,7 +37,7 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 	if cfg.socketPath == "" {
 		return fmt.Errorf("socket path is empty")
 	}
-	if cfg.cgroupRoot == "" {
+	if cfg.socketLBEnabled && cfg.cgroupRoot == "" {
 		return fmt.Errorf("cgroup root is empty")
 	}
 	if cfg.mtu <= 0 {
@@ -300,21 +300,26 @@ func run(ctx context.Context, cfg config, logger klog.Logger) error {
 		}
 	}
 
-	socketLB, err := seteraebpf.AttachSocketLB(cfg.cgroupRoot)
-	if err != nil {
-		cancel()
-		return fmt.Errorf("attach Service socket LB: %w", err)
-	}
-	defer func() {
-		if err := socketLB.Close(); err != nil {
-			logger.Error(err, "close Service socket LB")
+	var socketLB *seteraebpf.SocketLB
+	if cfg.socketLBEnabled {
+		socketLB, err = seteraebpf.AttachSocketLB(cfg.cgroupRoot)
+		if err != nil {
+			cancel()
+			return fmt.Errorf("attach Service socket LB: %w", err)
 		}
-	}()
+		defer func() {
+			if err := socketLB.Close(); err != nil {
+				logger.Error(err, "close Service socket LB")
+			}
+		}()
 
-	logger.Info(
-		"Service socket LB attached",
-		"cgroupRoot", cfg.cgroupRoot,
-	)
+		logger.Info(
+			"Service socket LB attached",
+			"cgroupRoot", cfg.cgroupRoot,
+		)
+	} else {
+		logger.Info("Service socket LB disabled; TC Service fallback remains active")
+	}
 
 	cniErr := make(chan error, 1)
 	go func() {

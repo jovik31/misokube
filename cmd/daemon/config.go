@@ -21,10 +21,11 @@ type config struct {
 	kubeconfig string
 	nodeName   string
 
-	socketPath string
-	stateDir   string
-	cgroupRoot string
-	mtu        int
+	socketPath      string
+	stateDir        string
+	cgroupRoot      string
+	socketLBEnabled bool
+	mtu             int
 
 	// Optional for now. When set, the daemon installs Pod egress
 	// masquerading for traffic leaving the cluster-wide Pod CIDR.
@@ -65,6 +66,12 @@ func parseConfig() config {
 		"cgroup-root",
 		defaultCgroupRoot,
 		"host cgroup v2 root used by the Service socket load balancer",
+	)
+	flag.BoolVar(
+		&cfg.socketLBEnabled,
+		"socket-lb",
+		true,
+		"enable the cgroup socket Service load balancer",
 	)
 	flag.IntVar(
 		&cfg.mtu,

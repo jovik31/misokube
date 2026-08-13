@@ -42,7 +42,7 @@ type serviceLBServiceFrontendValue struct {
 	Flags        uint32
 }
 
-type serviceLBServiceRevnatKey struct {
+type serviceLBServiceSocketRevnatKey struct {
 	_              structs.HostLayout
 	SocketCookie   uint64
 	BackendAddress uint32
@@ -50,7 +50,7 @@ type serviceLBServiceRevnatKey struct {
 	Pad            uint16
 }
 
-type serviceLBServiceRevnatValue struct {
+type serviceLBServiceSocketRevnatValue struct {
 	_               structs.HostLayout
 	FrontendAddress uint32
 	FrontendPort    uint16

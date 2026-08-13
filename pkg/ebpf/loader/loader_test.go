@@ -35,13 +35,53 @@ func TestTcRouterDeclaresSharedVXLANIfIndexMap(t *testing.T) {
 	if got == nil {
 		t.Fatal("TC router does not declare tc_vxlan_ifindex")
 	}
+
 	want := tcVXLANIfIndexMapSpec()
 	if got.Type != want.Type ||
 		got.KeySize != want.KeySize ||
 		got.ValueSize != want.ValueSize ||
 		got.MaxEntries != want.MaxEntries ||
 		got.Flags != want.Flags {
-		t.Fatalf("tc_vxlan_ifindex = %s, want %s", got, want)
+		t.Fatalf(
+			"tc_vxlan_ifindex = %s, want %s",
+			got,
+			want,
+		)
+	}
+}
+
+func TestTcRouterDeclaresPacketServiceMaps(t *testing.T) {
+	spec, err := loadTcFirewall()
+	if err != nil {
+		t.Fatalf("load TC router spec: %v", err)
+	}
+
+	want := map[string]*ebpf.MapSpec{
+		"svc_frontend":   serviceFrontendMapSpec(),
+		"svc_backend":    serviceBackendMapSpec(),
+		"svc_pkt_flow":   servicePacketFlowMapSpec(),
+		"svc_pkt_revnat": servicePacketRevNatMapSpec(),
+		"svc_pkt_stats":  servicePacketStatsMapSpec(),
+	}
+
+	for name, expected := range want {
+		got := spec.Maps[name]
+		if got == nil {
+			t.Fatalf("TC router does not declare %s", name)
+		}
+
+		if got.Type != expected.Type ||
+			got.KeySize != expected.KeySize ||
+			got.ValueSize != expected.ValueSize ||
+			got.MaxEntries != expected.MaxEntries ||
+			got.Flags != expected.Flags {
+			t.Fatalf(
+				"%s = %s, want %s",
+				name,
+				got,
+				expected,
+			)
+		}
 	}
 }
 
@@ -88,7 +128,12 @@ func TestEnsureTcPodIDsSpecDisablesELFPinning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := prepareTcCollectionSpec(spec, "tc router", true); err != nil {
+	if err := prepareTcCollectionSpec(
+		spec,
+		"tc router",
+		true,
+		true,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,11 +142,17 @@ func TestEnsureTcPodIDsSpecDisablesELFPinning(t *testing.T) {
 		"tc_vxlan_ifindex",
 		"tc_iface_cfg",
 		"tc_stats",
+		"svc_frontend",
+		"svc_backend",
+		"svc_pkt_flow",
+		"svc_pkt_revnat",
+		"svc_pkt_stats",
 	} {
 		mapSpec := spec.Maps[name]
 		if mapSpec == nil {
 			t.Fatalf("map %s is missing", name)
 		}
+
 		if got := mapSpec.Pinning; got != ebpf.PinNone {
 			t.Fatalf(
 				"%s pinning = %v, want PinNone",
@@ -193,6 +244,7 @@ func TestNewTCBpfFilter(t *testing.T) {
 			filter.Attrs().LinkIndex,
 		)
 	}
+
 	if filter.Attrs().Parent != netlink.HANDLE_MIN_INGRESS {
 		t.Fatalf(
 			"Parent = %#x, want %#x",
@@ -200,9 +252,14 @@ func TestNewTCBpfFilter(t *testing.T) {
 			netlink.HANDLE_MIN_INGRESS,
 		)
 	}
+
 	if filter.Fd != 100 {
-		t.Fatalf("Fd = %d, want 100", filter.Fd)
+		t.Fatalf(
+			"Fd = %d, want 100",
+			filter.Fd,
+		)
 	}
+
 	if filter.Name != "setera_test" {
 		t.Fatalf(
 			"Name = %q, want %q",
@@ -210,6 +267,7 @@ func TestNewTCBpfFilter(t *testing.T) {
 			"setera_test",
 		)
 	}
+
 	if !filter.DirectAction {
 		t.Fatal("DirectAction = false, want true")
 	}
@@ -249,17 +307,34 @@ func TestTcFirewallTenantConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tenantBytes, isDefault := tcFirewallTenantConstants(tt.tenant)
+			tenantBytes, isDefault := tcFirewallTenantConstants(
+				tt.tenant,
+			)
 
-			gotTenant := string(tenantBytes[:len(tt.wantTenant)])
+			gotTenant := string(
+				tenantBytes[:len(tt.wantTenant)],
+			)
 			if gotTenant != tt.wantTenant {
-				t.Fatalf("tenant bytes = %q, want %q", gotTenant, tt.wantTenant)
+				t.Fatalf(
+					"tenant bytes = %q, want %q",
+					gotTenant,
+					tt.wantTenant,
+				)
 			}
+
 			if tenantBytes[len(tt.wantTenant)] != 0 {
-				t.Fatalf("tenant bytes are not NUL-terminated after %q", tt.wantTenant)
+				t.Fatalf(
+					"tenant bytes are not NUL-terminated after %q",
+					tt.wantTenant,
+				)
 			}
+
 			if isDefault != tt.wantIsDefault {
-				t.Fatalf("isDefault = %d, want %d", isDefault, tt.wantIsDefault)
+				t.Fatalf(
+					"isDefault = %d, want %d",
+					isDefault,
+					tt.wantIsDefault,
+				)
 			}
 		})
 	}

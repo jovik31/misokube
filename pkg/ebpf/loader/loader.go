@@ -176,6 +176,7 @@ func prepareTcCollectionSpec(
 	spec *ebpf.CollectionSpec,
 	programName string,
 	requireVXLANIfIndex bool,
+	requireServiceMaps bool,
 ) error {
 	mapSpec, ok := spec.Maps["tc_podIDs"]
 	if !ok || mapSpec == nil {
@@ -225,6 +226,43 @@ func prepareTcCollectionSpec(
 		}
 
 		vxlanMapSpec.Pinning = ebpf.PinNone
+	}
+
+	if requireServiceMaps {
+		serviceMaps := map[string]*ebpf.MapSpec{
+			"svc_frontend":   serviceFrontendMapSpec(),
+			"svc_backend":    serviceBackendMapSpec(),
+			"svc_pkt_flow":   servicePacketFlowMapSpec(),
+			"svc_pkt_revnat": servicePacketRevNatMapSpec(),
+			"svc_pkt_stats":  servicePacketStatsMapSpec(),
+		}
+
+		for name, wantService := range serviceMaps {
+			serviceMap := spec.Maps[name]
+			if serviceMap == nil {
+				return fmt.Errorf(
+					"%s: %s map is missing from collection spec",
+					programName,
+					name,
+				)
+			}
+
+			if serviceMap.Type != wantService.Type ||
+				serviceMap.KeySize != wantService.KeySize ||
+				serviceMap.ValueSize != wantService.ValueSize ||
+				serviceMap.MaxEntries != wantService.MaxEntries ||
+				serviceMap.Flags != wantService.Flags {
+				return fmt.Errorf(
+					"%s: %s map is incompatible: got %s, want %s",
+					programName,
+					name,
+					serviceMap,
+					wantService,
+				)
+			}
+
+			serviceMap.Pinning = ebpf.PinNone
+		}
 	}
 
 	// These maps are program-instance state. Do not let their ELF
@@ -434,7 +472,7 @@ func loadTcFirewallObjectsWithTenant(obj interface{}, opts *ebpf.CollectionOptio
 	if err != nil {
 		return err
 	}
-	if err := prepareTcCollectionSpec(spec, "tc router", true); err != nil {
+	if err := prepareTcCollectionSpec(spec, "tc router", true, true); err != nil {
 		return err
 	}
 
@@ -469,7 +507,7 @@ func loadPreparedNodeRouterObjects(
 	if err != nil {
 		return err
 	}
-	if err := prepareTcCollectionSpec(spec, "node router", false); err != nil {
+	if err := prepareTcCollectionSpec(spec, "node router", false, false); err != nil {
 		return err
 	}
 	return spec.LoadAndAssign(obj, opts)
@@ -586,12 +624,12 @@ func (fw *XDPFirewall) Close() error {
 	return fw.objs.Close()
 }
 
-// NewTCFirewall loads and attaches the Pod TC program to ingress on the given
-// host-side veth.
+// NewTCFirewall loads the Pod TC object and attaches its ingress program to the
+// given host-side veth. NewPodPolicy attaches the egress program from the same
+// object after this function returns.
 //
-// Setera makes all Pod routing/isolation decisions on ingress. No Setera egress
-// program is attached. Any legacy Setera egress filter from an older daemon is
-// removed during attach.
+// Any old Setera egress filter is removed first so NewPodPolicy can install the
+// current egress program without leaving stale filters behind.
 //
 // The returned object owns only its ingress filter and BPF object handles. It
 // deliberately leaves clsact in place on Close.
@@ -618,11 +656,18 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 	}
 	defer sharedVXLANIfIndex.Close()
 
+	serviceMaps, err := openPacketServiceMaps()
+	if err != nil {
+		return nil, err
+	}
+	defer serviceMaps.Close()
+
+	replacements := serviceMaps.replacements()
+	replacements["tc_podIDs"] = sharedPodIDs
+	replacements["tc_vxlan_ifindex"] = sharedVXLANIfIndex
+
 	opts := &ebpf.CollectionOptions{
-		MapReplacements: map[string]*ebpf.Map{
-			"tc_podIDs":        sharedPodIDs,
-			"tc_vxlan_ifindex": sharedVXLANIfIndex,
-		},
+		MapReplacements: replacements,
 	}
 
 	tenant := ""
@@ -834,9 +879,8 @@ func deleteTCFilter(
 	return nil
 }
 
-// deleteNamedTCBpfFilters removes Setera filters left by older daemon versions.
-// It makes the ingress-only attachment model effective across an in-place
-// daemon upgrade without deleting shared clsact state.
+// deleteNamedTCBpfFilters removes stale Setera filters before the current
+// program is attached. It does not delete the shared clsact qdisc.
 func deleteNamedTCBpfFilters(
 	linkIndex int,
 	parent uint32,
@@ -1121,8 +1165,8 @@ func (fw *TCFirewall) GetIngressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 0)
 }
 
-// GetEgressStats is retained for API compatibility. Setera no longer attaches
-// the TC egress program, so this counter normally remains zero.
+// GetEgressStats returns aggregated egress packet statistics. NewPodPolicy
+// attaches the egress program that updates this counter.
 func (fw *TCFirewall) GetEgressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 1)
 }
