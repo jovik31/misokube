@@ -9,12 +9,12 @@ import (
 )
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=tn
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="oldSelf == null || self.spec.name == oldSelf.spec.name",message="spec.name is immutable; only spec.zones may change"
 // Tenant is a specification for a Tenant resource
 type Tenant struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -26,9 +26,6 @@ type Tenant struct {
 
 type TenantSpec struct {
 
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"` //Tenant Name
-
 	// +kubebuilder:validation:Minimum=1
 	Zones int `json:"zones"` //Number of nodes where the tenant is to be deployed
 }
@@ -37,23 +34,10 @@ type TenantStatus struct {
 	// Conditions is a list of conditions for the tenant~
 
 	// assigned nodes
-	AssignedNodes []NodeInfo `json:"assignedNodes,omitempty"` // list of nodes where the tenant is assigned
-
-	// paused is true if the tenant is paused
-	Paused bool `json:"paused,omitempty"` // tenant is paused
-
-	AwaitingNodeConfiguration []string `json:"waitingForNodeConfiguration,omitempty"` // list of nodes where the tenant is waiting for configuration
+	AssignedNodes []string `json:"assignedNodes,omitempty"` // list of nodes where the tenant is assigned
 
 	// Conditions is a list of conditions for the tenant
 	Conditions []metav1.Condition `json:"conditions,omitempty"` // list of conditions for the tenant
-}
-
-type NodeInfo struct {
-	Name       string `json:"name"` // Name of the node
-	NodeIP     string `json:"node ip"`
-	TenantCIDR string `json:"tenant network"`    // IP address of the node
-	VtepIP     string `json:"vtepIP,omitempty"`  // VTEP IP address of the node, if applicable
-	VtepMAC    string `json:"vtepMAC,omitempty"` // VTEP MAC address of the node, if applicable
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

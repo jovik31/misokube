@@ -7,26 +7,23 @@ import (
 )
 
 const (
-	validateEndpoint string = "/validate"
-	//validatePodEndpoint        string = "/validate/pod"
-	//validateTenantEndpoint     string = "/validate/tenant"
-	//validateDeploymentEndpoint string = "validate/deployment"
-	//validateDaemonsetEndpoint  string = "validate/daemonset" // not sure if i should validate daemonsets at this moment in time
-	//tlsCert string = "tls.crt"
-	//tlsKey  string = "tls.key"
-	//tlsDir      string = "/run/secrets/tls"
-	serverPort string = ":8443"
+	validateEndpoint = "/validate"
+	serverPort       = ":8443"
 
-	contentTypeHeader string = "content-type"
-	contentTypeJSON   string = "application/json"
+	WebhookServiceName             = "setera-webhook"
+	WebhookConfigurationName       = "setera-pod-admission"
+	WebhookServicePort       int32 = 443
 
-	tenantLabelKey string = "setera.com.v1.tenant"
+	contentTypeHeader = "content-type"
+	contentTypeJSON   = "application/json"
 
-	tenantNotFound      string = "tenant not found"
-	tenantLabelNotFound string = "tenant label not found"
-	podIsValid          string = "pod is valid"
-	tenantIsValid       string = "tenant is valid"
-	zonesAboveNodes     string = "the number of tenant zones is greater than the number of nodes"
+	tenantNotFound             = "tenant not found"
+	tenantNotAssigned          = "tenant is not assigned to nodes"
+	tenantNodeSelectorConflict = "Pod has a conflicting Setera tenant node selector"
+	podNodeNameNotAllowed      = "tenant Pod must not set spec.nodeName"
+	podIsValid                 = "Pod is valid"
+	tenantIsValid              = "tenant is valid"
+	zonesAboveNodes            = "the number of tenant zones is greater than the number of nodes"
 )
 
 var (
@@ -39,7 +36,7 @@ var (
 	daemonsetGVK = metav1.GroupVersionKind{
 		Group:   "apps",
 		Version: "v1",
-		Kind:    "Daemonset",
+		Kind:    "DaemonSet",
 	}
 
 	podGVK = metav1.GroupVersionKind{

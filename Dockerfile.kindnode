@@ -12,6 +12,7 @@ RUN apt-get update && \
         conntrack \
         dnsutils \
         netcat-openbsd \
+        bpftool \
         curl \
         vim \
     && apt-get clean \

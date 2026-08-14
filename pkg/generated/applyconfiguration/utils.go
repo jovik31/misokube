@@ -24,7 +24,7 @@ import (
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	testing "k8s.io/client-go/testing"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 )
 
 // ForKind returns an apply configuration type for the given GroupVersionKind, or nil if no
@@ -32,20 +32,8 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=setera.com, Version=v1
-	case v1.SchemeGroupVersion.WithKind("NodeInfo"):
-		return &seteracomv1.NodeInfoApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NodeStore"):
-		return &seteracomv1.NodeStoreApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NodeStoreSpec"):
-		return &seteracomv1.NodeStoreSpecApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NodeStoreStatus"):
-		return &seteracomv1.NodeStoreStatusApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("Pod_Info"):
-		return &seteracomv1.Pod_InfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Tenant"):
 		return &seteracomv1.TenantApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("TenantInfra"):
-		return &seteracomv1.TenantInfraApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TenantSpec"):
 		return &seteracomv1.TenantSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TenantStatus"):
@@ -55,6 +43,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	return nil
 }
 
-func NewTypeConverter(scheme *runtime.Scheme) *testing.TypeConverter {
-	return &testing.TypeConverter{Scheme: scheme, TypeResolver: internal.Parser()}
+func NewTypeConverter(scheme *runtime.Scheme) managedfields.TypeConverter {
+	return managedfields.NewSchemeTypeConverter(scheme, internal.Parser())
 }

@@ -11,26 +11,34 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - create
+  - get
+  - update
 - apiGroups:
   - setera.com
   resources:
-  - nodeStores
   - tenants
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
-  - update
   - watch
 - apiGroups:
   - setera.com
   resources:
-  - nodeStores/status
   - tenants/status
   verbs:
-  - get
-  - patch
   - update

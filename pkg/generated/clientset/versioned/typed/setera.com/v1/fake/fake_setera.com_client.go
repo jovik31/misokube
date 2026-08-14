@@ -28,12 +28,8 @@ type FakeSeteraV1 struct {
 	*testing.Fake
 }
 
-func (c *FakeSeteraV1) NodeStores(namespace string) v1.NodeStoreInterface {
-	return newFakeNodeStores(c, namespace)
-}
-
-func (c *FakeSeteraV1) Tenants(namespace string) v1.TenantInterface {
-	return newFakeTenants(c, namespace)
+func (c *FakeSeteraV1) Tenants() v1.TenantInterface {
+	return newFakeTenants(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

@@ -8,72 +8,115 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type wrappedWritter struct {
+type wrappedWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
 type Middleware func(http.Handler) http.Handler
 
-func runMiddleware(xs ...Middleware) Middleware {
-
+func runMiddleware(
+	middlewares ...Middleware,
+) Middleware {
 	return func(next http.Handler) http.Handler {
-		for i := len(xs) - 1; i >= 0; i-- {
-			x := xs[i]
-			next = x(next)
+		for i := len(middlewares) - 1; i >= 0; i-- {
+			next = middlewares[i](next)
 		}
+
 		return next
 	}
 }
 
-func (w *wrappedWritter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
+func (w *wrappedWriter) WriteHeader(
+	statusCode int,
+) {
 	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-// validate http request fields
-func validatingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func validatingMiddleware(
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(
+		func(
+			w http.ResponseWriter,
+			r *http.Request,
+		) {
+			if r.Method != http.MethodPost {
+				http.Error(
+					w,
+					fmt.Sprintf(
+						"%s method is not allowed",
+						r.Method,
+					),
+					http.StatusMethodNotAllowed,
+				)
 
-		//validate http method
-		if r.Method != http.MethodPost {
-			http.Error(w, fmt.Sprintf("%s method is not allowed", r.Method), http.StatusMethodNotAllowed)
-			klog.Error(http.StatusMethodNotAllowed, fmt.Sprintf(" %s method is not allowed", r.Method))
-			return
-		}
+				return
+			}
 
-		//validate headers
-		contentType := r.Header.Get(contentTypeHeader)
-		if contentType != contentTypeJSON {
-			http.Error(w, fmt.Sprintf("%s is not a supported content type", contentType), http.StatusUnsupportedMediaType)
-			klog.Error(http.StatusUnsupportedMediaType, fmt.Sprintf(" %s is not a supported content type", contentType))
-			return
-		}
+			contentType := r.Header.Get(
+				contentTypeHeader,
+			)
 
-		//check if body is empty
-		if r.Body == nil {
-			http.Error(w, fmt.Sprintf(" %s request is empty ", r.Method), http.StatusMethodNotAllowed)
-			klog.Error(fmt.Sprintf("error code %d request has an empty body", http.StatusBadRequest))
-			return
-		}
+			if contentType != contentTypeJSON {
+				http.Error(
+					w,
+					fmt.Sprintf(
+						"%s is not a supported content type",
+						contentType,
+					),
+					http.StatusUnsupportedMediaType,
+				)
 
-		next.ServeHTTP(&wrappedWritter{ResponseWriter: w, statusCode: http.StatusOK}, r)
+				return
+			}
 
-	})
+			if r.Body == nil {
+				http.Error(
+					w,
+					"request body is empty",
+					http.StatusBadRequest,
+				)
+
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		},
+	)
 }
 
-// logging middleware to log info on the requests made
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func loggingMiddleware(
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(
+		func(
+			w http.ResponseWriter,
+			r *http.Request,
+		) {
+			start := time.Now()
 
-		start := time.Now()
-		wrappedWriter := &wrappedWritter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-		}
-		next.ServeHTTP(wrappedWriter, r)
-		klog.Info(r.RemoteAddr, " ", wrappedWriter.statusCode, " ", r.Method, " ", r.URL.Path, " ", time.Since(start))
+			writer := &wrappedWriter{
+				ResponseWriter: w,
+				statusCode:     http.StatusOK,
+			}
 
-	})
+			next.ServeHTTP(writer, r)
 
+			klog.Info(
+				"webhook request",
+				"remoteAddress",
+				r.RemoteAddr,
+				"status",
+				writer.statusCode,
+				"method",
+				r.Method,
+				"path",
+				r.URL.Path,
+				"duration",
+				time.Since(start),
+			)
+		},
+	)
 }

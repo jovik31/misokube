@@ -3,13 +3,29 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: setera-cluster
 nodes:
   - role: control-plane
-    image: kind-node-nettool:v1.33.1
+    image: kind-node-nettool:latest
+    extraMounts:
+    - hostPath: /sys/fs/bpf 
+      containerPath: /sys/fs/bpf 
+      readOnly: false
   - role: worker
-    image: kind-node-nettool:v1.33.1
+    image: kind-node-nettool:latest
+    extraMounts:
+      - hostPath: /sys/fs/bpf 
+        containerPath: /sys/fs/bpf 
+        readOnly: false
   - role: worker
-    image: kind-node-nettool:v1.33.1
+    image: kind-node-nettool:latest
+    extraMounts:
+      - hostPath: /sys/fs/bpf 
+        containerPath: /sys/fs/bpf 
+        readOnly: false
   - role: worker
-    image: kind-node-nettool:v1.33.1
+    image: kind-node-nettool:latest
+    extraMounts:
+      - hostPath: /sys/fs/bpf 
+        containerPath: /sys/fs/bpf 
+        readOnly: false
 networking:
   disableDefaultCNI: true
   kubeProxyMode: iptables

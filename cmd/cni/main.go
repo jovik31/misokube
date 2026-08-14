@@ -19,15 +19,15 @@ import (
 )
 
 func main() {
-    // Initialize logging to file if configured; fallback is stderr.
-    lf := cniplugin.LoadLogFile()
-    if lf != nil {
-        defer lf.Close()
-    }
+	// Initialize logging to file if configured; fallback is stderr.
+	lf := cniplugin.LoadLogFile()
+	if lf != nil {
+		defer lf.Close()
+	}
 
 	opts := cniplugin.Options{
 		SocketPath: "/var/run/setera/setera.sock",
-		Timeout:    5 * time.Second,
+		Timeout:    15 * time.Second,
 	}
 
 	skel.PluginMainFuncs(

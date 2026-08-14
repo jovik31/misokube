@@ -23,8 +23,6 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// NodeStores returns a NodeStoreInformer.
-	NodeStores() NodeStoreInformer
 	// Tenants returns a TenantInformer.
 	Tenants() TenantInformer
 }
@@ -40,12 +38,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// NodeStores returns a NodeStoreInformer.
-func (v *version) NodeStores() NodeStoreInformer {
-	return &nodeStoreInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // Tenants returns a TenantInformer.
 func (v *version) Tenants() TenantInformer {
-	return &tenantInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &tenantInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

@@ -29,7 +29,7 @@ func init() {
 
 func addKnownTypes(scheme *runtime.Scheme) error {
 
-	scheme.AddKnownTypes(SchemeGroupVersion, &Tenant{}, &TenantList{}, &NodeStore{}, &NodeStoreList{})
+	scheme.AddKnownTypes(SchemeGroupVersion, &Tenant{}, &TenantList{})
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-test
+  namespace: default
+spec:
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600

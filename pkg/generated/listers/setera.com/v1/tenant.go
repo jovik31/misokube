@@ -31,8 +31,9 @@ type TenantLister interface {
 	// List lists all Tenants in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*seteracomv1.Tenant, err error)
-	// Tenants returns an object that can list and get Tenants.
-	Tenants(namespace string) TenantNamespaceLister
+	// Get retrieves the Tenant from the index for a given name.
+	// Objects returned here must be treated as read-only.
+	Get(name string) (*seteracomv1.Tenant, error)
 	TenantListerExpansion
 }
 
@@ -44,27 +45,4 @@ type tenantLister struct {
 // NewTenantLister returns a new TenantLister.
 func NewTenantLister(indexer cache.Indexer) TenantLister {
 	return &tenantLister{listers.New[*seteracomv1.Tenant](indexer, seteracomv1.Resource("tenant"))}
-}
-
-// Tenants returns an object that can list and get Tenants.
-func (s *tenantLister) Tenants(namespace string) TenantNamespaceLister {
-	return tenantNamespaceLister{listers.NewNamespaced[*seteracomv1.Tenant](s.ResourceIndexer, namespace)}
-}
-
-// TenantNamespaceLister helps list and get Tenants.
-// All objects returned here must be treated as read-only.
-type TenantNamespaceLister interface {
-	// List lists all Tenants in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*seteracomv1.Tenant, err error)
-	// Get retrieves the Tenant from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
-	Get(name string) (*seteracomv1.Tenant, error)
-	TenantNamespaceListerExpansion
-}
-
-// tenantNamespaceLister implements the TenantNamespaceLister
-// interface.
-type tenantNamespaceLister struct {
-	listers.ResourceIndexer[*seteracomv1.Tenant]
 }

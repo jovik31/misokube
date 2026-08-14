@@ -1,0 +1,6 @@
+apiVersion: setera.com/v1
+kind: Tenant
+metadata:
+  name: tenant-c
+spec:
+  zones: 1

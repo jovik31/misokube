@@ -38,14 +38,10 @@ spec:
             type: object
           spec:
             properties:
-              name:
-                minLength: 1
-                type: string
               zones:
                 minimum: 1
                 type: integer
             required:
-            - name
             - zones
             type: object
           status:
@@ -53,22 +49,7 @@ spec:
               assignedNodes:
                 description: assigned nodes
                 items:
-                  properties:
-                    name:
-                      type: string
-                    node ip:
-                      type: string
-                    tenant network:
-                      type: string
-                    vtepIP:
-                      type: string
-                    vtepMAC:
-                      type: string
-                  required:
-                  - name
-                  - node ip
-                  - tenant network
-                  type: object
+                  type: string
                 type: array
               conditions:
                 description: Conditions is a list of conditions for the tenant
@@ -127,20 +108,10 @@ spec:
                   - type
                   type: object
                 type: array
-              paused:
-                description: paused is true if the tenant is paused
-                type: boolean
-              waitingForNodeConfiguration:
-                items:
-                  type: string
-                type: array
             type: object
         required:
         - spec
         type: object
-        x-kubernetes-validations:
-        - message: spec.name is immutable; only spec.zones may change
-          rule: oldSelf == null || self.spec.name == oldSelf.spec.name
     served: true
     storage: true
     subresources:

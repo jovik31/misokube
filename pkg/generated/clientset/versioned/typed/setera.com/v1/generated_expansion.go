@@ -17,6 +17,4 @@ limitations under the License.
 
 package v1
 
-type NodeStoreExpansion interface{}
-
 type TenantExpansion interface{}

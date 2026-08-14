@@ -1,199 +1,40 @@
+# Local Setera end-to-end deployment.
+#
+# Generated ClusterRoles are intentionally NOT duplicated here.
+# Before applying this file:
+#
+#   make rbac-all
+#   kubectl apply -f config/rbac/daemon
+#   kubectl apply -f config/rbac/orchestrator
+#
+# This manifest installs:
+#   - the Setera CNI binary/config on every node;
+#   - one Setera daemon per Linux node;
+#   - one Setera orchestrator for Tenant -> Node assignment;
+#   - one webhook Service for tenant Pod admission.
+#
+# The kind cluster used for this E2E deployment must have the default CNI
+# disabled so Setera can own Pod networking.
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: daemon-service-account
   namespace: default
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  creationTimestamp: null
-  name: daemon-cluster-role
-rules:
-- apiGroups:
-  - setera.com
-  resources:
-  - tenants
-  - nodestores
-  - tenants/status
-  - nodestores/status
-  verbs:
-  - list
-  - watch
-  - create
-  - get
-  - patch
-  - update
-- apiGroups:
-  - apiextensions.k8s.io
-  resources:
-  - customresourcedefinitions
-  verbs:
-  - list
-  - watch
-  - create
-  - get
-  - patch
-  - update
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  - namespaces
-  - pods
-  - configmaps
-  - events
-  verbs:
-  - create
-  - list
-  - watch
-  - get
-  - patch
-  - update
-  - delete
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  creationTimestamp: null
-  name: daemon-cluster-role-binding
+  name: daemon-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: daemon-cluster-role
+  name: daemon-role
 subjects:
-- kind: ServiceAccount
-  name: daemon-service-account
-  namespace: default
----
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: tenantcni-config
-  namespace: default
-  labels:
-    tier: node
-    app: tenantcni
-data:
-  cni-conf.json: |
-   {
-      "cniVersion": "0.4.0",
-      "name": "tenantcni",
-      "type": "tenantcni"
-    }
-  net-conf.json: |
-    {
-      "PodCIDR": "10.244.0.0/24",
-      "Backend": {
-        "Type": "vxlan"
-      }
-    }
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  creationTimestamp: null
-  labels:
-    tier: node
-    app: daemon
-  name: daemon
-spec:
-  selector:
-    matchLabels:
-      app: daemon
-  template:
-    metadata:
-      creationTimestamp: null
-      labels:
-        app: daemon
-    spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/os
-                operator: In
-                values:
-                - linux
-      hostNetwork: true
-      priorityClassName: system-node-critical
-      tolerations:
-      - operator: Exists
-        effect: NoSchedule
-      serviceAccountName: daemon-service-account
-      initContainers:
-      - name: install-cni-plugin
-        image: jovik31/tenantcni:latest
-        command: 
-        - cp
-        args:
-        - -f
-        - /tenantcni
-        - /opt/cni/bin/tenantcni
-        volumeMounts:
-        - name: cni-plugin
-          mountPath: /opt/cni/bin
-      - name: install-cni
-        image: jovik31/tenantcni:latest
-        command: 
-        - cp
-        args:
-        - -f
-        - /etc/tenantcni/cni-conf.json
-        - /etc/cni/net.d/10-tenantcni.conf
-        volumeMounts:
-        - name: cni
-          mountPath: /etc/cni/net.d
-        - name: tenantcni
-          mountPath: /etc/tenantcni/
-      containers:
-      - image: setera-daemon:v0.1.0
-        name: daemon
-        command:
-        - /daemon
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: MY_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: MY_POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace 
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        securityContext:
-          privileged: false
-          capabilities:
-            add: ["NET_ADMIN", "NET_RAW"]
-        volumeMounts:
-        - name: tenantcni-cfg
-          mountPath: /etc/tenantcni
-          readOnly: true
-      volumes:
-        - name: var-lib-cni-tenantcni
-          hostPath:
-            path: /var/lib/cni/tenantcni
-        - name: cni-plugin
-          hostPath:
-            path: /opt/cni/bin
-        - name: cni
-          hostPath:
-            path: /etc/cni/net.d
-        - name: tenantcni
-          configMap:
-            name: tenantcni-config
-        - name: tenantcni-cfg
-          configMap:
-            name: tenantcni-config      
+  - kind: ServiceAccount
+    name: daemon-service-account
+    namespace: default
 
 ---
 apiVersion: v1
@@ -201,46 +42,205 @@ kind: ServiceAccount
 metadata:
   name: orchestrator-service-account
   namespace: default
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: orchestrator-cluster-role
-rules:
-- apiGroups:
-  - setera.com
-  resources:
-  - tenants
-  - nodestores
-  - tenants/status
-  - nodestores/status
-  verbs:
-  - list
-  - watch
-  - get
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: orchestrator-cluster-role-binding
+  name: orchestrator-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: orchestrator-cluster-role
+  name: orchestrator-role
 subjects:
-- kind: ServiceAccount
-  name: orchestrator-service-account
+  - kind: ServiceAccount
+    name: orchestrator-service-account
+    namespace: default
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: setera-cni-config
   namespace: default
+data:
+  10-tenantcni.conf: |
+    {
+      "cniVersion": "0.4.0",
+      "name": "tenantcni",
+      "type": "tenantcni"
+    }
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: daemon
+  namespace: default
+  labels:
+    app: daemon
+    tier: node
+spec:
+  selector:
+    matchLabels:
+      app: daemon
+
+  updateStrategy:
+    type: RollingUpdate
+
+  template:
+    metadata:
+      labels:
+        app: daemon
+        tier: node
+
+    spec:
+      serviceAccountName: daemon-service-account
+
+      # The daemon changes the node network namespace.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
+      priorityClassName: system-node-critical
+      terminationGracePeriodSeconds: 10
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/os
+                    operator: In
+                    values:
+                      - linux
+
+      # Run on control-plane nodes and worker nodes.
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+
+      initContainers:
+        - name: install-cni-plugin
+          image: cni-uds-stub:dev
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp -f /cni /host/opt/cni/bin/tenantcni
+              chmod 0755 /host/opt/cni/bin/tenantcni
+
+          volumeMounts:
+            - name: cni-bin
+              mountPath: /host/opt/cni/bin
+
+        - name: install-cni-config
+          image: cni-uds-stub:dev
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              mkdir -p /host/etc/cni/net.d
+              cp -f /config/10-tenantcni.conf \
+                /host/etc/cni/net.d/10-tenantcni.conf
+
+          volumeMounts:
+            - name: cni-net-dir
+              mountPath: /host/etc/cni/net.d
+
+            - name: cni-config
+              mountPath: /config
+              readOnly: true
+
+      containers:
+        - name: daemon
+          image: setera-daemon:v0.2.2-old-datapath
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /daemon
+
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+            - name: CLUSTER_POD_CIDR
+              value: "10.200.0.0/16"
+
+          securityContext:
+            privileged: true
+
+          volumeMounts:
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+              mountPropagation: Bidirectional
+
+            - name: setera-run
+              mountPath: /var/run/setera
+
+            - name: ipam-state
+              mountPath: /var/lib/cni/tenantcni/ipam
+
+            - name: host-netns
+              mountPath: /var/run/netns
+              mountPropagation: HostToContainer
+
+      volumes:
+        - name: cni-bin
+          hostPath:
+            path: /opt/cni/bin
+            type: Directory
+
+        - name: cni-net-dir
+          hostPath:
+            path: /etc/cni/net.d
+            type: DirectoryOrCreate
+
+        - name: cni-config
+          configMap:
+            name: setera-cni-config
+
+        - name: setera-run
+          hostPath:
+            path: /var/run/setera
+            type: DirectoryOrCreate
+
+        - name: ipam-state
+          hostPath:
+            path: /var/lib/cni/tenantcni/ipam
+            type: DirectoryOrCreate
+
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+
+        - name: host-netns
+          hostPath:
+            path: /var/run/netns
+            type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: setera-webhook
+  namespace: default
+spec:
+  selector:
+    app: orchestrator
+
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -249,20 +249,47 @@ metadata:
   namespace: default
   labels:
     app: orchestrator
+
 spec:
   replicas: 1
+
+  strategy:
+    type: Recreate
+
   selector:
     matchLabels:
       app: orchestrator
+
   template:
     metadata:
       labels:
         app: orchestrator
+
     spec:
       serviceAccountName: orchestrator-service-account
+
+      # The admission webhook must be reachable before tenant Pod
+      # networking is available. Do not depend on the Setera CNI.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
+      terminationGracePeriodSeconds: 10
+
       containers:
-      - name: orchestrator
-        image: setera-orchestrator:v0.1.0
-        imagePullPolicy: IfNotPresent
-        command:
-        - /orchestrator
+        - name: orchestrator
+          image: setera-orchestrator:v0.1.0
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /orchestrator
+
+          ports:
+            - name: webhook
+              containerPort: 8443
+              protocol: TCP
+
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

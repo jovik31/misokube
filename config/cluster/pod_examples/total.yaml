@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-a-1
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-a
+    setera.com/test-group: tenant-a
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-a
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-a-2
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-a
+    setera.com/test-group: tenant-a
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-a
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-a-3
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-a
+    setera.com/test-group: tenant-a
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-a
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-b-1
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-b
+    setera.com/test-group: tenant-b
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-b
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-b-2
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-b
+    setera.com/test-group: tenant-b
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-b
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tenant-b-3
+  namespace: default
+  labels:
+    setera.com/tenant: tenant-b
+    setera.com/test-group: tenant-b
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          setera.com/test-group: tenant-b
+
+  containers:
+    - name: toolbox
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - sleep 3600
