@@ -71,7 +71,7 @@ func GenerateTLSFiles(
 		SerialNumber: newSerialNumber(),
 
 		Subject: pkix.Name{
-			CommonName: "setera-webhook-ca",
+			CommonName: "misokube-webhook-ca",
 		},
 
 		NotBefore: now.Add(-time.Minute),

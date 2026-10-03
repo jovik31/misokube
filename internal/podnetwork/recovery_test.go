@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/internal/nodeipam"
-	"github/setera/pkg/network"
+	"github/misokube/internal/nodeipam"
+	"github/misokube/pkg/network"
 )
 
 func TestRecover(t *testing.T) {

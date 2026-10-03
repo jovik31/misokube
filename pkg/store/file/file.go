@@ -33,7 +33,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 const (

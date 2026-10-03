@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github/setera/internal/ebpfmanager"
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/internal/ebpfmanager"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

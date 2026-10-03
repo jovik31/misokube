@@ -18,9 +18,9 @@ limitations under the License.
 package applyconfiguration
 
 import (
-	v1 "github/setera/pkg/api/setera.com/v1"
-	internal "github/setera/pkg/generated/applyconfiguration/internal"
-	seteracomv1 "github/setera/pkg/generated/applyconfiguration/setera.com/v1"
+	v1 "github/misokube/pkg/api/misokube.com/v1"
+	internal "github/misokube/pkg/generated/applyconfiguration/internal"
+	misokubecomv1 "github/misokube/pkg/generated/applyconfiguration/misokube.com/v1"
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -31,13 +31,13 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=setera.com, Version=v1
+	// Group=misokube.com, Version=v1
 	case v1.SchemeGroupVersion.WithKind("Tenant"):
-		return &seteracomv1.TenantApplyConfiguration{}
+		return &misokubecomv1.TenantApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TenantSpec"):
-		return &seteracomv1.TenantSpecApplyConfiguration{}
+		return &misokubecomv1.TenantSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TenantStatus"):
-		return &seteracomv1.TenantStatusApplyConfiguration{}
+		return &misokubecomv1.TenantStatusApplyConfiguration{}
 
 	}
 	return nil

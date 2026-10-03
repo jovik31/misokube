@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github/setera/pkg/store"
-	filestore "github/setera/pkg/store/file"
+	"github/misokube/pkg/store"
+	filestore "github/misokube/pkg/store/file"
 )
 
 func openStore(t *testing.T, opts ...filestore.Option) *filestore.Store {

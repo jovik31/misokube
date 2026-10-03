@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +14,7 @@ import (
 func (ws *WebhookServer) validateTenant(
 	admissionRequest *admissionv1.AdmissionRequest,
 ) (*admissionv1.AdmissionResponse, error) {
-	var tenant seterav1.Tenant
+	var tenant misokubev1.Tenant
 
 	if err := json.Unmarshal(
 		admissionRequest.Object.Raw,

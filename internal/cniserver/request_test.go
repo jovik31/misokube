@@ -11,9 +11,9 @@ import (
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/tenantmeta"
-	"github/setera/pkg/wire"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/tenantmeta"
+	"github/misokube/pkg/wire"
 )
 
 func TestHandleAddUsesPodMetadata(t *testing.T) {
@@ -254,7 +254,7 @@ func TestHandleAddRejectsTenantNotAssignedToLocalNode(
 	podNetwork := &fakePodNetwork{}
 
 	server, err := New(
-		"/tmp/setera-test.sock",
+		"/tmp/misokube-test.sock",
 		"node-a",
 		pods,
 		newNodeLister(
@@ -399,7 +399,7 @@ func newTestServer(
 	t.Helper()
 
 	server, err := New(
-		"/tmp/setera-test.sock",
+		"/tmp/misokube-test.sock",
 		"node-a",
 		pods,
 		newNodeLister(

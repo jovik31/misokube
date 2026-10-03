@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github/setera/internal/noderouting"
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/internal/noderouting"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"

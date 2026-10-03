@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/internal/ebpfmanager"
+	"github/misokube/internal/ebpfmanager"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"

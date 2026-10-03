@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 // allocator is the part of an IP allocator that NodeIPAM needs.

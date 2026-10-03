@@ -7,8 +7,8 @@ import (
 
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/wire"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/wire"
 )
 
 func TestEncodeAddResult(t *testing.T) {

@@ -20,13 +20,13 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 256);
+    __uint(max_entries, 4096);
     __type(key, __u32);      // IP address of a pod
     __type(value, struct veth_tenant); // tenant name + veth ifindex
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tc_podIDs SEC(".maps");
 
-// Node-wide VXLAN device selected by the daemon after it creates setera-vxlan0.
+// Node-wide VXLAN device selected by the daemon after it creates misokube-vxlan0.
 // Key 0 contains that device's ifindex.
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);

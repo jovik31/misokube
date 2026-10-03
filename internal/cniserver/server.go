@@ -9,9 +9,9 @@ import (
 	"net"
 	"time"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/transport/uds"
-	"github/setera/pkg/wire"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/transport/uds"
+	"github/misokube/pkg/wire"
 
 	corev1listers "k8s.io/client-go/listers/core/v1"
 )

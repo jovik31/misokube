@@ -28,7 +28,14 @@ rules:
   - get
   - update
 - apiGroups:
-  - setera.com
+  - metrics.k8s.io
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - misokube.com
   resources:
   - tenants
   verbs:
@@ -37,7 +44,7 @@ rules:
   - patch
   - watch
 - apiGroups:
-  - setera.com
+  - misokube.com
   resources:
   - tenants/status
   verbs:

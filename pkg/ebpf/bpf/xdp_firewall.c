@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// XDP firewall program for Setera tenant isolation
+// XDP firewall program for MIsoKube tenant isolation
 //
 // Attaches at the network driver level for fastest possible packet filtering.
 // Supports per-rule allow/drop decisions with packet/byte counters.
@@ -10,7 +10,7 @@
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 256);
+    __uint(max_entries, 4096);
     __type(key, __u32); // interface index
     __type(value, char[64]);//tenant name
 } xdp_iface_action SEC(".maps");

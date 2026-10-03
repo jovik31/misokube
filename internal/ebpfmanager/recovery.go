@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github/setera/internal/podnetwork"
+	"github/misokube/internal/podnetwork"
 )
 
 // RecoverLocalPod reinstalls the eBPF datapath for a local Pod discovered
 // during daemon startup.
 //
 // Recovery deliberately uses the same installation path as a normal ADD.
-// pkg/ebpf attaches TC programs with filter replacement, so stale Setera TC
+// pkg/ebpf attaches TC programs with filter replacement, so stale MIsoKube TC
 // filters left by the previous daemon process are atomically replaced by the
 // new program instance. The shared tc_podIDs entry is then refreshed and the
 // new Manager rebuilds its in-memory ownership record.

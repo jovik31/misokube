@@ -5,10 +5,10 @@ import (
 	"net/netip"
 	"sort"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
-// PodEndpoint is one entry in Setera's shared tc_podIDs map.
+// PodEndpoint is one entry in MIsoKube's shared tc_podIDs map.
 //
 // Positive IfIndex values identify local host-side veths.
 // RemotePodIfIndex identifies Pods that live on another Node.

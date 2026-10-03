@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MAP_PATH=${1:-/sys/fs/bpf/setera/tc/tc_podIDs}
+MAP_PATH=${1:-/sys/fs/bpf/misokube/tc/tc_podIDs}
 NODE_CONTAINER=${2:-}
 BPFCMD=${BPFCMD:-}
 

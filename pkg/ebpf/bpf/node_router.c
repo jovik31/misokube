@@ -18,7 +18,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 256);
+    __uint(max_entries, 4096);
     __type(key, __u32);      // IP address of a pod
     __type(value, struct veth_tenant); // tenant name + veth ifindex
     __uint(pinning, LIBBPF_PIN_BY_NAME);

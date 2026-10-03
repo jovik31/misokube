@@ -1,4 +1,4 @@
-# Setera Orchestrator: Cluster Architecture Overview
+# MIsoKube Orchestrator: Cluster Architecture Overview
 
 This document summarizes the multi-component design for orchestrating tenant networking across the cluster. It distinguishes responsibilities between the single Orchestrator (cluster-scoped) and Daemons (node-scoped), and explains data/control flows, operators, actors, and runtime services.
 

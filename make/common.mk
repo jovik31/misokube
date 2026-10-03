@@ -18,6 +18,6 @@ LDFLAGS ?= -s -w \
 # Images (example)
 REGISTRY ?= ghcr.io/your-org
 BINARY   ?= orchestrator
-IMAGE    ?= $(REGISTRY)/setera-$(BINARY)
+IMAGE    ?= $(REGISTRY)/misokube-$(BINARY)
 
 # ...other repo-wide vars...

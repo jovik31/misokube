@@ -4,7 +4,7 @@ metadata:
   name: ping-test
   namespace: default
   labels:
-    setera.com/tenant: "tenant-a"
+    misokube.com/tenant: "tenant-a"
 spec:
   containers:
     - name: toolbox

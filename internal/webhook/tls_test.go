@@ -73,7 +73,7 @@ func TestGenerateTLSFiles(
 	roots.AddCert(caCert)
 
 	serviceDNSName :=
-		"setera-webhook.default.svc"
+		"misokube-webhook.default.svc"
 
 	if _, err := serverCert.Verify(
 		x509.VerifyOptions{

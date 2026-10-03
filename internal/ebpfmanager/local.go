@@ -7,10 +7,10 @@ import (
 	"net/netip"
 	"strings"
 
-	"github/setera/internal/podnetwork"
+	"github/misokube/internal/podnetwork"
 )
 
-// AddLocalPod installs the Setera datapath for one local Pod.
+// AddLocalPod installs the MIsoKube datapath for one local Pod.
 //
 // The TC program is attached before the Pod is published in tc_podIDs. If the
 // map update fails, the program attachment is rolled back.
@@ -102,7 +102,7 @@ func (m *Manager) AddLocalPod(ctx context.Context, pod podnetwork.LocalPod) erro
 	return nil
 }
 
-// DeleteLocalPod removes one local Pod from the Setera datapath.
+// DeleteLocalPod removes one local Pod from the MIsoKube datapath.
 //
 // The shared endpoint-map entry is removed before the TC program is detached,
 // so new traffic cannot be redirected to an endpoint while it is being torn

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
-	seterafake "github/setera/pkg/generated/clientset/versioned/fake"
-	"github/setera/pkg/tenantmeta"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
+	misokubefake "github/misokube/pkg/generated/clientset/versioned/fake"
+	"github/misokube/pkg/tenantmeta"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -372,7 +372,7 @@ func newTestWebhookServer(
 	objects ...runtime.Object,
 ) *WebhookServer {
 	return NewWebhookServer(
-		seterafake.NewSimpleClientset(
+		misokubefake.NewSimpleClientset(
 			objects...,
 		),
 		fake.NewSimpleClientset(),
@@ -417,16 +417,16 @@ func tenantPod(
 func readyTenant(
 	name string,
 	generation int64,
-) *seterav1.Tenant {
-	return &seterav1.Tenant{
+) *misokubev1.Tenant {
+	return &misokubev1.Tenant{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       name,
 			Generation: generation,
 		},
-		Spec: seterav1.TenantSpec{
+		Spec: misokubev1.TenantSpec{
 			Zones: 1,
 		},
-		Status: seterav1.TenantStatus{
+		Status: misokubev1.TenantStatus{
 			AssignedNodes: []string{
 				"node-a",
 			},

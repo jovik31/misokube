@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github/setera/pkg/wire"
+	"github/misokube/pkg/wire"
 )
 
 // Client performs a single request/response over a Unix domain socket.
@@ -14,7 +14,7 @@ type Client struct {
 	Codec wire.Codec // JSON today; Protobuf later
 }
 
-func NewClientJSON() *Client { return &Client{Codec: wire.JSONCodec{}} }
+func NewClientJSON() *Client   { return &Client{Codec: wire.JSONCodec{}} }
 func NewClientBinary() *Client { return &Client{Codec: wire.BinaryCodec{}} }
 
 func (c *Client) Call(sock string, deadline time.Duration, req *wire.Request, out *wire.Response) error {

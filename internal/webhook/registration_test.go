@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,7 +127,7 @@ func TestEnsureMutatingWebhookConfigurationUpdatesCA(
 			Webhooks: []admissionregistrationv1.
 				MutatingWebhook{
 				{
-					Name: "pods.setera.com",
+					Name: "pods.misokube.com",
 					ClientConfig: admissionregistrationv1.
 						WebhookClientConfig{
 						CABundle: oldCA,

@@ -3,7 +3,7 @@ package tenantcontroller
 import (
 	"testing"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -101,7 +101,7 @@ func TestScaleUpCandidatesSkipAssignedAndUnavailableNodes(
 	}
 }
 
-func TestScaleUpCandidatesSkipNodeWithoutSeteraDataplane(
+func TestScaleUpCandidatesSkipNodeWithoutMIsoKubeDataplane(
 	t *testing.T,
 ) {
 	ready := readyNode("ready")

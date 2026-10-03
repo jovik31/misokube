@@ -1,4 +1,4 @@
-# Copilot Instructions for Setera Orchestrator
+# Copilot Instructions for MIsoKube Orchestrator
 
 These guidelines make AI agents immediately productive in this repo. Focus on the existing design and workflows; avoid introducing new patterns unless asked.
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +48,14 @@ func (c *Controller) reconcileAssignments(
 			nodes,
 			tenant,
 		)
+
+		candidates, err = c.rankScaleUpCandidates(
+			ctx,
+			candidates,
+		)
+		if err != nil {
+			return assignmentResult{}, err
+		}
 
 		if need > len(candidates) {
 			need = len(candidates)

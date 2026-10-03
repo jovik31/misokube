@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github/setera/internal/ebpfmanager"
+	"github/misokube/internal/ebpfmanager"
 
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -14,7 +14,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const fullSyncKey = "__setera_full_remote_pod_sync__"
+const fullSyncKey = "__misokube_full_remote_pod_sync__"
 
 type remoteDatapath interface {
 	UpsertRemotePod(

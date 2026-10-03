@@ -19,7 +19,7 @@ package versioned
 
 import (
 	fmt "fmt"
-	seterav1 "github/setera/pkg/generated/clientset/versioned/typed/setera.com/v1"
+	misokubev1 "github/misokube/pkg/generated/clientset/versioned/typed/misokube.com/v1"
 	http "net/http"
 
 	discovery "k8s.io/client-go/discovery"
@@ -29,18 +29,18 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	SeteraV1() seterav1.SeteraV1Interface
+	MIsoKubeV1() misokubev1.MIsoKubeV1Interface
 }
 
 // Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	seteraV1 *seterav1.SeteraV1Client
+	misokubeV1 *misokubev1.MIsoKubeV1Client
 }
 
-// SeteraV1 retrieves the SeteraV1Client
-func (c *Clientset) SeteraV1() seterav1.SeteraV1Interface {
-	return c.seteraV1
+// MIsoKubeV1 retrieves the MIsoKubeV1Client
+func (c *Clientset) MIsoKubeV1() misokubev1.MIsoKubeV1Interface {
+	return c.misokubeV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -87,7 +87,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 	var cs Clientset
 	var err error
-	cs.seteraV1, err = seterav1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	cs.misokubeV1, err = misokubev1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.seteraV1 = seterav1.New(c)
+	cs.misokubeV1 = misokubev1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

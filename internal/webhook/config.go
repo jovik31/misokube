@@ -1,7 +1,7 @@
 package webhook
 
 import (
-	seterav1 "github/setera/pkg/api/setera.com/v1"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -10,8 +10,8 @@ const (
 	validateEndpoint = "/validate"
 	serverPort       = ":8443"
 
-	WebhookServiceName             = "setera-webhook"
-	WebhookConfigurationName       = "setera-pod-admission"
+	WebhookServiceName             = "misokube-webhook"
+	WebhookConfigurationName       = "misokube-pod-admission"
 	WebhookServicePort       int32 = 443
 
 	contentTypeHeader = "content-type"
@@ -19,7 +19,7 @@ const (
 
 	tenantNotFound             = "tenant not found"
 	tenantNotAssigned          = "tenant is not assigned to nodes"
-	tenantNodeSelectorConflict = "Pod has a conflicting Setera tenant node selector"
+	tenantNodeSelectorConflict = "Pod has a conflicting MIsoKube tenant node selector"
 	podNodeNameNotAllowed      = "tenant Pod must not set spec.nodeName"
 	podIsValid                 = "Pod is valid"
 	tenantIsValid              = "tenant is valid"
@@ -46,8 +46,8 @@ var (
 	}
 
 	tenantGVK = metav1.GroupVersionKind{
-		Group:   seterav1.SchemeGroupVersion.Group,
-		Version: seterav1.SchemeGroupVersion.Version,
-		Kind:    seterav1.SchemeGroupVersion.WithKind("Tenant").Kind,
+		Group:   misokubev1.SchemeGroupVersion.Group,
+		Version: misokubev1.SchemeGroupVersion.Version,
+		Kind:    misokubev1.SchemeGroupVersion.WithKind("Tenant").Kind,
 	}
 )

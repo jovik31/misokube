@@ -1,11 +1,11 @@
-# Setera Orchestrator — Working TODOs
+# MIsoKube Orchestrator — Working TODOs
 
 This document tracks pending work items and simplifications discussed across daemon, orchestrator, and networking layers. It complements existing design docs and will be iterated as features land.
 
 ## Orchestrator
 - Indexers correctness: attach tenant indexers only to `Tenant` informer; attach NodeStore indexers only to `NodeStore` informer. Use type-safe `IndexFunc`s and avoid cross-informer reuse. Implement:
-  - Tenant indexer key (e.g., `setera.com/tenant`) on `Tenant` informer.
-  - NodeStore indexers (e.g., `setera.com/nodename`, optional `setera.com/tenant`) on `NodeStore` informer.
+  - Tenant indexer key (e.g., `misokube.com/tenant`) on `Tenant` informer.
+  - NodeStore indexers (e.g., `misokube.com/nodename`, optional `misokube.com/tenant`) on `NodeStore` informer.
 - Verify handler ordering: add indexers before handlers and informer start.
 
 ## Daemon — NodeStore Event Handlers (from Kubernetes)

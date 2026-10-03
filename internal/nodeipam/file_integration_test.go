@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/pkg/ipam/bitmap"
-	filestore "github/setera/pkg/store/file"
+	"github/misokube/pkg/ipam/bitmap"
+	filestore "github/misokube/pkg/store/file"
 )
 
 func TestFileStoreRestore(t *testing.T) {

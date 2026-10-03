@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 const (

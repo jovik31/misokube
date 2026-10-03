@@ -1,6 +1,6 @@
 package noderouting
 
-import "github/setera/pkg/network"
+import "github/misokube/pkg/network"
 
 func neighborFor(ifIndex int, node RemoteNode) network.Neighbor {
 	return network.Neighbor{

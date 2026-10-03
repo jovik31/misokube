@@ -11,7 +11,7 @@ func TestAttachNodeProgram(t *testing.T) {
 	var gotIfName string
 
 	program, err := attachNodeProgram(
-		"setera0",
+		"misokube0",
 		func(ifName string) (nodeProgramHandle, error) {
 			gotIfName = ifName
 			return handle, nil
@@ -24,11 +24,11 @@ func TestAttachNodeProgram(t *testing.T) {
 	if program == nil {
 		t.Fatal("expected program")
 	}
-	if gotIfName != "setera0" {
+	if gotIfName != "misokube0" {
 		t.Fatalf(
 			"ifName = %q, want %q",
 			gotIfName,
-			"setera0",
+			"misokube0",
 		)
 	}
 }
@@ -61,7 +61,7 @@ func TestAttachNodeProgramRejectsEmptyInterface(t *testing.T) {
 }
 
 func TestAttachNodeProgramRejectsNilAttacher(t *testing.T) {
-	_, err := attachNodeProgram("setera0", nil)
+	_, err := attachNodeProgram("misokube0", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -71,7 +71,7 @@ func TestAttachNodeProgramWrapsAttachError(t *testing.T) {
 	wantErr := errors.New("attach failed")
 
 	_, err := attachNodeProgram(
-		"setera0",
+		"misokube0",
 		func(string) (nodeProgramHandle, error) {
 			return nil, wantErr
 		},
@@ -90,7 +90,7 @@ func TestAttachNodeProgramWrapsAttachError(t *testing.T) {
 
 func TestAttachNodeProgramRejectsNilHandle(t *testing.T) {
 	_, err := attachNodeProgram(
-		"setera0",
+		"misokube0",
 		func(string) (nodeProgramHandle, error) {
 			return nil, nil
 		},
@@ -104,7 +104,7 @@ func TestNodeProgramCloseIsIdempotent(t *testing.T) {
 	handle := &fakeNodeProgramHandle{}
 
 	program, err := attachNodeProgram(
-		"setera0",
+		"misokube0",
 		func(string) (nodeProgramHandle, error) {
 			return handle, nil
 		},
@@ -135,7 +135,7 @@ func TestNodeProgramCloseReturnsCloseError(t *testing.T) {
 	}
 
 	program, err := attachNodeProgram(
-		"setera0",
+		"misokube0",
 		func(string) (nodeProgramHandle, error) {
 			return handle, nil
 		},

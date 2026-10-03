@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"sort"
 
-	"github/setera/pkg/ebpf"
+	"github/misokube/pkg/ebpf"
 )
 
 // ReconcileRemotePods makes the remote portion of tc_podIDs match desired.

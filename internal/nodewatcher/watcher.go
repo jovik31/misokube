@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github/setera/internal/noderouting"
+	"github/misokube/internal/noderouting"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +17,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const fullSyncKey = "__setera_full_node_routing_sync__"
+const fullSyncKey = "__misokube_full_node_routing_sync__"
 
 type routingDatapath interface {
 	EnsureLocal(netip.Prefix, netip.Addr) (noderouting.LocalNode, error)

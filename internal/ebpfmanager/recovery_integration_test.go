@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/network"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/network"
 )
 
 // TestIntegrationRecoverLocalPod simulates a daemon restart while a Pod and
@@ -20,7 +20,7 @@ import (
 func TestIntegrationRecoverLocalPod(t *testing.T) {
 	if os.Getenv(ebpfIntegrationEnv) != "1" {
 		t.Skip(
-			"set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
+			"set MISOKUBE_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
 		)
 	}
 	if os.Geteuid() != 0 {
@@ -64,7 +64,7 @@ func TestIntegrationRecoverLocalPod(t *testing.T) {
 		t.Fatalf("initial AddLocalPod: %v", err)
 	}
 
-	requireSeteraPodFilters(t, host)
+	requireMIsoKubePodFilters(t, host)
 	requirePinnedPodEndpoint(
 		t,
 		podIP,
@@ -112,7 +112,7 @@ func TestIntegrationRecoverLocalPod(t *testing.T) {
 	}
 
 	requireLocalManagerRecord(t, restarted, recoveredPod)
-	requireSeteraPodFilters(t, host)
+	requireMIsoKubePodFilters(t, host)
 	requirePinnedPodEndpoint(
 		t,
 		podIP,
@@ -129,7 +129,7 @@ func TestIntegrationRecoverLocalPod(t *testing.T) {
 
 	requireNoLocalManagerRecord(t, restarted, podIP)
 	requirePinnedPodEndpointMissing(t, podIP)
-	requireNoSeteraPodFilters(t, host)
+	requireNoMIsoKubePodFilters(t, host)
 	requireClsact(t, host)
 
 	t.Logf(

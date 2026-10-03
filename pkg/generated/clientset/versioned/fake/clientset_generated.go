@@ -18,10 +18,10 @@ limitations under the License.
 package fake
 
 import (
-	applyconfiguration "github/setera/pkg/generated/applyconfiguration"
-	clientset "github/setera/pkg/generated/clientset/versioned"
-	seterav1 "github/setera/pkg/generated/clientset/versioned/typed/setera.com/v1"
-	fakeseterav1 "github/setera/pkg/generated/clientset/versioned/typed/setera.com/v1/fake"
+	applyconfiguration "github/misokube/pkg/generated/applyconfiguration"
+	clientset "github/misokube/pkg/generated/clientset/versioned"
+	misokubev1 "github/misokube/pkg/generated/clientset/versioned/typed/misokube.com/v1"
+	fakemisokubev1 "github/misokube/pkg/generated/clientset/versioned/typed/misokube.com/v1/fake"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -136,7 +136,7 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// SeteraV1 retrieves the SeteraV1Client
-func (c *Clientset) SeteraV1() seterav1.SeteraV1Interface {
-	return &fakeseterav1.FakeSeteraV1{Fake: &c.Fake}
+// MIsoKubeV1 retrieves the MIsoKubeV1Client
+func (c *Clientset) MIsoKubeV1() misokubev1.MIsoKubeV1Interface {
+	return &fakemisokubev1.FakeMIsoKubeV1{Fake: &c.Fake}
 }

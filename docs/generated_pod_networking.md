@@ -1,4 +1,4 @@
-Setera Networking: Conversation Context (Design + Decisions)
+MIsoKube Networking: Conversation Context (Design + Decisions)
 
 Last updated: 2025-10-06
 
@@ -67,7 +67,7 @@ Concurrency via per-conn goroutines.
 
 Separation of wire (framing) from server (I/O & concurrency).
 
-Permissions: sock path (e.g. /var/run/setera/cni.sock) created with strict perms (0600), validated on start.
+Permissions: sock path (e.g. /var/run/misokube/cni.sock) created with strict perms (0600), validated on start.
 
 Resolver (Pod → Tenant)
 Design

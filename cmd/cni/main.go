@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github/setera/internal/cniplugin"
+	"github/misokube/internal/cniplugin"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cniversion "github.com/containernetworking/cni/pkg/version"
@@ -26,7 +26,7 @@ func main() {
 	}
 
 	opts := cniplugin.Options{
-		SocketPath: "/var/run/setera/setera.sock",
+		SocketPath: "/var/run/misokube/misokube.sock",
 		Timeout:    15 * time.Second,
 	}
 
@@ -49,7 +49,7 @@ func main() {
 			},
 		},
 
-		cniversion.All, "setera cni plugin, delegates cni requests to setera daemon via unix socket",
+		cniversion.All, "misokube cni plugin, delegates cni requests to misokube daemon via unix socket",
 	)
 
 }

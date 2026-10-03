@@ -34,7 +34,7 @@ func TestEnsureVXLANReusesMatchingLink(t *testing.T) {
 	underlay := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "eth0", Index: 2}}
 	link := &netlink.Vxlan{
 		LinkAttrs: netlink.LinkAttrs{
-			Name:         "setera-vxlan0",
+			Name:         "misokube-vxlan0",
 			Index:        17,
 			HardwareAddr: mac,
 		},
@@ -62,7 +62,7 @@ func TestEnsureVXLANReusesMatchingLink(t *testing.T) {
 	}
 
 	got, err := NewLinux().EnsureVXLAN(VXLANConfig{
-		Name:       "setera-vxlan0",
+		Name:       "misokube-vxlan0",
 		VNI:        100,
 		Port:       4789,
 		MTU:        1450,
@@ -134,7 +134,7 @@ func TestEnsureVXLANCreatesWithExplicitUnderlay(t *testing.T) {
 	linkSetUp = func(netlink.Link) error { return nil }
 
 	_, err := NewLinux().EnsureVXLAN(VXLANConfig{
-		Name:       "setera-vxlan0",
+		Name:       "misokube-vxlan0",
 		VNI:        100,
 		Port:       4789,
 		MTU:        1450,
@@ -169,7 +169,7 @@ func mustParseMACForNetworkTest(t *testing.T, value string) net.HardwareAddr {
 
 func TestEnsureVXLANRequiresHostPrefix(t *testing.T) {
 	_, err := NewLinux().EnsureVXLAN(VXLANConfig{
-		Name:       "setera-vxlan0",
+		Name:       "misokube-vxlan0",
 		VNI:        100,
 		Port:       4789,
 		MTU:        1450,
@@ -183,7 +183,7 @@ func TestEnsureVXLANRequiresHostPrefix(t *testing.T) {
 
 func TestEnsureVXLANRequiresUnderlayIP(t *testing.T) {
 	_, err := NewLinux().EnsureVXLAN(VXLANConfig{
-		Name:    "setera-vxlan0",
+		Name:    "misokube-vxlan0",
 		VNI:     100,
 		Port:    4789,
 		MTU:     1450,

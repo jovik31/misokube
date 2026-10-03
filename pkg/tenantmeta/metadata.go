@@ -16,21 +16,21 @@ const (
 	DefaultTenant = "default"
 
 	// PodTenantLabel identifies the tenant that owns a Pod.
-	PodTenantLabel = "setera.com/tenant"
+	PodTenantLabel = "misokube.com/tenant"
 
 	// NodeTenantLabelPrefix is the label-name prefix used for Node tenant
 	// membership. The tenant name is appended to this prefix.
-	NodeTenantLabelPrefix = "setera.com/tenant."
+	NodeTenantLabelPrefix = "misokube.com/tenant."
 
 	// NodeVTEPReadyLabel reports that the node-local daemon published valid VTEP
 	// metadata for the Node.
-	NodeVTEPReadyLabel = "setera.com/vtep-ready"
+	NodeVTEPReadyLabel = "misokube.com/vtep-ready"
 
 	// NodeVTEPIPAnnotation stores the node VTEP IP address.
-	NodeVTEPIPAnnotation = "setera.com/vtep-ip"
+	NodeVTEPIPAnnotation = "misokube.com/vtep-ip"
 
 	// NodeVTEPMACAnnotation stores the node VTEP MAC address.
-	NodeVTEPMACAnnotation = "setera.com/vtep-mac"
+	NodeVTEPMACAnnotation = "misokube.com/vtep-mac"
 )
 
 // VTEP contains node-to-node tunnel endpoint metadata published on a Node.
@@ -82,7 +82,7 @@ func HasTenant(labels map[string]string, tenant string) bool {
 	return labels[key] == "true"
 }
 
-// Tenants returns all Setera tenant names represented by Node membership
+// Tenants returns all MIsoKube tenant names represented by Node membership
 // labels. The returned list is sorted.
 func Tenants(labels map[string]string) []string {
 	out := make([]string, 0)
@@ -104,7 +104,7 @@ func Tenants(labels map[string]string) []string {
 	return out
 }
 
-// TenantCount returns the number of Setera tenant memberships on a Node.
+// TenantCount returns the number of MIsoKube tenant memberships on a Node.
 func TenantCount(labels map[string]string) int {
 	count := 0
 	for key, value := range labels {

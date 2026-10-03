@@ -15,7 +15,7 @@ import (
 
 var (
 	// ErrPodVethNotFound means the kernel no longer has the local /32 route and
-	// veth that Setera created for the Pod.
+	// veth that MIsoKube created for the Pod.
 	ErrPodVethNotFound = errors.New("network: Pod veth not found")
 
 	linkByIndex = netlink.LinkByIndex
@@ -24,7 +24,7 @@ var (
 // FindPodVeth rediscovers the host side of an existing local Pod veth from the
 // /32 route installed by SetupVeth.
 //
-// Setera deliberately does not persist the host-veth name or ifindex. Both are
+// MIsoKube deliberately does not persist the host-veth name or ifindex. Both are
 // kernel-runtime state and can be recovered from the route:
 //
 //	podIP/32 -> host veth ifindex -> host veth name

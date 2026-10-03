@@ -2,17 +2,17 @@
 
 set -Eeuo pipefail
 
-KIND_CONTEXT="${KIND_CONTEXT:-kind-setera-cluster}"
-EXTERNAL_IP="${SETERA_E2E_EXTERNAL_IP:-1.1.1.1}"
-HTTP_PORT="${SETERA_E2E_HTTP_PORT:-18080}"
+KIND_CONTEXT="${KIND_CONTEXT:-kind-misokube-cluster}"
+EXTERNAL_IP="${MISOKUBE_E2E_EXTERNAL_IP:-1.1.1.1}"
+HTTP_PORT="${MISOKUBE_E2E_HTTP_PORT:-18080}"
 
 TENANT_A="tenant-a"
 TENANT_B="tenant-b"
 
-TENANT_LABEL="setera.com/tenant"
+TENANT_LABEL="misokube.com/tenant"
 
-SERVICE_A="setera-e2e-tenant-a"
-SERVICE_B="setera-e2e-tenant-b"
+SERVICE_A="misokube-e2e-tenant-a"
+SERVICE_B="misokube-e2e-tenant-b"
 
 log() {
     printf '\n==> %s\n' "$*"
@@ -45,9 +45,9 @@ diagnostics() {
     k get tenants -o wide >&2 || true
 
     k get nodes \
-        -L setera.com/tenant.tenant-a \
-        -L setera.com/tenant.tenant-b \
-        -L setera.com/vtep-ready \
+        -L misokube.com/tenant.tenant-a \
+        -L misokube.com/tenant.tenant-b \
+        -L misokube.com/vtep-ready \
         >&2 || true
 
     k get pods -o wide >&2 || true
@@ -243,10 +243,10 @@ start_http_server() {
     local pod="$1"
 
     k exec "$pod" -- sh -ec "
-        mkdir -p /tmp/setera-e2e-www
+        mkdir -p /tmp/misokube-e2e-www
 
-        printf 'setera-e2e\n' \
-            > /tmp/setera-e2e-www/index.html
+        printf 'misokube-e2e\n' \
+            > /tmp/misokube-e2e-www/index.html
 
         if ! wget \
             -qO- \
@@ -255,7 +255,7 @@ start_http_server() {
 
             httpd \
                 -p ${HTTP_PORT} \
-                -h /tmp/setera-e2e-www
+                -h /tmp/misokube-e2e-www
         fi
     " >/dev/null
 }
@@ -303,7 +303,7 @@ mapfile -t B_PODS < <(
 
 k get pods \
     -l "$TENANT_LABEL" \
-    -o custom-columns='POD:.metadata.name,TENANT:.metadata.labels.setera\.com/tenant,NODE:.spec.nodeName,IP:.status.podIP'
+    -o custom-columns='POD:.metadata.name,TENANT:.metadata.labels.misokube\.com/tenant,NODE:.spec.nodeName,IP:.status.podIP'
 
 A_NODE_COUNT="$(
     unique_node_count "${A_PODS[@]}"
@@ -614,4 +614,4 @@ expect_exec_deny \
     -T 2 \
     "http://${SERVICE_A_IP}:${HTTP_PORT}/"
 
-log "All Setera E2E connectivity tests passed"
+log "All MIsoKube E2E connectivity tests passed"

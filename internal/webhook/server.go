@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	seterav1clientset "github/setera/pkg/generated/clientset/versioned"
+	misokubev1clientset "github/misokube/pkg/generated/clientset/versioned"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -16,26 +16,26 @@ import (
 const shutdownTimeout = 5 * time.Second
 
 type WebhookServer struct {
-	port               string
-	tlsCert            string
-	tlsKey             string
-	Server             *http.Server
-	seterav1Clientset  seterav1clientset.Interface
-	kubernetsClientset kubernetes.Interface
+	port                string
+	tlsCert             string
+	tlsKey              string
+	Server              *http.Server
+	misokubev1Clientset misokubev1clientset.Interface
+	kubernetsClientset  kubernetes.Interface
 }
 
 func NewWebhookServer(
-	seteraClient seterav1clientset.Interface,
+	misokubeClient misokubev1clientset.Interface,
 	k8sClientset kubernetes.Interface,
 	tlsCert string,
 	tlsKey string,
 ) *WebhookServer {
 	return &WebhookServer{
-		port:               serverPort,
-		tlsCert:            tlsCert,
-		tlsKey:             tlsKey,
-		seterav1Clientset:  seteraClient,
-		kubernetsClientset: k8sClientset,
+		port:                serverPort,
+		tlsCert:             tlsCert,
+		tlsKey:              tlsKey,
+		misokubev1Clientset: misokubeClient,
+		kubernetsClientset:  k8sClientset,
 	}
 }
 

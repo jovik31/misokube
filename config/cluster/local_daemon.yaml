@@ -1,4 +1,4 @@
-# Local Setera end-to-end deployment.
+# Local MIsoKube end-to-end deployment.
 #
 # Generated ClusterRoles are intentionally NOT duplicated here.
 # Before applying this file:
@@ -8,13 +8,13 @@
 #   kubectl apply -f config/rbac/orchestrator
 #
 # This manifest installs:
-#   - the Setera CNI binary/config on every node;
-#   - one Setera daemon per Linux node;
-#   - one Setera orchestrator for Tenant -> Node assignment;
+#   - the MIsoKube CNI binary/config on every node;
+#   - one MIsoKube daemon per Linux node;
+#   - one MIsoKube orchestrator for Tenant -> Node assignment;
 #   - one webhook Service for tenant Pod admission.
 #
 # The kind cluster used for this E2E deployment must have the default CNI
-# disabled so Setera can own Pod networking.
+# disabled so MIsoKube can own Pod networking.
 
 apiVersion: v1
 kind: ServiceAccount
@@ -61,7 +61,7 @@ subjects:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: setera-cni-config
+  name: misokube-cni-config
   namespace: default
 data:
   10-tenantcni.conf: |
@@ -121,7 +121,7 @@ spec:
 
       initContainers:
         - name: install-cni-plugin
-          image: cni-uds-stub:dev
+          image: joaoribeiro0406/misokube-cni:rename-v1
           imagePullPolicy: IfNotPresent
 
           command:
@@ -136,7 +136,7 @@ spec:
               mountPath: /host/opt/cni/bin
 
         - name: install-cni-config
-          image: cni-uds-stub:dev
+          image: joaoribeiro0406/misokube-cni:rename-v1
           imagePullPolicy: IfNotPresent
 
           command:
@@ -157,7 +157,7 @@ spec:
 
       containers:
         - name: daemon
-          image: setera-daemon:v0.2.2-old-datapath
+          image: joaoribeiro0406/misokube-daemon:rename-v1
           imagePullPolicy: IfNotPresent
 
           command:
@@ -180,8 +180,8 @@ spec:
               mountPath: /sys/fs/bpf
               mountPropagation: Bidirectional
 
-            - name: setera-run
-              mountPath: /var/run/setera
+            - name: misokube-run
+              mountPath: /var/run/misokube
 
             - name: ipam-state
               mountPath: /var/lib/cni/tenantcni/ipam
@@ -203,11 +203,11 @@ spec:
 
         - name: cni-config
           configMap:
-            name: setera-cni-config
+            name: misokube-cni-config
 
-        - name: setera-run
+        - name: misokube-run
           hostPath:
-            path: /var/run/setera
+            path: /var/run/misokube
             type: DirectoryOrCreate
 
         - name: ipam-state
@@ -229,7 +229,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: setera-webhook
+  name: misokube-webhook
   namespace: default
 spec:
   selector:
@@ -269,7 +269,7 @@ spec:
       serviceAccountName: orchestrator-service-account
 
       # The admission webhook must be reachable before tenant Pod
-      # networking is available. Do not depend on the Setera CNI.
+      # networking is available. Do not depend on the MIsoKube CNI.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
 
@@ -277,7 +277,7 @@ spec:
 
       containers:
         - name: orchestrator
-          image: setera-orchestrator:v0.1.0
+          image: joaoribeiro0406/misokube-orchestrator:rename-v1
           imagePullPolicy: IfNotPresent
 
           command:

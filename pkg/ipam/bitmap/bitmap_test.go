@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github/setera/pkg/ipam"
+	"github/misokube/pkg/ipam"
 )
 
 func mustPrefix(t *testing.T, value string) netip.Prefix {

@@ -5,16 +5,16 @@ import (
 	"net"
 	"net/netip"
 
-	"github/setera/pkg/network"
+	"github/misokube/pkg/network"
 )
 
 const (
-	DefaultInterfaceName = "setera-vxlan0"
+	DefaultInterfaceName = "misokube-vxlan0"
 	DefaultVNI           = 100
 	DefaultVXLANPort     = 4789
 )
 
-// Config configures the one node-wide Setera VXLAN interface.
+// Config configures the one node-wide MIsoKube VXLAN interface.
 type Config struct {
 	InterfaceName string
 	VNI           int
@@ -33,7 +33,7 @@ func DefaultConfig(mtu int) Config {
 	}
 }
 
-// LocalNode describes the local Setera VTEP after it has been created.
+// LocalNode describes the local MIsoKube VTEP after it has been created.
 type LocalNode struct {
 	InterfaceName string
 	IfIndex       int
@@ -43,7 +43,7 @@ type LocalNode struct {
 }
 
 // VTEPAddress returns the first usable IPv4 address in a Node PodCIDR as a
-// /32. Setera reserves this address exclusively for the node-wide VTEP.
+// /32. MIsoKube reserves this address exclusively for the node-wide VTEP.
 //
 // Example: 10.244.1.0/24 -> 10.244.1.1/32.
 func VTEPAddress(podCIDR netip.Prefix) (netip.Prefix, error) {

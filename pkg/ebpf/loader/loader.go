@@ -16,10 +16,10 @@ import (
 
 // Action constants matching the BPF program defines.
 const (
-	tcPinRoot                    = "/sys/fs/bpf/setera/tc"
+	tcPinRoot                    = "/sys/fs/bpf/misokube/tc"
 	tcPodIDsMapPath              = tcPinRoot + "/tc_podIDs"
 	tcVXLANIfIndexMapPath        = tcPinRoot + "/tc_vxlan_ifindex"
-	tcPodIDsMaxEntries    uint32 = 256
+	tcPodIDsMaxEntries    uint32 = 4096
 	ActionDrop            uint32 = 0
 	ActionAllow           uint32 = 1
 	ActionLog             uint32 = 2
@@ -582,8 +582,8 @@ func (fw *XDPFirewall) Close() error {
 // NewTCFirewall loads and attaches the Pod TC program to ingress on the given
 // host-side veth.
 //
-// Setera makes all Pod routing/isolation decisions on ingress. No Setera egress
-// program is attached. Any legacy Setera egress filter from an older daemon is
+// MIsoKube makes all Pod routing/isolation decisions on ingress. No MIsoKube egress
+// program is attached. Any legacy MIsoKube egress filter from an older daemon is
 // removed during attach.
 //
 // The returned object owns only its ingress filter and BPF object handles. It
@@ -650,7 +650,7 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 	if err := deleteNamedTCBpfFilters(
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_EGRESS,
-		"setera_tc_egress",
+		"misokube_tc_egress",
 	); err != nil {
 		objs.Close()
 		return nil, fmt.Errorf("remove legacy Pod TC egress filter: %w", err)
@@ -660,7 +660,7 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_INGRESS,
 		objs.TcFirewallIngress.FD(),
-		"setera_tc_ingress",
+		"misokube_tc_ingress",
 	)
 	if err := netlink.FilterReplace(ingressFilter); err != nil {
 		objs.Close()
@@ -678,7 +678,7 @@ func NewTCFirewall(ifaceName string, tenantName ...string) (*TCFirewall, error) 
 // NewNodeRouter loads and attaches the forwarding-only node router to ingress
 // on the given VXLAN interface.
 //
-// No Setera node-router egress program is attached. Any legacy Setera node
+// No MIsoKube node-router egress program is attached. Any legacy MIsoKube node
 // egress filter from an older daemon is removed during attach.
 //
 // The returned object owns only its ingress filter and BPF object handles. It
@@ -732,7 +732,7 @@ func NewNodeRouter(ifaceName string) (*NodeRouter, error) {
 	if err := deleteNamedTCBpfFilters(
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_EGRESS,
-		"setera_node_egress",
+		"misokube_node_egress",
 	); err != nil {
 		objs.Close()
 		return nil, fmt.Errorf("remove legacy node TC egress filter: %w", err)
@@ -742,7 +742,7 @@ func NewNodeRouter(ifaceName string) (*NodeRouter, error) {
 		nlLink.Attrs().Index,
 		netlink.HANDLE_MIN_INGRESS,
 		objs.TcNodeIngress.FD(),
-		"setera_node_ingress",
+		"misokube_node_ingress",
 	)
 	if err := netlink.FilterReplace(ingressFilter); err != nil {
 		objs.Close()
@@ -827,7 +827,7 @@ func deleteTCFilter(
 	return nil
 }
 
-// deleteNamedTCBpfFilters removes Setera filters left by older daemon versions.
+// deleteNamedTCBpfFilters removes MIsoKube filters left by older daemon versions.
 // It makes the ingress-only attachment model effective across an in-place
 // daemon upgrade without deleting shared clsact state.
 func deleteNamedTCBpfFilters(
@@ -1114,7 +1114,7 @@ func (fw *TCFirewall) GetIngressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 0)
 }
 
-// GetEgressStats is retained for API compatibility. Setera no longer attaches
+// GetEgressStats is retained for API compatibility. MIsoKube no longer attaches
 // the TC egress program, so this counter normally remains zero.
 func (fw *TCFirewall) GetEgressStats() (*PktStats, error) {
 	return getPercpuStats(fw.objs.TcStats, 1)

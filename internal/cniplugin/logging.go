@@ -7,12 +7,12 @@ import (
 )
 
 // LoadLogFile configures the global logger to write to a file.
-// Controlled by env var LOG_FILE; default is "/var/log/setera-cni.log".
+// Controlled by env var LOG_FILE; default is "/var/log/misokube-cni.log".
 // Returns the opened *os.File or nil if logging to file is disabled or failed.
 func LoadLogFile() *os.File {
 	logFile := os.Getenv("LOG_FILE")
 	if logFile == "" {
-		logFile = "/var/log/setera-cni.log"
+		logFile = "/var/log/misokube-cni.log"
 	}
 
 	f, err := openLogFile(logFile)

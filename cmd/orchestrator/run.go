@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github/setera/internal/tenantcontroller"
-	"github/setera/internal/webhook"
-	seteraclient "github/setera/pkg/generated/clientset/versioned"
-	seterainformers "github/setera/pkg/generated/informers/externalversions"
+	"github/misokube/internal/tenantcontroller"
+	"github/misokube/internal/webhook"
+	misokubeclient "github/misokube/pkg/generated/clientset/versioned"
+	misokubeinformers "github/misokube/pkg/generated/informers/externalversions"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 func run(
@@ -32,10 +33,18 @@ func run(
 		)
 	}
 
-	seteraClient, err := seteraclient.NewForConfig(restConfig)
+	misokubeClient, err := misokubeclient.NewForConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf(
-			"create Setera client: %w",
+			"create MIsoKube client: %w",
+			err,
+		)
+	}
+
+	metricsClient, err := metricsclient.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf(
+			"create metrics client: %w",
 			err,
 		)
 	}
@@ -65,7 +74,7 @@ func run(
 	}
 
 	webhookServer := webhook.NewWebhookServer(
-		seteraClient,
+		misokubeClient,
 		kubeClient,
 		tlsFiles.CertFile,
 		tlsFiles.KeyFile,
@@ -76,8 +85,8 @@ func run(
 		cfg.resyncPeriod,
 	)
 
-	seteraFactory := seterainformers.NewSharedInformerFactory(
-		seteraClient,
+	misokubeFactory := misokubeinformers.NewSharedInformerFactory(
+		misokubeClient,
 		cfg.resyncPeriod,
 	)
 
@@ -86,15 +95,16 @@ func run(
 		V1().
 		Nodes()
 
-	tenantInformer := seteraFactory.
-		Setera().
+	tenantInformer := misokubeFactory.
+		MIsoKube().
 		V1().
 		Tenants()
 
 	controller := tenantcontroller.New(
 		logger,
-		seteraClient,
+		misokubeClient,
 		kubeClient,
+		metricsClient,
 		tenantInformer.Informer(),
 		tenantInformer.Lister(),
 		nodeInformer.Informer(),
@@ -106,7 +116,7 @@ func run(
 
 	// Request informers before Start so the factories start all required caches.
 	coreFactory.Start(runCtx.Done())
-	seteraFactory.Start(runCtx.Done())
+	misokubeFactory.Start(runCtx.Done())
 
 	controllerErr := make(chan error, 1)
 

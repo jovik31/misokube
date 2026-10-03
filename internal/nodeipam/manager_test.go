@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github/setera/pkg/ipam/bitmap"
-	"github/setera/pkg/store"
+	"github/misokube/pkg/ipam/bitmap"
+	"github/misokube/pkg/store"
 )
 
 func TestNewRejectsNilDependencies(t *testing.T) {

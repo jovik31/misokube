@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/ebpf"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/ebpf"
 )
 
 // TestIntegrationReconcileRemotePodsAfterRestart proves that startup remote
@@ -16,7 +16,7 @@ import (
 func TestIntegrationReconcileRemotePodsAfterRestart(t *testing.T) {
 	if os.Getenv(ebpfIntegrationEnv) != "1" {
 		t.Skip(
-			"set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
+			"set MISOKUBE_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
 		)
 	}
 	if os.Geteuid() != 0 {

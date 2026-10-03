@@ -18,7 +18,7 @@ limitations under the License.
 package internalinterfaces
 
 import (
-	versioned "github/setera/pkg/generated/clientset/versioned"
+	versioned "github/misokube/pkg/generated/clientset/versioned"
 	time "time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

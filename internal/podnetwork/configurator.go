@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github/setera/internal/nodeipam"
-	"github/setera/pkg/network"
+	"github/misokube/internal/nodeipam"
+	"github/misokube/pkg/network"
 )
 
 var (

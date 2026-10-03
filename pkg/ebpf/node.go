@@ -5,10 +5,10 @@ import (
 	"strings"
 	"sync"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
-// NodeProgram is the Setera TC program attached to a node-level interface.
+// NodeProgram is the MIsoKube TC program attached to a node-level interface.
 //
 // The node program has no tenant identity.
 // Pod programs enforce tenant isolation.
@@ -19,7 +19,7 @@ type NodeProgram struct {
 	handle nodeProgramHandle
 }
 
-// AttachNodeProgram loads and attaches the Setera node TC program.
+// AttachNodeProgram loads and attaches the MIsoKube node TC program.
 //
 // Linux routing and netfilter process traffic after VXLAN decapsulation.
 func AttachNodeProgram(

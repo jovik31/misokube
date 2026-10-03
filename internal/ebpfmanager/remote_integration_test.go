@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github/setera/pkg/ebpf"
+	"github/misokube/pkg/ebpf"
 )
 
 // TestIntegrationRemotePodLifecycle validates the remote-only manager path
@@ -15,7 +15,7 @@ import (
 func TestIntegrationRemotePodLifecycle(t *testing.T) {
 	if os.Getenv(ebpfIntegrationEnv) != "1" {
 		t.Skip(
-			"set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
+			"set MISOKUBE_EBPF_INTEGRATION=1 to run privileged eBPF integration tests",
 		)
 	}
 	if os.Geteuid() != 0 {

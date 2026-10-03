@@ -1,6 +1,6 @@
 package noderouting
 
-import "github/setera/pkg/network"
+import "github/misokube/pkg/network"
 
 func fdbFor(ifIndex int, node RemoteNode) network.FDBEntry {
 	return network.FDBEntry{

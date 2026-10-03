@@ -1,7 +1,7 @@
 package webhook
 
 import (
-	seterav1 "github/setera/pkg/api/setera.com/v1"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,7 +42,7 @@ func isMapSubset[K, V comparable](
 
 func checkNodeZones(
 	nodeList []corev1.Node,
-	status seterav1.TenantStatus,
+	status misokubev1.TenantStatus,
 ) (bool, string) {
 	if len(nodeList) <
 		len(status.AssignedNodes) {

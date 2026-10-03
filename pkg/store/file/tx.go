@@ -11,7 +11,7 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 // txState holds the shared state of a transaction. The closed flag is atomic, so

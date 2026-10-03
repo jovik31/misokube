@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github/setera/pkg/ebpf"
+	"github/misokube/pkg/ebpf"
 )
 
 var (
@@ -15,7 +15,7 @@ var (
 	ErrRemotePodConflict = errors.New("ebpfmanager: remote pod conflict")
 )
 
-// Manager owns Setera's node-local eBPF lifecycle state.
+// Manager owns MIsoKube's node-local eBPF lifecycle state.
 //
 // It tracks local and remote Pod ownership for the shared tc_podIDs keyspace.
 // Kubernetes watches and routing remain outside this package.
@@ -27,7 +27,7 @@ type Manager struct {
 	deps   dependencies
 }
 
-// New returns a concrete Setera eBPF manager.
+// New returns a concrete MIsoKube eBPF manager.
 func New() *Manager {
 	return newWithDependencies(defaultDependencies())
 }

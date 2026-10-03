@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/internal/podnetwork"
+	"github/misokube/internal/podnetwork"
 )
 
 func TestAddLocalPod(t *testing.T) {

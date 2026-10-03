@@ -9,7 +9,7 @@ import (
 	"os"
 	"syscall"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 const lockFileName = ".store-lock"

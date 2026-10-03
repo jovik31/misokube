@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 )

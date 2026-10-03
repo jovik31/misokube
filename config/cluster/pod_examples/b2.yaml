@@ -4,7 +4,7 @@ metadata:
   name: b2
   namespace: default
   annotations:
-    setera.com/tenant: "two"
+    misokube.com/tenant: "two"
 spec:
   containers:
   - name: b2
@@ -14,5 +14,5 @@ spec:
       - "3600"
     imagePullPolicy: IfNotPresent
   nodeSelector:
-    setera.com.tenant.two: "Enabled"
+    misokube.com.tenant.two: "Enabled"
   restartPolicy: Always

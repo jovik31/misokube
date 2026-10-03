@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github/setera/pkg/ebpf"
+	"github/misokube/pkg/ebpf"
 )
 
 // RemotePod is the userspace identity needed to manage one Pod that lives on

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github/setera/pkg/network"
+	"github/misokube/pkg/network"
 )
 
 func TestVTEPAddress(t *testing.T) {

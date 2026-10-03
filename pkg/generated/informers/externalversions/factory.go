@@ -18,9 +18,9 @@ limitations under the License.
 package externalversions
 
 import (
-	versioned "github/setera/pkg/generated/clientset/versioned"
-	internalinterfaces "github/setera/pkg/generated/informers/externalversions/internalinterfaces"
-	seteracom "github/setera/pkg/generated/informers/externalversions/setera.com"
+	versioned "github/misokube/pkg/generated/clientset/versioned"
+	internalinterfaces "github/misokube/pkg/generated/informers/externalversions/internalinterfaces"
+	misokubecom "github/misokube/pkg/generated/informers/externalversions/misokube.com"
 	reflect "reflect"
 	sync "sync"
 	time "time"
@@ -254,9 +254,9 @@ type SharedInformerFactory interface {
 	// client.
 	InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer
 
-	Setera() seteracom.Interface
+	MIsoKube() misokubecom.Interface
 }
 
-func (f *sharedInformerFactory) Setera() seteracom.Interface {
-	return seteracom.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) MIsoKube() misokubecom.Interface {
+	return misokubecom.New(f, f.namespace, f.tweakListOptions)
 }

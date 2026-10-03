@@ -11,12 +11,12 @@ import (
 	cebpf "github.com/cilium/ebpf"
 	"github.com/vishvananda/netlink"
 
-	"github/setera/internal/podnetwork"
+	"github/misokube/internal/podnetwork"
 )
 
 const (
-	ebpfIntegrationEnv = "SETERA_EBPF_INTEGRATION"
-	tcPodIDsPinnedPath = "/sys/fs/bpf/setera/tc/tc_podIDs"
+	ebpfIntegrationEnv = "MISOKUBE_EBPF_INTEGRATION"
+	tcPodIDsPinnedPath = "/sys/fs/bpf/misokube/tc/tc_podIDs"
 )
 
 // TestIntegrationLocalPodLifecycle validates the complete local eBPF manager
@@ -29,7 +29,7 @@ const (
 //
 //	Manager.DeleteLocalPod
 //	    -> tc_podIDs entry removed
-//	    -> Setera filters detached
+//	    -> MIsoKube filters detached
 //	    -> clsact retained
 //
 // The test is opt-in because it requires root/eBPF/TC privileges.
@@ -42,16 +42,16 @@ const (
 // Then copy and run the binary inside a privileged kind node:
 //
 //	docker cp ./bin/ebpfmanager.test \
-//	  setera-cluster-worker:/root/ebpfmanager.test
+//	  misokube-cluster-worker:/root/ebpfmanager.test
 //
-//	docker exec -e SETERA_EBPF_INTEGRATION=1 \
-//	  setera-cluster-worker \
+//	docker exec -e MISOKUBE_EBPF_INTEGRATION=1 \
+//	  misokube-cluster-worker \
 //	  /root/ebpfmanager.test \
 //	  -test.run TestIntegrationLocalPodLifecycle \
 //	  -test.v
 func TestIntegrationLocalPodLifecycle(t *testing.T) {
 	if os.Getenv(ebpfIntegrationEnv) != "1" {
-		t.Skip("set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests")
+		t.Skip("set MISOKUBE_EBPF_INTEGRATION=1 to run privileged eBPF integration tests")
 	}
 	if os.Geteuid() != 0 {
 		t.Skip("requires root or equivalent eBPF/TC capabilities")
@@ -82,7 +82,7 @@ func TestIntegrationLocalPodLifecycle(t *testing.T) {
 	})
 
 	requireLocalManagerRecord(t, manager, pod)
-	requireSeteraPodFilters(t, host)
+	requireMIsoKubePodFilters(t, host)
 	requirePinnedPodEndpoint(
 		t,
 		podIP,
@@ -96,7 +96,7 @@ func TestIntegrationLocalPodLifecycle(t *testing.T) {
 
 	requireNoLocalManagerRecord(t, manager, podIP)
 	requirePinnedPodEndpointMissing(t, podIP)
-	requireNoSeteraPodFilters(t, host)
+	requireNoMIsoKubePodFilters(t, host)
 	requireClsact(t, host)
 
 	t.Logf(
@@ -228,7 +228,7 @@ func requireNoLocalManagerRecord(
 	}
 }
 
-func requireSeteraPodFilters(
+func requireMIsoKubePodFilters(
 	t *testing.T,
 	link netlink.Link,
 ) {
@@ -238,13 +238,13 @@ func requireSeteraPodFilters(
 		t,
 		link,
 		netlink.HANDLE_MIN_INGRESS,
-		"setera_tc_ingress",
+		"misokube_tc_ingress",
 	)
 	requireNamedBPFProgram(
 		t,
 		link,
 		netlink.HANDLE_MIN_EGRESS,
-		"setera_tc_egress",
+		"misokube_tc_egress",
 	)
 }
 
@@ -284,7 +284,7 @@ func requireNamedBPFProgram(
 	)
 }
 
-func requireNoSeteraPodFilters(
+func requireNoMIsoKubePodFilters(
 	t *testing.T,
 	link netlink.Link,
 ) {
@@ -309,9 +309,9 @@ func requireNoSeteraPodFilters(
 			if !ok {
 				continue
 			}
-			if strings.HasPrefix(bpfFilter.Name, "setera_tc_") {
+			if strings.HasPrefix(bpfFilter.Name, "misokube_tc_") {
 				t.Fatalf(
-					"Setera Pod filter %q still attached to %s",
+					"MIsoKube Pod filter %q still attached to %s",
 					bpfFilter.Name,
 					link.Attrs().Name,
 				)

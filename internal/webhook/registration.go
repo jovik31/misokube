@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -54,7 +54,7 @@ func EnsureMutatingWebhookConfiguration(
 			},
 			Webhooks: []admissionregistrationv1.MutatingWebhook{
 				{
-					Name: "pods.setera.com",
+					Name: "pods.misokube.com",
 
 					ClientConfig: admissionregistrationv1.WebhookClientConfig{
 						Service: &admissionregistrationv1.ServiceReference{

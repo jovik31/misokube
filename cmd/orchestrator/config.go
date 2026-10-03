@@ -12,7 +12,7 @@ import (
 
 const (
 	defaultWebhookNamespace = "default"
-	defaultWebhookTLSDir    = "/tmp/setera-webhook"
+	defaultWebhookTLSDir    = "/tmp/misokube-webhook"
 )
 
 type config struct {

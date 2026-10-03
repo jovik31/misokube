@@ -1,2 +1,28 @@
 bin/
 
+
+# Generated evaluation output
+results/
+test-results/
+benchmark-results/
+artifacts/
+coverage/
+*.log
+*.pcap
+*.prof
+*.out
+*.cover
+coverage.*
+
+# Generated evaluation output
+results/
+test-results/
+benchmark-results/
+artifacts/
+coverage/
+*.log
+*.pcap
+*.prof
+*.out
+*.cover
+coverage.*

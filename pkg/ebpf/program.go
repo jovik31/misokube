@@ -5,12 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
 const maxTenantIDBytes = 63
 
-// PodProgram is an attached Setera TC program for one local Pod host veth.
+// PodProgram is an attached MIsoKube TC program for one local Pod host veth.
 //
 // PodProgram owns only the low-level eBPF attachment. Kubernetes and Pod
 // lifecycle state belong to internal/ebpfmanager.
@@ -21,7 +21,7 @@ type PodProgram struct {
 	handle podProgramHandle
 }
 
-// AttachPodProgram loads the Setera Pod TC policy, configures its tenant
+// AttachPodProgram loads the MIsoKube Pod TC policy, configures its tenant
 // identity, and attaches it to ingress and egress on the host-side veth.
 //
 // The tenant identity is stored in the BPF program's fixed char[64]

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"slices"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
-	"github/setera/pkg/tenantmeta"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
+	"github/misokube/pkg/tenantmeta"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +36,8 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 			return err
 		}
 
-		tenant, err = c.setera.
-			SeteraV1().
+		tenant, err = c.misokube.
+			MIsoKubeV1().
 			Tenants().
 			Get(ctx, tenant.Name, metav1.GetOptions{})
 		if err != nil {
@@ -71,7 +71,7 @@ func (c *Controller) reconcileKey(ctx context.Context, key string) error {
 
 func (c *Controller) reconcileDelete(
 	ctx context.Context,
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 ) error {
 	if !slices.Contains(tenant.Finalizers, tenantFinalizer) {
 		return nil
@@ -142,7 +142,7 @@ func (c *Controller) reconcileDelete(
 
 func (c *Controller) ensureFinalizer(
 	ctx context.Context,
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 ) error {
 	if slices.Contains(tenant.Finalizers, tenantFinalizer) {
 		return nil
@@ -158,7 +158,7 @@ func (c *Controller) ensureFinalizer(
 
 func (c *Controller) removeFinalizer(
 	ctx context.Context,
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 ) error {
 	finalizers := make([]string, 0, len(tenant.Finalizers))
 
@@ -175,7 +175,7 @@ func (c *Controller) removeFinalizer(
 
 func (c *Controller) patchTenantFinalizers(
 	ctx context.Context,
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 	finalizers []string,
 ) error {
 	payload := map[string]any{
@@ -193,8 +193,8 @@ func (c *Controller) patchTenantFinalizers(
 		)
 	}
 
-	if _, err := c.setera.
-		SeteraV1().
+	if _, err := c.misokube.
+		MIsoKubeV1().
 		Tenants().
 		Patch(
 			ctx,

@@ -1,0 +1,6 @@
+apiVersion: misokube.com/v1
+kind: Tenant
+metadata:
+  name: default
+spec:
+  zones: 2

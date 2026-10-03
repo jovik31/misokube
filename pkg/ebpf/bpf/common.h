@@ -2,7 +2,7 @@
 #define __COMMON_H__
 
 // ============================================================================
-// Shared types and constants for Setera eBPF firewall programs (TC + XDP)
+// Shared types and constants for MIsoKube eBPF firewall programs (TC + XDP)
 // ============================================================================
 
 #include <linux/bpf.h>

@@ -4,7 +4,7 @@ metadata:
   name: busybox2
   namespace: default
   annotations:
-    setera.com/tenant: "one"
+    misokube.com/tenant: "one"
 spec:
   containers:
   - name: busybox
@@ -14,5 +14,5 @@ spec:
       - "3600"
     imagePullPolicy: IfNotPresent
   nodeSelector:
-    setera.com.tenant.one: "Enabled"
+    misokube.com.tenant.one: "Enabled"
   restartPolicy: Always

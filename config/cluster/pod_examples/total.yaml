@@ -4,8 +4,8 @@ metadata:
   name: tenant-a-1
   namespace: default
   labels:
-    setera.com/tenant: tenant-a
-    setera.com/test-group: tenant-a
+    misokube.com/tenant: tenant-a
+    misokube.com/test-group: tenant-a
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -14,7 +14,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-a
+          misokube.com/test-group: tenant-a
 
   containers:
     - name: toolbox
@@ -31,8 +31,8 @@ metadata:
   name: tenant-a-2
   namespace: default
   labels:
-    setera.com/tenant: tenant-a
-    setera.com/test-group: tenant-a
+    misokube.com/tenant: tenant-a
+    misokube.com/test-group: tenant-a
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -41,7 +41,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-a
+          misokube.com/test-group: tenant-a
 
   containers:
     - name: toolbox
@@ -58,8 +58,8 @@ metadata:
   name: tenant-a-3
   namespace: default
   labels:
-    setera.com/tenant: tenant-a
-    setera.com/test-group: tenant-a
+    misokube.com/tenant: tenant-a
+    misokube.com/test-group: tenant-a
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -68,7 +68,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-a
+          misokube.com/test-group: tenant-a
 
   containers:
     - name: toolbox
@@ -85,8 +85,8 @@ metadata:
   name: tenant-b-1
   namespace: default
   labels:
-    setera.com/tenant: tenant-b
-    setera.com/test-group: tenant-b
+    misokube.com/tenant: tenant-b
+    misokube.com/test-group: tenant-b
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -95,7 +95,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-b
+          misokube.com/test-group: tenant-b
 
   containers:
     - name: toolbox
@@ -112,8 +112,8 @@ metadata:
   name: tenant-b-2
   namespace: default
   labels:
-    setera.com/tenant: tenant-b
-    setera.com/test-group: tenant-b
+    misokube.com/tenant: tenant-b
+    misokube.com/test-group: tenant-b
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -122,7 +122,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-b
+          misokube.com/test-group: tenant-b
 
   containers:
     - name: toolbox
@@ -139,8 +139,8 @@ metadata:
   name: tenant-b-3
   namespace: default
   labels:
-    setera.com/tenant: tenant-b
-    setera.com/test-group: tenant-b
+    misokube.com/tenant: tenant-b
+    misokube.com/test-group: tenant-b
 spec:
   topologySpreadConstraints:
     - maxSkew: 1
@@ -149,7 +149,7 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          setera.com/test-group: tenant-b
+          misokube.com/test-group: tenant-b
 
   containers:
     - name: toolbox

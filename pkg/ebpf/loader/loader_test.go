@@ -163,7 +163,7 @@ func TestNewTCBpfFilter(t *testing.T) {
 		42,
 		netlink.HANDLE_MIN_INGRESS,
 		100,
-		"setera_test",
+		"misokube_test",
 	)
 
 	if filter.Attrs().LinkIndex != 42 {
@@ -182,11 +182,11 @@ func TestNewTCBpfFilter(t *testing.T) {
 	if filter.Fd != 100 {
 		t.Fatalf("Fd = %d, want 100", filter.Fd)
 	}
-	if filter.Name != "setera_test" {
+	if filter.Name != "misokube_test" {
 		t.Fatalf(
 			"Name = %q, want %q",
 			filter.Name,
-			"setera_test",
+			"misokube_test",
 		)
 	}
 	if !filter.DirectAction {

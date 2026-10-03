@@ -3,7 +3,7 @@ package ebpf
 import (
 	"fmt"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
 // SetVXLANIfIndex publishes the node-wide VXLAN interface used by Pod TC

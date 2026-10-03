@@ -29,23 +29,23 @@ func TestNewValidatesDependencies(t *testing.T) {
 		},
 		{
 			name:       "missing node name",
-			socketPath: "/tmp/setera.sock",
+			socketPath: "/tmp/misokube.sock",
 		},
 		{
 			name:       "missing pod lister",
-			socketPath: "/tmp/setera.sock",
+			socketPath: "/tmp/misokube.sock",
 			nodeName:   "node-a",
 			podsNil:    true,
 		},
 		{
 			name:       "missing node lister",
-			socketPath: "/tmp/setera.sock",
+			socketPath: "/tmp/misokube.sock",
 			nodeName:   "node-a",
 			nodesNil:   true,
 		},
 		{
 			name:       "missing pod network",
-			socketPath: "/tmp/setera.sock",
+			socketPath: "/tmp/misokube.sock",
 			nodeName:   "node-a",
 			networkNil: true,
 		},
@@ -84,7 +84,7 @@ func TestNewValidatesDependencies(t *testing.T) {
 
 func TestNewUsesFallbackCNIVersion(t *testing.T) {
 	server, err := New(
-		"/tmp/setera.sock",
+		"/tmp/misokube.sock",
 		"node-a",
 		newPodLister(t),
 		newNodeLister(
@@ -109,7 +109,7 @@ func TestNewUsesFallbackCNIVersion(t *testing.T) {
 
 func TestRunRejectsCancelledContext(t *testing.T) {
 	server, err := New(
-		"/tmp/setera.sock",
+		"/tmp/misokube.sock",
 		"node-a",
 		newPodLister(t),
 		newNodeLister(

@@ -3,7 +3,7 @@ package podwatcher
 import (
 	"reflect"
 
-	"github/setera/pkg/tenantmeta"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -47,7 +47,7 @@ func (w *Watcher) onNodeUpdate(oldObj, newObj any) {
 		return
 	}
 
-	// Remote relevance depends only on Setera tenant membership. This applies
+	// Remote relevance depends only on MIsoKube tenant membership. This applies
 	// to the local Node and to remote Nodes hosting explicit-tenant Pods.
 	if !reflect.DeepEqual(
 		tenantmeta.Tenants(oldNode.Labels),

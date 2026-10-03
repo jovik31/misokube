@@ -14,7 +14,7 @@ fail() {
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-THIS_PKG="${THIS_PKG:-github/setera}"
+THIS_PKG="${THIS_PKG:-github/misokube}"
 API_DIR="${API_DIR:-${REPO_ROOT}/pkg/api}"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/pkg/generated}"
 OUTPUT_PKG="${OUTPUT_PKG:-${THIS_PKG}/pkg/generated}"
@@ -26,7 +26,7 @@ cd "${REPO_ROOT}"
 command -v go >/dev/null 2>&1 || fail "go binary not found in PATH"
 
 if ! go env GOCACHE >/dev/null 2>&1 || [ ! -w "$(go env GOCACHE)" ]; then
-	export GOCACHE="${GOCACHE:-/tmp/setera-go-build-cache}"
+	export GOCACHE="${GOCACHE:-/tmp/misokube-go-build-cache}"
 	mkdir -p "${GOCACHE}"
 	log "using writable Go build cache: ${GOCACHE}"
 fi

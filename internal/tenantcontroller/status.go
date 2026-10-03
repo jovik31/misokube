@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sort"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -18,12 +18,12 @@ const assignedCondition = "Assigned"
 
 func (c *Controller) updateTenantStatus(
 	ctx context.Context,
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 	assignment assignmentResult,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		current, err := c.setera.
-			SeteraV1().
+		current, err := c.misokube.
+			MIsoKubeV1().
 			Tenants().
 			Get(ctx, tenant.Name, metav1.GetOptions{})
 		if err != nil {
@@ -67,8 +67,8 @@ func (c *Controller) updateTenantStatus(
 			return nil
 		}
 
-		if _, err := c.setera.
-			SeteraV1().
+		if _, err := c.misokube.
+			MIsoKubeV1().
 			Tenants().
 			UpdateStatus(ctx, mod, metav1.UpdateOptions{}); err != nil {
 			return err

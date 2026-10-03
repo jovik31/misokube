@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	seteraclient "github/setera/pkg/generated/clientset/versioned"
-	seteralisters "github/setera/pkg/generated/listers/setera.com/v1"
+	misokubeclient "github/misokube/pkg/generated/clientset/versioned"
+	misokubelisters "github/misokube/pkg/generated/listers/misokube.com/v1"
 
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 const (
-	tenantFinalizer   = "setera.com/tenant-finalizer"
+	tenantFinalizer   = "misokube.com/tenant-finalizer"
 	blockedRetryDelay = 10 * time.Second
 )
 
@@ -24,12 +25,13 @@ const (
 type Controller struct {
 	logger klog.Logger
 
-	setera seteraclient.Interface
-	kube   kubernetes.Interface
-	pods   podReader
+	misokube misokubeclient.Interface
+	kube     kubernetes.Interface
+	metrics  metricsclient.Interface
+	pods     podReader
 
 	tenantInformer cache.SharedIndexInformer
-	tenantLister   seteralisters.TenantLister
+	tenantLister   misokubelisters.TenantLister
 
 	nodeInformer cache.SharedIndexInformer
 	nodeLister   corelisters.NodeLister
@@ -39,17 +41,19 @@ type Controller struct {
 
 func New(
 	logger klog.Logger,
-	seteraClient seteraclient.Interface,
+	misokubeClient misokubeclient.Interface,
 	kubeClient kubernetes.Interface,
+	metricsClient metricsclient.Interface,
 	tenantInformer cache.SharedIndexInformer,
-	tenantLister seteralisters.TenantLister,
+	tenantLister misokubelisters.TenantLister,
 	nodeInformer cache.SharedIndexInformer,
 	nodeLister corelisters.NodeLister,
 ) *Controller {
 	c := &Controller{
 		logger:         logger.WithName("tenant-controller"),
-		setera:         seteraClient,
+		misokube:       misokubeClient,
 		kube:           kubeClient,
+		metrics:        metricsClient,
 		pods:           newKubePodReader(kubeClient),
 		tenantInformer: tenantInformer,
 		tenantLister:   tenantLister,

@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
 const (

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 const tempFilePrefix = ".store-tmp-"

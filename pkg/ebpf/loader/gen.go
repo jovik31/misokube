@@ -1,6 +1,6 @@
 package loader
 
-// Generate Go bindings from Setera BPF C programs using bpf2go.
+// Generate Go bindings from MIsoKube BPF C programs using bpf2go.
 //
 // Run from the repository root:
 //

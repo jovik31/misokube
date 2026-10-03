@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github/setera/pkg/wire"
+	"github/misokube/pkg/wire"
 )
 
 // Listen binds a unix socket path (creating parent dir) with hardened perms.

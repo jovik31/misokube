@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
-	"github/setera/pkg/tenantmeta"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
+	"github/misokube/pkg/tenantmeta"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,8 +52,8 @@ func (ws *WebhookServer) admitPod(
 		), nil
 	}
 
-	tenant, err := ws.seterav1Clientset.
-		SeteraV1().
+	tenant, err := ws.misokubev1Clientset.
+		MIsoKubeV1().
 		Tenants().
 		Get(
 			ctx,
@@ -165,7 +165,7 @@ func (ws *WebhookServer) admitPod(
 }
 
 func tenantIsAssigned(
-	tenant *seterav1.Tenant,
+	tenant *misokubev1.Tenant,
 ) bool {
 	if tenant == nil {
 		return false

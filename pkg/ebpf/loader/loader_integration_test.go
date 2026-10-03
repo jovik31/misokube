@@ -15,20 +15,20 @@ import (
 // This test is intentionally opt-in because it requires eBPF/TC privileges and
 // creates temporary Linux interfaces.
 //
-// Run on a Setera development node with:
+// Run on a MIsoKube development node with:
 //
-//	SETERA_EBPF_INTEGRATION=1 go test ./pkg/ebpf/loader -run TestIntegrationTCProgramsShareTcPodIDs -v
+//	MISOKUBE_EBPF_INTEGRATION=1 go test ./pkg/ebpf/loader -run TestIntegrationTCProgramsShareTcPodIDs -v
 func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
-	if os.Getenv("SETERA_EBPF_INTEGRATION") != "1" {
-		t.Skip("set SETERA_EBPF_INTEGRATION=1 to run privileged eBPF integration tests")
+	if os.Getenv("MISOKUBE_EBPF_INTEGRATION") != "1" {
+		t.Skip("set MISOKUBE_EBPF_INTEGRATION=1 to run privileged eBPF integration tests")
 	}
 
 	if os.Geteuid() != 0 {
 		t.Skip("requires root or equivalent eBPF/TC capabilities")
 	}
 
-	podLink := addIntegrationDummy(t, "setera-pod0")
-	nodeLink := addIntegrationDummy(t, "setera-node0")
+	podLink := addIntegrationDummy(t, "misokube-pod0")
+	nodeLink := addIntegrationDummy(t, "misokube-node0")
 
 	podProgram, err := NewPodPolicy(
 		podLink.Attrs().Name,
@@ -57,11 +57,11 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 		}
 	}()
 
-	requireSeteraPodPolicy(t, podLink)
-	requireSeteraIngressOnly(
+	requireMIsoKubePodPolicy(t, podLink)
+	requireMIsoKubeIngressOnly(
 		t,
 		nodeLink,
-		"setera_node_ingress",
+		"misokube_node_ingress",
 	)
 
 	podMapID := requireMapID(
@@ -165,12 +165,12 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 		)
 	}
 
-	requireNoSeteraFilters(
+	requireNoMIsoKubeFilters(
 		t,
 		podLink,
 	)
 
-	requireNoSeteraFilters(
+	requireNoMIsoKubeFilters(
 		t,
 		nodeLink,
 	)
@@ -186,28 +186,28 @@ func TestIntegrationTCProgramsShareTcPodIDs(t *testing.T) {
 	)
 }
 
-func requireSeteraPodPolicy(
+func requireMIsoKubePodPolicy(
 	t *testing.T,
 	link netlink.Link,
 ) {
 	t.Helper()
 
-	requireNamedSeteraFilter(
+	requireNamedMIsoKubeFilter(
 		t,
 		link,
 		netlink.HANDLE_MIN_INGRESS,
-		"setera_tc_ingress",
+		"misokube_tc_ingress",
 	)
 
-	requireNamedSeteraFilter(
+	requireNamedMIsoKubeFilter(
 		t,
 		link,
 		netlink.HANDLE_MIN_EGRESS,
-		"setera_tc_egress",
+		"misokube_tc_egress",
 	)
 }
 
-func requireNamedSeteraFilter(
+func requireNamedMIsoKubeFilter(
 	t *testing.T,
 	link netlink.Link,
 	parent uint32,
@@ -237,14 +237,14 @@ func requireNamedSeteraFilter(
 		if !ok ||
 			!strings.HasPrefix(
 				bpfFilter.Name,
-				"setera_",
+				"misokube_",
 			) {
 			continue
 		}
 
 		if bpfFilter.Name != wantName {
 			t.Fatalf(
-				"unexpected Setera filter %q on %s parent %#x",
+				"unexpected MIsoKube filter %q on %s parent %#x",
 				bpfFilter.Name,
 				link.Attrs().Name,
 				parent,
@@ -256,7 +256,7 @@ func requireNamedSeteraFilter(
 
 	if !found {
 		t.Fatalf(
-			"Setera filter %q not attached to %s parent %#x",
+			"MIsoKube filter %q not attached to %s parent %#x",
 			wantName,
 			link.Attrs().Name,
 			parent,
@@ -264,7 +264,7 @@ func requireNamedSeteraFilter(
 	}
 }
 
-func requireSeteraIngressOnly(
+func requireMIsoKubeIngressOnly(
 	t *testing.T,
 	link netlink.Link,
 	wantIngressName string,
@@ -292,14 +292,14 @@ func requireSeteraIngressOnly(
 		if !ok ||
 			!strings.HasPrefix(
 				bpfFilter.Name,
-				"setera_",
+				"misokube_",
 			) {
 			continue
 		}
 
 		if bpfFilter.Name != wantIngressName {
 			t.Fatalf(
-				"unexpected Setera ingress filter %q on %s",
+				"unexpected MIsoKube ingress filter %q on %s",
 				bpfFilter.Name,
 				link.Attrs().Name,
 			)
@@ -310,7 +310,7 @@ func requireSeteraIngressOnly(
 
 	if !foundIngress {
 		t.Fatalf(
-			"Setera ingress filter %q not attached to %s",
+			"MIsoKube ingress filter %q not attached to %s",
 			wantIngressName,
 			link.Attrs().Name,
 		)
@@ -338,10 +338,10 @@ func requireSeteraIngressOnly(
 
 		if strings.HasPrefix(
 			bpfFilter.Name,
-			"setera_",
+			"misokube_",
 		) {
 			t.Fatalf(
-				"Setera egress filter %q unexpectedly attached to %s",
+				"MIsoKube egress filter %q unexpectedly attached to %s",
 				bpfFilter.Name,
 				link.Attrs().Name,
 			)
@@ -349,7 +349,7 @@ func requireSeteraIngressOnly(
 	}
 }
 
-func requireNoSeteraFilters(
+func requireNoMIsoKubeFilters(
 	t *testing.T,
 	link netlink.Link,
 ) {
@@ -382,10 +382,10 @@ func requireNoSeteraFilters(
 
 			if strings.HasPrefix(
 				bpfFilter.Name,
-				"setera_",
+				"misokube_",
 			) {
 				t.Fatalf(
-					"Setera filter %q still attached to %s",
+					"MIsoKube filter %q still attached to %s",
 					bpfFilter.Name,
 					link.Attrs().Name,
 				)

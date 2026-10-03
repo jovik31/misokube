@@ -20,7 +20,7 @@ type PodPolicy struct {
 	closeErr  error
 }
 
-// NewPodPolicy attaches Setera tenant policy to both TC directions of one Pod
+// NewPodPolicy attaches MIsoKube tenant policy to both TC directions of one Pod
 // host veth.
 func NewPodPolicy(
 	ifaceName string,
@@ -38,7 +38,7 @@ func NewPodPolicy(
 		firewall.ingressFilter.Attrs().LinkIndex,
 		netlink.HANDLE_MIN_EGRESS,
 		firewall.objs.TcFirewallEgress.FD(),
-		"setera_tc_egress",
+		"misokube_tc_egress",
 	)
 
 	if err := netlink.FilterReplace(egressFilter); err != nil {

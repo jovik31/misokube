@@ -8,7 +8,7 @@ import (
 	"net"
 	"regexp"
 
-	"github/setera/pkg/wire"
+	"github/misokube/pkg/wire"
 
 	"github.com/containernetworking/cni/pkg/skel"
 )

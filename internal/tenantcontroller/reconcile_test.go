@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
-	seterafake "github/setera/pkg/generated/clientset/versioned/fake"
-	seteralisters "github/setera/pkg/generated/listers/setera.com/v1"
-	"github/setera/pkg/tenantmeta"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
+	misokubefake "github/misokube/pkg/generated/clientset/versioned/fake"
+	misokubelisters "github/misokube/pkg/generated/listers/misokube.com/v1"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,12 +21,12 @@ import (
 func TestReconcileInitialTenantAssignsNodesAndUpdatesStatus(t *testing.T) {
 	ctx := context.Background()
 
-	tenant := &seterav1.Tenant{
+	tenant := &misokubev1.Tenant{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "tenant-a",
 			Generation: 1,
 		},
-		Spec: seterav1.TenantSpec{
+		Spec: misokubev1.TenantSpec{
 			Zones: 2,
 		},
 	}
@@ -35,7 +35,7 @@ func TestReconcileInitialTenantAssignsNodesAndUpdatesStatus(t *testing.T) {
 	nodeB := readyNode("node-b")
 	nodeC := readyNode("node-c")
 
-	seteraClient := seterafake.NewSimpleClientset(tenant.DeepCopy())
+	misokubeClient := misokubefake.NewSimpleClientset(tenant.DeepCopy())
 	kubeClient := fake.NewSimpleClientset(
 		nodeA.DeepCopy(),
 		nodeB.DeepCopy(),
@@ -56,10 +56,10 @@ func TestReconcileInitialTenantAssignsNodesAndUpdatesStatus(t *testing.T) {
 
 	controller := &Controller{
 		logger:       klog.Background(),
-		setera:       seteraClient,
+		misokube:     misokubeClient,
 		kube:         kubeClient,
 		pods:         newKubePodReader(kubeClient),
-		tenantLister: seteralisters.NewTenantLister(tenantIndexer),
+		tenantLister: misokubelisters.NewTenantLister(tenantIndexer),
 		nodeLister:   corelisters.NewNodeLister(nodeIndexer),
 		queue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
@@ -71,8 +71,8 @@ func TestReconcileInitialTenantAssignsNodesAndUpdatesStatus(t *testing.T) {
 		t.Fatalf("reconcile tenant: %v", err)
 	}
 
-	current, err := seteraClient.
-		SeteraV1().
+	current, err := misokubeClient.
+		MIsoKubeV1().
 		Tenants().
 		Get(ctx, tenant.Name, metav1.GetOptions{})
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/pkg/ebpf"
+	"github/misokube/pkg/ebpf"
 )
 
 func TestUpsertRemotePod(t *testing.T) {

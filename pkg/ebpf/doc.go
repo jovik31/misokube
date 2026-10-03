@@ -1,11 +1,11 @@
-// Package ebpf provides low-level eBPF datapath primitives used by Setera.
+// Package ebpf provides low-level eBPF datapath primitives used by MIsoKube.
 //
 // This package owns mechanisms such as:
-//   - loading Setera eBPF programs;
+//   - loading MIsoKube eBPF programs;
 //   - attaching and detaching programs from Linux interfaces;
-//   - reading and updating Setera BPF maps.
+//   - reading and updating MIsoKube BPF maps.
 //
-// It deliberately does not own Kubernetes or Setera lifecycle state.
+// It deliberately does not own Kubernetes or MIsoKube lifecycle state.
 // In particular, this package must not:
 //   - watch Pods, Nodes, or Tenants;
 //   - track Pod lifecycle by Pod UID or name;

@@ -1,6 +1,6 @@
 package noderouting
 
-import "github/setera/pkg/network"
+import "github/misokube/pkg/network"
 
 func routeFor(ifIndex int, node RemoteNode) network.Route {
 	return network.Route{

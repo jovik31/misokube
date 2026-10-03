@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github/setera/pkg/ebpf/loader"
+	"github/misokube/pkg/ebpf/loader"
 )
 
 func TestConvertListedPodEndpoints(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github/setera/pkg/network"
+	"github/misokube/pkg/network"
 )
 
 // RecoveryStats summarizes local Pod datapath recovery during daemon startup.

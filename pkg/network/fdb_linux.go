@@ -47,7 +47,7 @@ func (n *Linux) DeleteFDB(entry FDBEntry) error {
 // ListFDB returns remote VXLAN FDB entries on IfIndex.
 //
 // Kernel-owned local/self entries without a remote destination IP are ignored;
-// this leaves only entries of the same shape Setera programs with SetFDB.
+// this leaves only entries of the same shape MIsoKube programs with SetFDB.
 func (n *Linux) ListFDB(ifIndex int) ([]FDBEntry, error) {
 	if ifIndex <= 0 {
 		return nil, fmt.Errorf("network: invalid FDB ifindex %d", ifIndex)

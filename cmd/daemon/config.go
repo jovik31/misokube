@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultSocketPath = "/var/run/setera/setera.sock"
+	defaultSocketPath = "/var/run/misokube/misokube.sock"
 	defaultStateDir   = "/var/lib/cni/tenantcni/ipam"
 	defaultMTU        = 1450
 )
@@ -50,7 +50,7 @@ func parseConfig() config {
 		&cfg.socketPath,
 		"socket-path",
 		defaultSocketPath,
-		"Unix domain socket used by the Setera CNI shim",
+		"Unix domain socket used by the MIsoKube CNI shim",
 	)
 	flag.StringVar(
 		&cfg.stateDir,

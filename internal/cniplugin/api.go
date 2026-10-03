@@ -10,8 +10,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 
-	"github/setera/pkg/transport/uds"
-	"github/setera/pkg/wire"
+	"github/misokube/pkg/transport/uds"
+	"github/misokube/pkg/wire"
 )
 
 type Options struct {

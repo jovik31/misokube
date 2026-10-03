@@ -2,7 +2,7 @@
 
 package network
 
-// Linux provides Linux network operations used by Setera components.
+// Linux provides Linux network operations used by MIsoKube components.
 //
 // The exported API uses standard-library types. Linux-specific dependencies,
 // such as netlink and network namespace handles, stay inside this package.

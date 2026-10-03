@@ -11,7 +11,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github/setera/pkg/ipam"
+	"github/misokube/pkg/ipam"
 )
 
 const defaultMaxAddresses uint64 = 1 << 20 // 1,048,576 addresses; 128 KiB per bitmap.

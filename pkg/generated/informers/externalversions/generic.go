@@ -19,7 +19,7 @@ package externalversions
 
 import (
 	fmt "fmt"
-	v1 "github/setera/pkg/api/setera.com/v1"
+	v1 "github/misokube/pkg/api/misokube.com/v1"
 
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -51,9 +51,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=setera.com, Version=v1
+	// Group=misokube.com, Version=v1
 	case v1.SchemeGroupVersion.WithResource("tenants"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Setera().V1().Tenants().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.MIsoKube().V1().Tenants().Informer()}, nil
 
 	}
 

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github/setera/internal/podnetwork"
-	"github/setera/pkg/tenantmeta"
-	"github/setera/pkg/wire"
+	"github/misokube/internal/podnetwork"
+	"github/misokube/pkg/tenantmeta"
+	"github/misokube/pkg/wire"
 )
 
 func (s *Server) handleRequest(

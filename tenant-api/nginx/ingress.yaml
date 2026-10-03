@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tenant-api
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - tenant-api-test.localhost
+      secretName: tenant-api-test-tls
+  rules:
+    - host: tenant-api-test.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tenant-api
+                port:
+                  number: 8080

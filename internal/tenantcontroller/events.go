@@ -3,8 +3,8 @@ package tenantcontroller
 import (
 	"reflect"
 
-	seterav1 "github/setera/pkg/api/setera.com/v1"
-	"github/setera/pkg/tenantmeta"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
+	"github/misokube/pkg/tenantmeta"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -64,7 +64,7 @@ func (c *Controller) onNodeUpdate(oldObj, newObj any) {
 	// fields that can affect assignment change:
 	//   - schedulability
 	//   - Ready state
-	//   - Setera tenant membership labels
+	//   - MIsoKube tenant membership labels
 	if nodeAssignmentStateChanged(oldNode, newNode) {
 		c.enqueueAllTenants()
 	}
@@ -105,13 +105,13 @@ func (c *Controller) enqueueAllTenants() {
 	}
 }
 
-func tenantFromObject(obj any) (*seterav1.Tenant, bool) {
+func tenantFromObject(obj any) (*misokubev1.Tenant, bool) {
 	switch value := obj.(type) {
-	case *seterav1.Tenant:
+	case *misokubev1.Tenant:
 		return value, value != nil
 
 	case cache.DeletedFinalStateUnknown:
-		tenant, ok := value.Obj.(*seterav1.Tenant)
+		tenant, ok := value.Obj.(*misokubev1.Tenant)
 		return tenant, ok && tenant != nil
 
 	default:

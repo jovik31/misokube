@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github/setera/pkg/ebpf"
-	"github/setera/pkg/network"
+	"github/misokube/pkg/ebpf"
+	"github/misokube/pkg/network"
 )
 
 // RemoteNode contains the transport information required to reach one remote
@@ -165,7 +165,7 @@ func (r *Routing) ReconcileRemoteNodes(ctx context.Context, desired []RemoteNode
 		return fmt.Errorf("noderouting: list VXLAN routes: %w", err)
 	}
 	for _, route := range actualRoutes {
-		// The VTEP's own /32 lives in the local routing table. Setera remote
+		// The VTEP's own /32 lives in the local routing table. MIsoKube remote
 		// routes in the main table are the routes with an explicit gateway.
 		if !route.Gateway.IsValid() {
 			continue

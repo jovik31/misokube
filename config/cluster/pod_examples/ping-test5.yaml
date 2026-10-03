@@ -4,7 +4,7 @@ metadata:
   name: ping-test5
   namespace: default
   annotations:
-    setera.com/tenant: "two"
+    misokube.com/tenant: "two"
 spec:
   containers:
     - name: toolbox
@@ -12,5 +12,5 @@ spec:
       command: ["sleep", "3600"]
       imagePullPolicy: IfNotPresent
   nodeSelector:
-    setera.com.tenant.two: "Enabled"
-    kubernetes.io/hostname: "setera-cluster-orch-dev-worker3"
+    misokube.com.tenant.two: "Enabled"
+    kubernetes.io/hostname: "misokube-cluster-orch-dev-worker3"

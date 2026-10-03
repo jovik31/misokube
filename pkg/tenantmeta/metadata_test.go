@@ -76,7 +76,7 @@ func TestNodeTenantLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "setera.com/tenant.tenant-a"; got != want {
+	if want := "misokube.com/tenant.tenant-a"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
@@ -89,10 +89,10 @@ func TestNodeTenantLabelRejectsInvalidName(t *testing.T) {
 
 func TestTenants(t *testing.T) {
 	labels := map[string]string{
-		"setera.com/tenant.beta":  "true",
-		"setera.com/tenant.alpha": "true",
-		"setera.com/tenant.skip":  "false",
-		"example.com/other":       "true",
+		"misokube.com/tenant.beta":  "true",
+		"misokube.com/tenant.alpha": "true",
+		"misokube.com/tenant.skip":  "false",
+		"example.com/other":         "true",
 	}
 
 	got := Tenants(labels)

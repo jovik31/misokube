@@ -18,7 +18,7 @@ limitations under the License.
 package fake
 
 import (
-	seterav1 "github/setera/pkg/api/setera.com/v1"
+	misokubev1 "github/misokube/pkg/api/misokube.com/v1"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +31,7 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
-	seterav1.AddToScheme,
+	misokubev1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

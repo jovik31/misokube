@@ -70,7 +70,7 @@ func (ws *WebhookServer) admissionValidationHandler(
 	default:
 		admissionResponse = createAdmissionResponse(
 			true,
-			"resource is not managed by Setera",
+			"resource is not managed by MIsoKube",
 		)
 	}
 

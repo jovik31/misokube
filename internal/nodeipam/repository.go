@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github/setera/pkg/store"
+	"github/misokube/pkg/store"
 )
 
 const (

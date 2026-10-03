@@ -1,4 +1,4 @@
-module github/setera
+module github/misokube
 
 go 1.25.0
 
@@ -59,6 +59,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b // indirect
+	k8s.io/metrics v0.35.1 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/knftables v0.0.18 // indirect

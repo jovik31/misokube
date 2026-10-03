@@ -4,10 +4,10 @@ include $(wildcard make/*.mk)
 .DEFAULT_GOAL := help
 
 ## -----------------------------------------------------------------------------
-## Local Setera / kind configuration
+## Local MIsoKube / kind configuration
 ## -----------------------------------------------------------------------------
 
-KIND_CLUSTER_NAME ?= setera-cluster
+KIND_CLUSTER_NAME ?= misokube-cluster
 KIND_CONTEXT      ?= kind-$(KIND_CLUSTER_NAME)
 KIND_CONFIG       ?= config/cluster/kind_cluster_deployment.yaml
 
@@ -17,15 +17,15 @@ KIND_NODE_DOCKERFILE ?= Dockerfile.kindnode
 # Local runtime image tags. These must match config/cluster/local_daemon.yaml.
 DAEMON_COMPONENT       ?= daemon
 DAEMON_VERSION         ?= v0.1.0
-DAEMON_IMG             ?= setera-$(DAEMON_COMPONENT):$(DAEMON_VERSION)
+DAEMON_IMG             ?= joaoribeiro0406/misokube-daemon:rename-v1
 
 ORCHESTRATOR_COMPONENT ?= orchestrator
 ORCHESTRATOR_VERSION   ?= v0.1.0
-ORCHESTRATOR_IMG       ?= setera-$(ORCHESTRATOR_COMPONENT):$(ORCHESTRATOR_VERSION)
+ORCHESTRATOR_IMG       ?= joaoribeiro0406/misokube-orchestrator:rename-v1
 
 CNI_COMPONENT          ?= cni
 CNI_VERSION            ?= dev
-CNI_IMG                ?= cni-uds-stub:$(CNI_VERSION)
+CNI_IMG                ?= joaoribeiro0406/misokube-cni:rename-v1
 
 # Local kind binaries and temporary runtime image contexts.
 KIND_BUILD_DIR ?= $(LOCALBIN)/kind
@@ -37,7 +37,8 @@ RBAC_DAEMON_DIR       ?= config/rbac/daemon
 CRD_DIR               ?= config/crd/bases
 
 LOCAL_DEPLOYMENT      ?= config/cluster/local_daemon.yaml
-WEBHOOK_CONFIGURATION ?= setera-pod-admission
+WEBHOOK_CONFIGURATION ?= misokube-pod-admission
+KUBECTL               ?= kubectl
 
 # Local E2E fixtures and test runner.
 E2E_TENANT_A ?= config/examples/tenants/1.yaml
@@ -164,7 +165,17 @@ kind-build-cni-image: kind-build-cni-binary ## Build the local CNI installer ima
 		$(KIND_BUILD_DIR)/cni
 
 .PHONY: kind-build-images
-kind-build-images: kind-build-daemon-image kind-build-orchestrator-image kind-build-cni-image ## Build all images required by local Setera E2E
+kind-build-images: kind-build-daemon-image kind-build-orchestrator-image kind-build-cni-image ## Build all images required by local MIsoKube E2E
+
+
+##@ Kubernetes deployment
+
+.PHONY: install
+install: manifests ## Generate and install MIsoKube CRDs, RBAC, daemon, and orchestrator in the current cluster
+	$(KUBECTL) apply -f $(CRD_DIR)
+	$(KUBECTL) apply -f $(RBAC_DAEMON_DIR)
+	$(KUBECTL) apply -f $(RBAC_ORCHESTRATOR_DIR)
+	$(KUBECTL) apply -f $(LOCAL_DEPLOYMENT)
 
 
 ##@ kind cluster
@@ -176,7 +187,7 @@ kind-node-image: ## Build the custom kind node image with networking/eBPF tools
 		-t $(KIND_NODE_IMG) .
 
 .PHONY: kind-cluster
-kind-cluster: kind-node-image ## Create the main Setera kind cluster if it does not already exist
+kind-cluster: kind-node-image ## Create the main MIsoKube kind cluster if it does not already exist
 	@if kind get clusters | grep -qx '$(KIND_CLUSTER_NAME)'; then \
 		echo "kind cluster $(KIND_CLUSTER_NAME) already exists"; \
 	else \
@@ -186,7 +197,7 @@ kind-cluster: kind-node-image ## Create the main Setera kind cluster if it does 
 	fi
 
 .PHONY: kind-cluster-check
-kind-cluster-check: ## Fail if the main Setera kind cluster does not exist
+kind-cluster-check: ## Fail if the main MIsoKube kind cluster does not exist
 	@kind get clusters | grep -qx '$(KIND_CLUSTER_NAME)' || { \
 		echo "kind cluster $(KIND_CLUSTER_NAME) does not exist"; \
 		echo "run: make kind-cluster"; \
@@ -194,11 +205,11 @@ kind-cluster-check: ## Fail if the main Setera kind cluster does not exist
 	}
 
 .PHONY: kind-cluster-delete
-kind-cluster-delete: ## Delete the main Setera kind cluster
+kind-cluster-delete: ## Delete the main MIsoKube kind cluster
 	kind delete cluster --name $(KIND_CLUSTER_NAME)
 
 .PHONY: kind-cluster-reset
-kind-cluster-reset: ## Recreate the main Setera kind cluster
+kind-cluster-reset: ## Recreate the main MIsoKube kind cluster
 	-$(MAKE) kind-cluster-delete
 	$(MAKE) kind-cluster
 
@@ -224,7 +235,7 @@ kind-load-images: kind-load-daemon-image kind-load-orchestrator-image kind-load-
 ##@ Local kind deployment
 
 .PHONY: kind-install-manifests
-kind-install-manifests: manifests kind-cluster-check ## Install Setera CRDs and generated RBAC into the kind cluster
+kind-install-manifests: manifests kind-cluster-check ## Install MIsoKube CRDs and generated RBAC into the kind cluster
 	kubectl --context $(KIND_CONTEXT) apply -f $(CRD_DIR)
 	kubectl --context $(KIND_CONTEXT) apply -f $(RBAC_DAEMON_DIR)
 	kubectl --context $(KIND_CONTEXT) apply -f $(RBAC_ORCHESTRATOR_DIR)
@@ -247,7 +258,7 @@ kind-deploy: ## Build/load images and deploy daemon + orchestrator to the existi
 	$(MAKE) kind-rollout
 
 .PHONY: kind-e2e
-kind-e2e: ## Create cluster if needed, build/load images, and deploy complete local Setera E2E
+kind-e2e: ## Create cluster if needed, build/load images, and deploy complete local MIsoKube E2E
 	$(MAKE) kind-cluster
 	$(MAKE) kind-deploy
 
@@ -264,11 +275,11 @@ kind-e2e-fixtures: kind-cluster-check ## Deploy E2E tenants and Pods, then wait 
 	kubectl --context $(KIND_CONTEXT) apply -f $(E2E_PODS)
 	kubectl --context $(KIND_CONTEXT) wait \
 		--for=condition=Ready pod \
-		-l setera.com/tenant=tenant-a \
+		-l misokube.com/tenant=tenant-a \
 		--timeout=$(E2E_TIMEOUT)
 	kubectl --context $(KIND_CONTEXT) wait \
 		--for=condition=Ready pod \
-		-l setera.com/tenant=tenant-b \
+		-l misokube.com/tenant=tenant-b \
 		--timeout=$(E2E_TIMEOUT)
 
 .PHONY: kind-connectivity-test
@@ -276,14 +287,14 @@ kind-connectivity-test: kind-cluster-check ## Run connectivity tests against the
 	KIND_CONTEXT=$(KIND_CONTEXT) bash $(E2E_TEST)
 
 .PHONY: kind-e2e-test
-kind-e2e-test: ## Recreate the cluster, deploy Setera and fixtures, then run the E2E test battery
+kind-e2e-test: ## Recreate the cluster, deploy MIsoKube and fixtures, then run the E2E test battery
 	-$(MAKE) kind-cluster-delete
 	$(MAKE) kind-e2e
 	$(MAKE) kind-e2e-fixtures
 	$(MAKE) kind-connectivity-test
 
 .PHONY: kind-redeploy
-kind-redeploy: ## Rebuild local images, reload them into kind, and restart Setera
+kind-redeploy: ## Rebuild local images, reload them into kind, and restart MIsoKube
 	$(MAKE) kind-deploy
 
 .PHONY: kind-undeploy
@@ -292,11 +303,11 @@ kind-undeploy: kind-cluster-check ## Remove daemon + orchestrator local E2E runt
 	-kubectl --context $(KIND_CONTEXT) delete mutatingwebhookconfiguration $(WEBHOOK_CONFIGURATION)
 
 .PHONY: kind-status
-kind-status: kind-cluster-check ## Show local Setera E2E status
+kind-status: kind-cluster-check ## Show local MIsoKube E2E status
 	kubectl --context $(KIND_CONTEXT) get nodes
 	kubectl --context $(KIND_CONTEXT) get daemonset daemon
 	kubectl --context $(KIND_CONTEXT) get deployment orchestrator
-	kubectl --context $(KIND_CONTEXT) get service setera-webhook
+	kubectl --context $(KIND_CONTEXT) get service misokube-webhook
 	kubectl --context $(KIND_CONTEXT) get mutatingwebhookconfiguration $(WEBHOOK_CONFIGURATION)
 	kubectl --context $(KIND_CONTEXT) get pods -o wide
 

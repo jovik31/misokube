@@ -1,0 +1,11 @@
+controlPlane:
+    statefulSet:
+      pods:
+        labels:
+          misokube.com/tenant: "default"
+      scheduling:
+        nodeSelector:
+          misokube.com/tenant.default: "true"
+      persistence:
+        volumeClaim:
+          enabled: false
